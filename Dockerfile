@@ -2,7 +2,6 @@ FROM python:3.10-slim
 
 LABEL org.opencontainers.image.title="Cathode MCP Server"
 LABEL org.opencontainers.image.description="Cathode turns intent into video and exposes the workflow over MCP."
-LABEL org.opencontainers.image.source="https://example.invalid/cathode"
 LABEL org.opencontainers.image.licenses="MIT"
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -27,4 +26,3 @@ COPY . .
 EXPOSE 8765
 
 CMD ["python", "cathode_mcp_server.py", "--transport", "streamable-http"]
-

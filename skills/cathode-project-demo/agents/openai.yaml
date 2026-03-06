@@ -1,0 +1,4 @@
+interface:
+  display_name: "Project Demo Video"
+  short_description: "Turn repos and notes into demo videos"
+  default_prompt: "Use $cathode-project-demo to turn this repo into a concise project demo video."

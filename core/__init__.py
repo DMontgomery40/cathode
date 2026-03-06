@@ -1,4 +1,4 @@
-"""Lazy exports for explainer-video pipeline helpers."""
+"""Lazy exports for Cathode pipeline helpers."""
 
 
 def generate_storyboard(*args, **kwargs):

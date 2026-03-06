@@ -1,9 +1,8 @@
 from __future__ import annotations
 
+import subprocess
 import wave
 from pathlib import Path
-
-from moviepy import ColorClip
 
 from core.video_assembly import assemble_video, get_media_duration, get_video_scene_timing
 
@@ -20,17 +19,25 @@ def _write_silent_wav(path: Path, duration_seconds: float, sample_rate: int = 16
 
 def _write_color_video(path: Path, duration_seconds: float, size: tuple[int, int] = (640, 360)) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    clip = ColorClip(size=size, color=(12, 32, 64), duration=duration_seconds)
-    try:
-        clip.write_videofile(
+    subprocess.run(
+        [
+            "ffmpeg",
+            "-y",
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-f",
+            "lavfi",
+            "-i",
+            f"color=c=0C2040:s={size[0]}x{size[1]}:d={duration_seconds}:r=24",
+            "-c:v",
+            "libx264",
+            "-pix_fmt",
+            "yuv420p",
             str(path),
-            fps=24,
-            codec="libx264",
-            audio=False,
-            logger=None,
-        )
-    finally:
-        clip.close()
+        ],
+        check=True,
+    )
 
 
 def test_get_video_scene_timing_reports_effective_and_freeze_duration():

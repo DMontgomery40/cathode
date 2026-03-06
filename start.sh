@@ -1,5 +1,5 @@
 #!/bin/bash
-# Start script for Storyboard Video Generator
+# Start script for Cathode
 # Uses Python 3.10 (required for Kokoro TTS)
 
 PYTHON="/opt/homebrew/bin/python3.10"
@@ -25,6 +25,6 @@ fi
 
 # Run the app
 PORT="${STREAMLIT_PORT:-8517}"
-echo "Starting Storyboard Video Generator..."
+echo "Starting Cathode..."
 echo "Opening http://localhost:${PORT}"
 $PYTHON -m streamlit run app.py --server.port "${PORT}" "$@"

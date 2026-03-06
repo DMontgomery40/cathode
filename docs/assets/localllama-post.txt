@@ -1,0 +1,3459 @@
+
+Go to LocalLLaMA
+r/LocalLLaMA
+•
+9mo ago
+Current-Ticket4214
+
+When you figure out it’s all just math:
+Funny
+r/LocalLLaMA - When you figure out it’s all just math:
+
+Upvote
+4.2K
+
+Downvote
+
+382
+Go to comments
+
+
+Share
+Join the conversation
+Sort by:
+
+Best
+
+Search Comments
+Expand comment search
+Comments Section
+GatePorters
+•
+9mo ago
+The thing is. Reasoning isn’t supposed to be thoughts. It is explicitly just output with a different label.
+
+Populating the context window with relevant stuff can increase the fitness of the model in a lot of tasks.
+
+This is like releasing a paper clarifying that Machine Learning isn’t actually a field of education.
+
+
+
+Upvote
+723
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+u/Potential-Net-9375 avatar
+Potential-Net-9375
+•
+9mo ago
+Exactly this holy hell I feel like I'm going insane. So many people just clearly don't know how these things work at all.
+
+Thinking is just using the model to fill its own context to make it perform better, it's not a different part of the ai brain metaphorically speaking, it's just the ai brain taking a beat to talk to itself before choosing to start talking out loud
+
+
+
+Upvote
+242
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+u/Cute-Ad7076 avatar
+Cute-Ad7076
+•
+9mo ago
+<think> The commenter wrote a point you agree with, but not all of it therefore he’s stupid. But wait, hmmmm-what if it’s a trap. No I should disagree with everything they said, maybe accuse them of something. Yeah that’s a plan <think> Nu-uh
+
+
+
+Upvote
+93
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+scoop_rice
+•
+9mo ago
+You’re absolutely right!
+
+
+Upvote
+17
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+
+4 more replies
+GatePorters
+•
+9mo ago
+Anthropic’s new circuit tracing library shows us what the internal “thoughts” actually are like.
+
+But even then, those map moreso to subconscious thoughts/neural computation.
+
+
+
+Upvote
+63
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+u/SamSlate avatar
+SamSlate
+•
+9mo ago
+interesting, how do they compare to the reasoning output?
+
+
+
+Upvote
+13
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+GatePorters
+•
+9mo ago
+It’s just like node networks of concepts in latent space. It isn’t very readable without labeling things. And it’s easy to get lost in the data
+
+Like they can force some “nodes” to be activated or prevent them from being activated and then get some wild outputs.
+
+
+
+Upvote
+24
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+clduab11
+•
+9mo ago
+Which is exactly why Apple's paper almost amounts to jack shit, because that's exactly what they tried to force these nodes to do in latent, sandboxed space.
+
+It does highlight (between this and the ASU paper "Stop Anthropomorphizing Reasoning Tokens" whitepaper) that we need a new way to talk about these things, but this paper doesn't do diddly squit as far as take away from the power of reasoning modes. Look at Qwen3 and how its MoE will reason on its own when it needs to via that same MoE.
+
+
+Upvote
+6
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+[deleted]
+•
+9mo ago
+Keep in mind this whitepaper is really just Apple circling the wagons because they have dick for proprietary AI tech.
+
+
+
+Upvote
+52
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+u/threeseed avatar
+threeseed
+•
+9mo ago
+•
+Edited 9mo ago
+One of the authors is the co-creator of Torch.
+
+On top of which almost all of the AI space was designed and built on.
+
+
+Upvote
+18
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+
+8 more replies
+
+10 more replies
+silverW0lf97
+•
+9mo ago
+Okay but what is thinking really then? Like if I am thinking something I too am filling up my brain with data about the thing and the process to which I will use it for.
+
+
+Upvote
+6
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+Ok-Kaleidoscope5627
+•
+9mo ago
+The way I prefer to think about it is that people input suboptimal prompts so the LLM is essentially just taking the users prompt to generate a better prompt which it then eventually responds to.
+
+If you look at the "thoughts" they're usually just building out the prompt in a very similar fashion to how they recommend building your prompts anyways.
+
+
+Upvote
+5
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+
+6 more replies
+stddealer
+•
+9mo ago
+It's literally just letting the model find a way to work around the limited compute budget per token. The actual text generated in the "reasoning" section is barely relevant.
+
+
+
+Upvote
+51
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+u/X3liteninjaX avatar
+X3liteninjaX
+•
+9mo ago
+I’m a noob to LLMs but to me it seemed reasoning solved the cold start problem with AI. They can’t exactly “think” before they “talk” like humans.
+
+Is the compute budget for reasoning tokens different than the standard output tokens?
+
+
+
+Upvote
+26
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+stddealer
+•
+9mo ago
+•
+Edited 9mo ago
+No, the compute budget is the same for every token. But the interesting part is that some of the internal states computed when generating or processing any token (like the "key" and "value" vectors for the attention heads) are kept in cache and are available to the model when generating the following token. (Without caching, these values would have to be re-computed for every new tokens, which would make the amount of compute for tokens later in the sequence much bigger, like O(n²) instead of O(n))
+
+Which means that some of the compute used to generate the reasoning tokens is reused to generate the final answer. This is not specific to reasoning tokens though, literally any tokens in between the question and the final answer could have some of their compute be used to figure out a better answer. Having the reasoning tokens related to the question seems to help a lot, and avoids confusing the model.
+
+
+
+Upvote
+31
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+exodusayman
+•
+9mo ago
+Well explained, thank you.
+
+
+Upvote
+3
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+
+6 more replies
+
+1 more reply
+[deleted]
+•
+9mo ago
+I learn alot about whatever problem I am using an LLM for by reading the thinking section and then the final answer, the thinking section gives a deeper insight to how its being solved
+
+
+Upvote
+15
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+The_Shryk
+•
+9mo ago
+Yeah it’s using the LLM to generate a massive and extremely detailed prompt, then sending that prompt to itself to generate the output.
+
+In the most basic sense
+
+
+Upvote
+15
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+AppearanceHeavy6724
+•
+9mo ago
+Yet I learn more from R1 traces, than actyal answers.
+
+
+
+Upvote
+36
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+CheatCodesOfLife
+•
+9mo ago
+Yet I learn more from R1 traces, than actyal answers
+
+Same here, I actually learned and understood several things by reading them broken down to first principles in the R1 traces.
+
+
+Upvote
+5
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+
+2 more replies
+[deleted]
+•
+9mo ago
+I dont get why people are dissing on this paper. Nobody cares what ‘thinking’ means, people care about the efficacy of thinking tokens for a desired task.
+
+And thats what they tried to test, how well the models do across tasks of varying level of complexity. I think the results are valid, and thinking tokens doesn’t really do much for problems which are very complex. It might also ‘overthink’ and waste tokens for easier problems.
+
+That being said, for easier to mid level problems, thinking tokens provide relevant context and are better than models with no reasoning capabilities.
+
+They confirmed through experiments all of this which we already know.
+
+
+Upvote
+20
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+u/dagelf avatar
+dagelf
+•
+9mo ago
+TL;DR The Illusion referred to in the paper is the <think></think> tags, that doesn't reason formally, but just pre-populates the model context for better probabilistic reasoning.
+
+
+Upvote
+5
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+
+1 more reply
+u/TheRealGentlefox avatar
+TheRealGentlefox
+•
+9mo ago
+Yeah, we already have evidence that they can fill their reasoning step at least partially with "nonsense" (to us) tokens and still get the performance boost.
+
+I would imagine it's basically a way for them to modify their weights at runtime. To say "Okay, we're in math verification mode now, we can re-use some of these pathways we'd usually use for something else." Blatant example would be that if my prompt starts with "5+4" it doesn't even have time to recognize that it's math until multiple tokens in.
+
+
+
+Upvote
+13
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+u/-dysangel- avatar
+-dysangel-
+•
+9mo ago
+Profile Badge for the Achievement Top 1% Commenter Top 1% Commenter
+the first token is actually used as an "attention sink". So I would guess starting with things like "please", "hi" or something else that isn't essential to the prompt probably helps output quality. Though I've not tested this
+
+https://www.youtube.com/watch?v=Y8Tj9kq4iWY
+
+
+Upvote
+5
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+u/ASYMT0TIC avatar
+ASYMT0TIC
+•
+9mo ago
+As though you actually know what a thought is, physically.
+
+
+Upvote
+7
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+
+2 more replies
+u/MINIMAN10001 avatar
+MINIMAN10001
+•
+9mo ago
+Inversely populating the context window with irrelevant stuff can decrease the fitness of the model in a lot of tasks. IE Discuss one subject and transition subjects in a different field. It will start referencing the previous material even though it is entirely irrelevant.
+
+
+Upvote
+3
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+
+6 more replies
+u/chkno avatar
+chkno
+•
+9mo ago
+Link to the paper: The Illusion of Thinking: Understanding the Strengths and Limitations of Reasoning Models via the Lens of Problem Complexity
+
+
+
+Upvote
+146
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+u/keepthepace avatar
+keepthepace
+•
+9mo ago
+Link to the retort: The illusion of "The Illusion of Thinking"
+
+
+
+Upvote
+71
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+ninjasaid13
+•
+9mo ago
+How many humans can sit down and correctly work out a thousand Tower of Hanoi steps? There are definitely many humans who could do this. But there are also many humans who can’t. Do those humans not have the ability to reason? Of course they do! They just don’t have the conscientiousness and patience required to correctly go through a thousand iterations of the algorithm by hand
+
+I don't understand why people are using human metaphors when these models are nothing like humans.
+
+
+
+Upvote
+42
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+u/keepthepace avatar
+keepthepace
+•
+9mo ago
+I blame people who argue whether a reasoning is "real" or "illusory" without providing a clear definition that leaves humans out of it. So we have to compare what models do to what humans do.
+
+
+Upvote
+20
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+ginger_and_egg
+•
+9mo ago
+Humans can reason
+
+Humans don't necessarily have the ability to write down thousands of towers of Hanoi steps
+
+-> Not writing thousands of towers of Hanoi steps doesn't mean that something can't reason
+
+
+Upvote
+7
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+
+8 more replies
+u/t3h avatar
+t3h
+•
+9mo ago
+Because they have zero clue about how LLMs work.
+
+Ironically, what's going on in their own head is only "the illusion of thinking"...
+
+
+Upvote
+3
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+
+6 more replies
+welcome-overlords
+•
+9mo ago
+Excellent read, thank you!
+
+
+Upvote
+7
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+
+13 more replies
+
+1 more reply
+reza2kn
+•
+9mo ago
+Two responses I liked coming from Reasoning models:
+
+Gemini 2.5 Pro:
+"The paper’s findings don't prove reasoning is an illusion; they prove that probabilistic, pattern-based reasoning is not the same as formal, symbolic reasoning. It is a different kind of cognition. Calling it an "illusion" is like arguing that because a bird's flight mechanics are different from an airplane's, the bird is creating an "illusion of flight." They are simply two different systems achieving a similar outcome through different means, each with its own strengths and failure points."
+
+DeepSeek R1:
+"The Scaling Paradox Isn’t Illogical: Reducing effort near collapse thresholds could be rational: Why "think hard" if success probability is near zero? Humans give up too."
+
+
+
+Upvote
+143
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+u/EstarriolOfTheEast avatar
+EstarriolOfTheEast
+•
+9mo ago
+•
+Edited 9mo ago
+We should be careful how we ask LLM questions because they tend to respond only to what is asked, often in a way that reinforces the user's implied preferences. IMO, in consulting an LLM, we shouldn't ask them to think for us or support what we say but to help us find missteps and errors in our own thinking. We should always be able to stand by our arguments in a manner not reliant or dependent on the LLMs outputs.
+
+I don't believe in pasting LLM responses but I think it's ok here. Here is what Gemini 2.5 pro says to itself when given the full paper's context (the point is independent of whether the below is a better or more correct answer, it's to show how LLMs can take quite different stances depending on how they're prompted):
+
+Accurate/Reasonable Parts of the Statement:
+
+"The paper’s findings don't prove reasoning is an illusion..." (in the sense of no reasoning whatsoever): This is largely true. The Apple paper isn't arguing that LRMs do nothing akin to reasoning. It's critiquing the depth, robustness, and generalizability of that reasoning, especially when compared to the elaborate "thinking" traces they produce.
+
+"...they prove that probabilistic, pattern-based reasoning is not the same as formal, symbolic reasoning. It is a different kind of cognition.": This is a widely accepted and important distinction. The paper's findings (e.g., failure to consistently apply algorithms, struggles with compositional complexity beyond a certain point) are consistent with the idea that LLMs operate differently from classical symbolic AI or even from how humans might approach some formal reasoning tasks. The paper provides evidence for the limitations of this probabilistic approach in certain contexts.
+
+"They are simply two different systems achieving a similar outcome through different means, each with its own strengths and failure points.": In a broad sense, comparing LLM "cognition" to human or symbolic AI cognition, this is true.
+
+The Key Flaw(s):
+
+The Bird vs. Airplane Analogy Misrepresents the "Illusion":
+
+The statement says: "Calling it an "illusion" is like arguing that because a bird's flight mechanics are different from an airplane's, the bird is creating an "illusion of flight.""
+
+This analogy is flawed because it misses the core of the paper's "illusion" argument.
+
+A bird achieves flight. An airplane achieves flight. Neither is an "illusion" of the other, nor does a bird produce outputs that mimic the engineering principles of an airplane while actually being unable to sustain flight in the way an airplane does.
+
+The "illusion" the Apple paper refers to is about the mismatch between the appearance of deep, step-by-step, human-like thinking (as suggested by the long Chain-of-Thought traces LRMs generate) and the actual brittleness, inefficiency, and scaling limitations of their problem-solving capabilities.
+
+It's more like if a system produced incredibly detailed and complex architectural blueprints (the "thinking trace") for a 100-story building but consistently failed to actually construct a stable building beyond 10 stories (the "accuracy collapse"). The detailed blueprints might then create an "illusion" of profound architectural understanding and capability that isn't fully borne out.
+
+The paper isn't saying probabilistic reasoning is an illusion because it's different from symbolic reasoning. It's saying the manifestation of LRM reasoning (the verbose "thinking") can create an illusion of greater capability than exists under stress or at scale.
+
+Downplaying the "Why" Behind the "Illusion" Title:
+
+By focusing only on "different kinds of cognition," the statement sidesteps the paper's specific observations about how current LRMs fail despite their elaborate reasoning traces: the accuracy collapse, the decline in effort at high complexity, the "overthinking" on simple tasks, and the failure to consistently use provided algorithms. These behaviors are what lead the authors to use the term "illusion" – the thinking process looks sophisticated, but the results often don't match that sophistication when pushed.
+
+In essence, the statement correctly identifies that LLMs use a different "kind of cognition" (probabilistic, pattern-based) than formal symbolic systems. However, it fails to grasp that the "illusion" highlighted by the paper isn't about this difference per se, but about the deceptive appearance of depth and robustness in the reasoning processes of current LRMs when contrasted with their actual performance limitations.
+
+
+
+Upvote
+65
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+218-69
+•
+9mo ago
+The "blueprint vs collapsing building" analogy is genius, but I think it misses one, tiny, crucial point.
+
+We keep talking about the model's Chain-of-Thought as if it's a transparent log file of its "thinking." It's not.
+
+The model isn't performing a reasoning task and then reporting its steps.
+
+It's performing a text-generation task where the target is "a plausible-sounding explanation of a reasoning process."
+
+The CoT isn't a window into its mind; it's part of the performance. Its entire goal, dictated by its loss function, is to generate text that looks like what a human would write after they've reasoned. It's learned the form of "showing your work" without ever learning the function of the math itself.
+
+The "illusion" isn't just that the reasoning is brittle. The illusion is that we think we're watching it reason at all. We're just watching a very, very good actor.
+
+
+
+Upvote
+29
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+u/EstarriolOfTheEast avatar
+EstarriolOfTheEast
+•
+9mo ago
+I agree, although I wouldn't go so far as to say it's purely acting.
+
+Reasoning traces help LLMs overcome the "go with the first dominant prediction and continue along that line" issue. The LLM can iterate on more answer variations and possible interpretations of the user query. The reasoning tokens also do have an impact.
+
+While the actual computation occurs in a high dimensional space, and we only glimpse shadows from a pinhole at best, the output tokens still serve as anchors for this space, with the tokens and their associated hidden states affecting future output through attention mechanisms. The hidden state representations of output tokens become part of the sequence context, actively influencing how the subsequent attention patterns and computations driving future reasoning steps will unfold. The selected "anchors" are also not arbitrary; during training, which selections set up the best expected values (or associations between reasoning token sequences and outcome quality) are learned and reinforced.
+
+As LLMs learn to stop overthinking or converging on useless loops, we'll also gain a flexible approximation to adaptive computation for free. Except that when to stop will be modulated by the semantic content of the tokens, instead of being done at a syntactic or lower level. Related is that as LLM reasoning improves, they'll also be able to revise, iterate and improve on their initial output; stopping and outputting a response when it makes sense.
+
+Finally, for those times when the LLMs are actually following an algorithm or recipe--say for a worked example--being able to write to context boost the LLM's computational expressiveness. So, while I agree that reasoning traces are largely post-hoc, non-representative and not faithful reports of the computations occurring internally, they are not purely performative and do serve a role. And can be improved to be better at that.
+
+
+Upvote
+15
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+
+1 more reply
+u/michaelsoft__binbows avatar
+michaelsoft__binbows
+•
+9mo ago
+We gave it arbitrary control over how long we let it perform inception on itself, and the fact that it works pretty well seems to me about as magical as the fact that they work at all.
+
+
+Upvote
+4
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+a_lit_bruh
+•
+9mo ago
+This is surprising well put.
+
+
+Upvote
+4
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+
+3 more replies
+u/Worth_Plastic5684 avatar
+Worth_Plastic5684
+•
+9mo ago
+My instinct aligns with that first take a lot. How do you write down the 1024-line solution to 10-disk towers of Hanoi? 30 lines in you're an automaton, the language centers in your brain have checked out, they are a poor fit for this problem. You're using what one might call "Python in the chain of thought"... Some frontier models already have that...
+
+
+Upvote
+3
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+
+3 more replies
+[deleted]
+•
+9mo ago
+Read the paper (not just the abstract), then read this:
+
+https://www.seangoedecke.com/illusion-of-thinking/
+
+
+
+Upvote
+97
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+WeGoToMars7
+•
+9mo ago
+•
+Edited 9mo ago
+Thanks for sharing, but I feel like this criticism cherry-picks one of its main points.
+
+Apart from the Tower of Hanoi, there were three more puzzles: checker jumping, river crossing, and block stacking. Tower of Hanoi requires on the order of 2n moves, so 10 blocks is indeed a nightmare to follow, but the other puzzles require on the order of n2 moves, and yet the models start to fail much sooner (as low as n=3 for checkers and river crossing!). I don't think it's unreasonable for a "reasoning" model to keep track of a dozen moves to solve a puzzle.
+
+Besides, the same AI labs for which "puzzles weren't a priority" lauded their results on ARC-AGI, which is also based on puzzles. I guess it's all about which narrative is more convenient.
+
+
+
+Upvote
+82
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+[deleted]
+•
+9mo ago
+The paper only shows how models reinforced to solve some kind of problems that require reasoning fail to solve some puzzles. Is an interesting paper as another benchmark for models, that's it.
+
+I bet someone could take Qwen3-0.6B and use GRPO to train it to solve this exact same puzzles as a weekend project...
+
+
+
+Upvote
+18
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+u/TheRealMasonMac avatar
+TheRealMasonMac
+•
+9mo ago
+•
+Edited 9mo ago
+Profile Badge for the Achievement Top 1% Commenter Top 1% Commenter
+Right, but that's the point. Goodhart's Law: "When a measure becomes a target, it ceases to be a good measure"
+
+They are showing how reasoning models have only learned to accommodate certain patterns rather than acquiring generalizing abilities, and that they lose performance in some areas compared to their respective pre-RL induct models. They are essentially arguing that there are flaws in current reasoning model training and evaluation methods which leaves testable gaps in their performance.
+
+
+Upvote
+47
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+
+8 more replies
+fattylimes
+•
+9mo ago
+“they say i can’t speak spanish but give me a weekend and i can memorize anything phonetically!”
+
+
+Upvote
+6
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+
+1 more reply
+
+1 more reply
+llmentry
+•
+9mo ago
+Taking a closer look at the Apple paper (and noting that this is coming from a company that has yet to demonstrate success in the LLM space ... i.e. the whole joke of the posted meme):
+
+There is a serious rookie error in the prompting. From the paper, the system prompt for the Tower of Hanoi problem includes the following:
+
+When exploring potential solutions in your thinking process, always include the corresponding complete list of moves.
+
+(My emphasis). Now, this appears to be poor prompting. It's forcing a reasoning LLM to not think of an algorithmic solution (which would be, you know, sensible) and making it manually, pointlessly, stupidly work through the series of manual steps.
+
+The same prompting error applies to all of the "puzzles" (the quoted line above is present in all of the system prompts).
+
+I was interested to try out the problem (providing the user prompt in the paper verbatim) on a model without a system prompt. When I did this with GPT-4.1 (not even a reasoning model!), giving it an 8 disc setup, it:
+
+Correctly tells me that the problem is the Tower of Hanoi problem (I mean, no shit, sherlock)
+
+Tells me the simple algorithm for solving the problem for any n
+
+Shows me what the first series of moves would look like, to illustrate it
+
+Tells me that to do this for 8 disks, it's going to generate a seriously long output (it tells me exactly how many moves it will involve) and take a very long time -- but if I really want that, to let it know -- and if so, what output format would I like it in?
+
+Tells me that if I'd prefer, it can just write out code, or a function, to solve the problem generically for any number of discs
+
+Even though the output is nothing but obsequious politeness, you can almost hear the model rolling its eyes, and saying, "seriously??"
+
+I don't even use reasoning models, because I actually agree that they don't usefully reason, and don't generally help. (There are exceptions, of course, just not enough to justify the token cost or time involved, in my view.) But this facile paper is not the way to prove that they're useless.
+
+All it's showing is that keeping track of a mind-numbingly repetitive series of moves is difficult for LLMs; and this should surprise nobody. (It's sad to say this, but it also strongly suggests to me that Apple still just doesn't get LLMs.)
+
+Am I missing something here? I'm bemused that this rather unimaginative paper has gained so much traction.
+
+
+
+Upvote
+9
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+u/MoffKalast avatar
+MoffKalast
+•
+9mo ago
+Profile Badge for the Achievement Top 1% Commenter Top 1% Commenter
+†Work done during an internship at Apple.
+
+The first author is just some intern, it's only got cred because Apple's trademark is attached to it and because it's controversial.
+
+
+
+Upvote
+6
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+llmentry
+•
+9mo ago
+The other first author (equal contribution) is not listed as an intern. All six authors' affiliations are simply given as "Apple" (no address, nothing else -- seriously, the hubris!) All authors' emails are apple.com addresses.
+
+So, Apple appears fully behind this one -- it's not just a rogue intern trolling.
+
+
+Upvote
+5
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+
+6 more replies
+
+2 more replies
+u/t3h avatar
+t3h
+•
+9mo ago
+•
+Edited 9mo ago
+That is an utterly ridiculous article.
+
+It starts off with a bunch of goalpost shifting about what "reasoning" really means. It's clear he believes that if it looks smart, it really is (which actually explains quite a lot here).
+
+Next, logic puzzles, apparently, "aren't maths" in the same way that theorems and proofs are. And these intelligent LLMs that 'can do reasoning', shouldn't be expected to reason about puzzles and produce an algorithm to solve them. Because they haven't been trained for that - they're more for things like writing code. Uhhh....
+
+But the most ridiculous part is - when DeepSeek outputs "it would mean working out 1023 steps, and this is too many, so I won't", he argues "it's still reasoning because it got that far, and besides, most humans would give up at that point too".
+
+This is the entire point - it can successfully output the algorithm when asked about n=7, and can give the appearance of executing it. Ask about the same puzzle but with n=8 and it fails hard. The original paper proposes that it hasn't been trained on this specific case, so can't pattern match on it, despite what it appears to be doing in the output.
+
+Also it's worth mentioning that he has only focused on n=8 Towers of Hanoi here. The paper included other less well known puzzles - and they failed at n=3, requiring 8 moves to solve.
+
+He's got a point that the statement 'even providing the algorithm, it still won't get the correct answer' is irrelevant as it's almost certainly in the training set. But this doesn't actually help his argument - it's just a nit-pick to provide a further distraction from the obvious point that he's trying to steer your attention away from.
+
+And then, with reference to 'it's too 'lazy' to do the full 1023 steps', when DeepSeek provides an excuse, he seems to believe it at face value, assigning emotion and feelings to the response. You really believe that a LLM has feelings?
+
+He re-interprets this as "oh look how 'smart' it is, it's just trying to find a more clever solution - because it thinks it's too much work to follow an algorithm for 1023 steps - see, reasoning!". No, it's gone right off the path into the weeds, and it's walking in circles. It's been trained to give you convincing excuses when it fails at a task - and it worked, you've fallen for them, hook line and sinker.
+
+Yes, it's perfectly reasonable to believe that a LLM's not going to be great at running algorithms. That's actually quite closely related to the argument the original paper is making. It gives the appearance of 'running' for n=7 and below, because it's pattern matching and providing the output. It's not 'reasoning', it's not 'thinking', and it's not 'running', it's just figured out 'this output' is what the user wants to see for 'this input'
+
+It's pretty obvious, ironically, the author of that article is very much deploying 'the illusion of reasoning'.
+
+
+Upvote
+16
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+
+1 more reply
+ZiggityZaggityZoopoo
+•
+9mo ago
+Apple is coping because they can’t release a large model that’s even remotely useful
+
+
+
+Upvote
+106
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+u/threeseed avatar
+threeseed
+•
+9mo ago
+They never tried to build one though.
+
+The focus was on building LLMs that can work on-device and within the limitations of their PCC (i.e. it can run on a VM style slice of compute).
+
+
+Upvote
+10
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+ninjasaid13
+•
+9mo ago
+Apple is coping because they can’t release a large model that’s even remotely useful
+
+Wtf does apple have to do with this research being true or false?
+
+
+
+Upvote
+12
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+u/t3h avatar
+t3h
+•
+9mo ago
+When you can't actually understand the paper, you have to aim the blows a little lower...
+
+
+Upvote
+12
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+
+1 more reply
+
+3 more replies
+
+7 more replies
+knownboyofno
+•
+9mo ago
+Is this the Apple paper? I'm on mobile and can't see the small text.
+
+
+
+Upvote
+18
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+u/Mitsuha_yourname avatar
+Mitsuha_yourname
+•
+9mo ago
+yup
+
+
+Upvote
+6
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+
+1 more reply
+u/Doormatty avatar
+Doormatty
+•
+9mo ago
+All you need is attention after all ;)
+
+
+Upvote
+17
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+u/Altruistic_Heat_9531 avatar
+Altruistic_Heat_9531
+•
+9mo ago
+I will add another point,
+
+Most of user actually hate waiting for reasoning, they prefer just to have their answer fast
+
+Based on point 1, actually most of user ask for simple question rather than high level stuff most of the time.
+
+Tool usage and vision is much more important than reasoning model.
+
+You can turn a non reasoning model to a semi reasoning model with n-shot prompting and RAG
+
+
+
+Upvote
+124
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+u/BusRevolutionary9893 avatar
+BusRevolutionary9893
+•
+9mo ago
+I rather wait for a correct answer than get a wrong one quickly. I won't even use a non thinking model for a question that requires the model to do searches. 
+
+
+Upvote
+55
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+
+2 more replies
+panchovix
+•
+9mo ago
+emoji:Discord:
+Wondering if there's a way to disable thinking/reasoning on Deepseek R1. Just to try a "alike" DeepSeekV3 0528.
+
+
+
+Upvote
+14
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+[deleted]
+•
+9mo ago
+There is! Most front ends allow you to pre-fill the next response for the AI to go off from. It's seriously as easy as putting a </think> at the start. A few front ends even offer this as a toggle and do it in the background.
+
+
+Upvote
+39
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+
+5 more replies
+damienVOG
+•
+9mo ago
+Right for me I either want the answer fast, or I'm willing to wait quite a while for it to reason. Like 5 to 10 minutes. Not a lot where I'd prefer the in between for.
+
+
+Upvote
+3
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+
+4 more replies
+u/nomorebuttsplz avatar
+nomorebuttsplz
+•
+9mo ago
+It seems like a solid paper. 
+
+Haven’t done a deep dive into it yet. 
+
+Does it make any predictions that in 9 months we could look back and see if they were accurate? If not, can we not pretend they’re predicting something dire?
+
+
+
+Upvote
+44
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+Current-Ticket4214
+OP
+•
+9mo ago
+I haven’t read the entire paper, but the abstract does actually provide some powerful insight. I would argue the insights can be gleaned through practice, but this is a pretty strong confirmation. The insights:
+
+non-reasoning models are better at simple tasks
+
+reasoning models are better at moderately complex tasks
+
+even reasoning models collapse beyond a certain level of complexity
+
+enormous token budget isn’t meaningful at high levels of complexity
+
+
+
+Upvote
+57
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+kunfushion
+•
+9mo ago
+But that level of complexity will increase and increase and increase though. So… who cares?
+
+
+
+Upvote
+30
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+u/burner_sb avatar
+burner_sb
+•
+9mo ago
+Not really. You can put it in the context of other work that shows that fundamentally the architecture doesn't "generalize" so you can never reach a magic level of complexity. It isn't really all that surprising since this is fundamental to NN architecture (well all of our ML architecture), and chain of thought was always a hack anyway.
+
+
+Upvote
+23
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+
+9 more replies
+
+1 more reply
+
+7 more replies
+u/SilentLennie avatar
+SilentLennie
+•
+9mo ago
+•
+Edited 9mo ago
+If you want to be lazy and get some idea of what the paper is about:
+
+https://www.youtube.com/watch?v=fGcfJ9J_Faw
+
+Edit: based on how the Internet reacted to it overall, that's a bit overblown.
+
+
+Upvote
+4
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+
+5 more replies
+PeachScary413
+•
+9mo ago
+It has been interesting to read so many emotional and hostile responses; it seems like many people are heavily invested in LLMs being the path to AGI (and perhaps that "thinking" would get us there).
+
+
+
+Upvote
+17
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+u/t3h avatar
+t3h
+•
+9mo ago
+•
+Edited 9mo ago
+That, and this paper came from researchers at Apple, so that's also a major trigger for irrational hatred.
+
+
+
+Upvote
+7
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+u/threeseed avatar
+threeseed
+•
+9mo ago
+Even though one of the researchers co-wrote Torch.
+
+
+Upvote
+7
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+Literature-South
+•
+9mo ago
+Here's the kicker. Most people aren't reasoning either. They're just accessing their memory and applying the response that fits the best when prompted.
+
+We're capable of reasoning and novel thinking, but there isn't a ton of that going on at any given time for a person.
+
+
+
+Upvote
+9
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+u/martinerous avatar
+martinerous
+•
+9mo ago
+We are reasoning much more than it seems. For example, we know when variable names are relevant and when they are not.
+
+If given a task, "Alice has two apples, Bob has three apples. How many apples do they have together?", we immediately know that we don't need to remember anything related to Bob and Alice. And then, if given the same task where the names are changed to Peter and Hanna, we know it's still the same task, and we don't even need to calculate, but fetch it directly from our recent memory. We are applying induction, deduction, abduction... constantly without being aware of that. LLMs do not seem to have the ability to do that. That is why LLMs need an insane amount of training data for even quite basic tasks.
+
+
+
+Upvote
+3
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+u/dagelf avatar
+dagelf
+•
+9mo ago
+You have clearly never tried to get a teenager to do anything. The only reasoning they do is: "you can't control me so I don't have to"
+
+
+Upvote
+5
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+
+1 more reply
+ScrapMode
+•
+9mo ago
+Everything quite literally math
+
+
+Upvote
+8
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+u/Murph-Dog avatar
+Murph-Dog
+Cake icon
+•
+9mo ago
+Then you begin to contemplate, how do our own neurons activate to store, access, and associate data?
+
+Strengthening and weakening connections between themselves at synapses, probabilistic reasoning, like some type of mathematical weighting and matrix transformation.
+
+...wait a second...
+
+
+Upvote
+4
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+
+1 more reply
+Jemainegy
+•
+9mo ago
+I hate these but AI doesn't actually do anything posts. It's such a flawed oppinion. It's an information it's an information carrier and retrieval system and generative tool. It's such a throw away mentality. Like yeah no doi it can't think. But that doesn't stop large data companies from reducing the busy work of analysts by more then 80%. Yeah it's not thinking but that does not mean it's not outperforming normal people across the board on tons of fields including for a lot of people reading and writing. Yeah it's math, and you know what that math is going to completely change Hollywood in the next 2 years. Like literally everything is math, using math as a redundancy is in itself redundant. These damn kids and their flippy phones and their interwebs, I have all I need right here in the only book I need.
+
+
+Upvote
+4
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+
+3 more replies
+u/NamelessNobody888 avatar
+NamelessNobody888
+•
+9mo ago
+I wonder if this paper will end up becoming an AI meme in the way that Minsky & Papert's book 'Perceptrons' did back in the day...
+
+
+Upvote
+4
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+PeachScary413
+•
+9mo ago
+I can't even imagine how frustrating it must be to be a neuroscientist doing studies on the brain rn. With all the tech bros running around asserting confidently that the brain is basically just an LLM and throwing around wild statements about how basic it is and shit lmaoo
+
+
+Upvote
+4
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+
+1 more reply
+u/Mart-McUH avatar
+Mart-McUH
+•
+9mo ago
+We were cruising around Iceland (before age of LLM) on a ship and at one moment the ship captain said a phrase I remember: "Everything is mathematics".
+
+Yeah, LLM is mathematics. But so is ultimately our our brain (let's not forget that random and quantum effects are also described by mathematics).
+
+
+Upvote
+4
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+
+1 more reply
+MountainRub3543
+•
+9mo ago
+And yet, Apple cannot build a functional assistant, let alone an LLM.
+
+
+
+Upvote
+13
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+u/relmny avatar
+relmny
+•
+9mo ago
+Maybe that's why they invest time and money on this paper.
+
+
+Upvote
+8
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+u/Lacono77 avatar
+Lacono77
+•
+9mo ago
+Apple should rename themselves "Sour Grapes"
+
+
+
+Upvote
+19
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+[deleted]
+•
+9mo ago
+Which reminds me, " When the monkey can't reach the bananas, he says they are not sweet"
+
+
+Upvote
+5
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+
+1 more reply
+u/gyanster avatar
+gyanster
+•
+9mo ago
+2+2 from memory or actually computing is quite different
+
+
+Upvote
+3
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+CraigBMG
+•
+9mo ago
+My semi-informed opinion is that LLMs are more like our language intuition, reasoning models are like our self-talk to validate our intuitions. We are asking how well this performs at solving visual-spatial puzzles, and the answer is an exceptionally unsurprising "not very". Let's not judge a fish by how poorly it flies.
+
+
+Upvote
+3
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+Jolly_Mongoose_8800
+•
+9mo ago
+Explain how people reason and think then. Go on
+
+
+
+Upvote
+3
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+u/martinerous avatar
+martinerous
+•
+9mo ago
+There are a few known reasoning tools that people usually learn early on. For example, induction, deduction, abduction.
+
+Without learning these principles, we would be as inefficient as LLMs, requiring huge amounts of examples and relying on memorization alone, and making stupid mistakes anytime when an example is missing.
+
+
+Upvote
+3
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+
+11 more replies
+u/zelkovamoon avatar
+zelkovamoon
+•
+9mo ago
+It's all just math... Like the universe you mean? Your and my brains? LLMs too.
+
+
+
+Upvote
+17
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+u/wrecklord0 avatar
+wrecklord0
+•
+9mo ago
+This is my gripe with all the criticisms of neural networks. It's not real AI, because (take your pick): "It's just pattern matching", "It's just linear equations", "It's just combining learned data"
+
+Maybe so. But first, you will have to prove that your brain does anything different, otherwise the argument is moot.
+
+
+
+Upvote
+29
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+u/zelkovamoon avatar
+zelkovamoon
+•
+9mo ago
+The funny part to me is that people think they can even. Like we don't understand the human brain, and even the best in the world AI researchers can't tell you how exactly an LLM arrives at some conclusion, usually. But everybody is an expert on reddit.
+
+
+Upvote
+8
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+sage-longhorn
+•
+9mo ago
+I'm the first to say we need big architecture improvements for AGI. But:
+
+It's just linear equations
+
+Is blatantly false. The most basic understanding of the theory behind artificial nueral nets will tell you that if it were all linear equations then all nueral nets could be reduced to a single layer. Each layer must include a non-linear component to be useful, commonly a ReLU nowadays
+
+
+Upvote
+8
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+
+2 more replies
+
+4 more replies
+
+3 more replies
+[deleted]
+•
+9mo ago
+I want to mention that the whole "Apple is just incompetent they can't make a better siri" argument is just... not a good one.
+
+Apple and it's competitors know that voice assistants were mostly just a bad idea in the first place. People generally tend to avoid using voice assistants even when there is better software out there, I think there is a good reason basically zero companies have made efforts at their own and that Apple has essentially made it a legacy offering at this point, nobody really wants it.
+
+What exactly will Apple do with an LLM anyways? Make an onboard chatgpt/Google competitor? There really isn't a use-case for Apple that wouldn't be better served by allowing some other company to do the hard work and then offering it as a service on their devices. It's like somebody asking why Apple never made a Google competitor, or Facebook, or whatever technology have you. It just doesn't make sense because there is nothing particular to their product lines that having an LLM on top of improves.
+
+
+Upvote
+5
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+
+6 more replies
+u/cnnyy200 avatar
+cnnyy200
+•
+9mo ago
+I still think LLM is just a small part of what would make an actual AGI. You can’t just recognize patterns to do actual reasoning. And the current methods are too inefficient.
+
+
+
+Upvote
+12
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+u/liquiddandruff avatar
+liquiddandruff
+•
+9mo ago
+Actually, recognizing patterns may be all that our brains do at the end of the day. You should look into what modern neuroscience has to say about this.
+
+https://en.m.wikipedia.org/wiki/Predictive_coding
+
+
+Upvote
+4
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+
+[deleted]
+•
+9mo ago
+
+3 more replies
+u/Snoo_28140 avatar
+Snoo_28140
+•
+9mo ago
+Tell me you didnt even glance at it.... It's not about it being mathematical or not. Its not about 2 ways to view the same thing.
+
+What it is about: lack of generalization abilities, which fundamentally limits their abilities.
+
+
+Upvote
+12
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+
+8 more replies
+u/tonsui avatar
+tonsui
+•
+9mo ago
+TL;DR: In a way, "thinking" is a sophisticated form of prompt engineering.
+
+
+Upvote
+2
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+u/Thick-Protection-458 avatar
+Thick-Protection-458
+•
+9mo ago
+Okay, I need to play around with other puzzles they used. But Hanoi tower example sounds ridiculous.
+
+--------
+
+Apple: Benchmarks are leaked into train data
+
+@
+
+Also apple: Let's use hanoi tower puzzle. It definitely did not leaked
+
+--------
+
+Also, losing performance after 7-8 disks? Man, without having physical freaking tower or at least drawing it after every step (and they did not mentioned tools allowing to imitate physical tower) I personally would lose coherence much faster. Probably would even with them. Most probably like V3 or so.
+
+Well, on the other hand I was always joking that attributing intelligence to us was overstated, so I have no problems with me being a pattern matching. Even if a bit more general.
+
+And frankly, if we - just because of complexity generalization being expected to be not 100%-good - assume we have M steps ahead. and N% chance to generate correct step and K% chance to find error and retrace the whole approach since than - shouldn't we expect exponential quality loss (the only question is the exponent base)? Which, upon certain threshold - will look like almost 0% chance to solve for given amount of samplings, and will look exactly llke 0% for certain samples?
+
+--------
+
+And finally... Degrading performance? Yes, it seems for that puzzle it is just reasonable to write some python program instead of solving it manually, lol. Or cheat and move whole tower physically, lol (which I got as an option from deepseek, lol).
+
+--------
+
+This being said - that's still interesting.
+
+They measured some qualities, instead - so now we have them measured numerically. Is that correct to intepret like "no generalization at all" or "complexity generalization is so imperfect so it lose quality after N steps" or "it finds out it is pointless to do that way and suggest another" is another question.
+
+At least now we have numbers to compare one more set of things.
+
+(btw, still interesting where humans will be at these plots).
+
+
+Upvote
+2
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+clduab11
+•
+9mo ago
+It's ALWAYS been just math. The right meme is the astronaut meme and "Always has been".
+
+The nomenclature around "reasoning" needs to change, and how it's marketed needs to change, but all the mouthbreathers who are buying into this meme a) are already behind the 8-ball because there's a lot of utility you can't refute when it comes to reasoning layers and tokens and 2) Apple's "whitepaper" used abstract, algorithmic layers they "claim" as "reasoning layers" and apply it to puzzle-centric testings where these layers were not designed to be used for in a vacuum. Anyone who actually READ the paper and not focused on this meme realizes this.
+
+Reuven Cohen said it best under a LinkedIn post to this...
+
+Same could be said for most humans.
+
+I swear, with all this AI, and people still just kneejerk at memes and headlines of whitepapers and can't even be bothered to have a 5 minute conversation with an LLM of their choice about it lol.
+
+
+
+Upvote
+2
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+Current-Ticket4214
+OP
+•
+9mo ago
+Can you just laugh?
+
+
+Upvote
+1
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+
+1 more reply
+mrb1585357890
+•
+9mo ago
+Ermmm, isn’t neuronal firing in the brain just math?
+
+Do we think the brain is special?
+
+
+Upvote
+4
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+u/Subject-Building1892 avatar
+Subject-Building1892
+•
+9mo ago
+Take 2 pills of 300 mg of copium after meal twice a day.
+
+
+Upvote
+4
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+Chmuurkaa_
+•
+9mo ago
+Apple: tries making an LLM
+
+Apple: Fails horribly
+
+Apple: "THIS DOESN'T WORK!"
+
+
+
+Upvote
+4
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+Interesting8547
+•
+9mo ago
+... and will never work... 😁 ... (probably an Apple scientist)
+
+
+Upvote
+1
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+TrifleHopeful5418
+•
+9mo ago
+This is a very good paper, re-enforcing the belief that I have held for long that transformer architecture can’t/ won’t get us to AGI, it is just a token prediction machine that draws the probability of next token based on the sequence + training data.
+
+RL fine tuning for reasoning helps as it’s makes the input sequence longer by adding the “thinking” tokens, but at the end it’s just enriching the context that helps with better prediction but it’s not truly thinking or reasoning.
+
+I believe that true thinking and reasoning come from internal chaos and contradictions. We come up with good solutions by mentally thinking about multiple solutions from different perspectives and quickly invalidating most of the solutions with problems. You can simulate that by running 10/20/30 iterations of non thinking model by varying the seed/temp to simulate entropy and then crafting the solution from that, it’s a lot more expensive than the thinking model but it does work.
+
+Again we can reach AGI but it won’t be just transformers but with a robust and massive scaffolding around it
+
+
+
+Upvote
+8
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+[deleted]
+•
+9mo ago
+Best reasoning models already "thinking about multiple solutions from different perspectives and quickly invalidating most of the solutions with problems".
+
+
+Upvote
+6
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+Current-Ticket4214
+OP
+•
+9mo ago
+I definitely agree with your last sentence. Not disagreeing with any others, but AGI with transformers will require massive scaffolding.
+
+
+Upvote
+0
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+goldlord44
+•
+9mo ago
+I was talking to a quant the other day. He genuinely believed that a reasoning model was completely different to a normal llm and that it had a specific real logical reasoning that could deterministically think through logical problems baked into the model. It was wild to me.
+
+He was specifically saying to me that an LLM can't compete with a reasoning model because the former is simply a stochastic process, whereas the latter has this deterministic process. Idk where tf he heard this.
+
+
+
+Upvote
+3
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+llmentry
+•
+9mo ago
+I was talking to a quant the other day.
+
+This is why it's always better to talk to a bf16 model.
+
+
+Upvote
+7
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+u/ConversationLow9545 avatar
+ConversationLow9545
+•
+4mo ago
+reasoning models are LLMs lol
+
+
+Upvote
+1
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+
+1 more reply
+colbyshores
+•
+9mo ago
+•
+Edited 9mo ago
+Wither or not a LLM is actually reasoning is irrelevant when it comes to its usefulness because it is a fact that LLMs are more accurate when when given test time compute. It’s why o3 beat the ARC-AGI test.. mind you it cost millions of dollars for what would have took a human a couple of minutes to figure out but still.
+
+
+Upvote
+3
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+u/RobXSIQ avatar
+RobXSIQ
+•
+9mo ago
+I thought this was settled ages ago. reasoning models are just doing thinking theater but its mostly just coming up with a roleplay on how it came to the answer it made seconds earlier before it even typed the first letter. I prefer non reasoning models as I have only noticed slowdown and token increase without giving be better results, but that is my personal experience.
+
+
+
+Upvote
+2
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+Interesting8547
+•
+9mo ago
+It depends on what you're trying to do, for roleplay and casual conversations non thinking models are usually better. For more complex tasks reasoning models are much better. The new R1 wipes the floor with V3, when reasoning tasks are involved. I mean tasks where you should think about what you're talking about and not just "yapping".
+
+
+Upvote
+1
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+rcparts
+•
+9mo ago
+Comment Image
+
+Upvote
+2
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+hipster-coder
+•
+9mo ago
+Saying that something is "just math" doesn't mean anything.
+
+
+Upvote
+2
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+u/jasonhon2013 avatar
+jasonhon2013
+•
+9mo ago
+turns out everyone and everything are just maths :((
+
+
+Upvote
+1
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+olivoGT000
+•
+9mo ago
+When you found out is only quantum mechanics
+
+
+Upvote
+1
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+SmallMacBlaster
+•
+9mo ago
+I mean, we're just biological computers. Does it mean free will is an illusion?
+
+
+
+Upvote
+1
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+unlucky_fig_
+•
+9mo ago
+It might one day
+
+
+Upvote
+1
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+sluuuurp
+•
+9mo ago
+If they can solve technical problems and help me without any “real reasoning”, I don’t really care. I care about results.
+
+
+Upvote
+1
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+u/Demoralizer13243 avatar
+Demoralizer13243
+•
+9mo ago
+•
+Edited 9mo ago
+I think the paper has some interesting conclusions but I would say 3 things about it:
+
+I would have liked to have seen them actually work with/modify their own model. They mentioned how they were limited by the fact that their data is limited because they are just API calls. You are apple, literally download the full deepseek or hell even a smaller Local LLAMA and do a closer analysis. Attempt to modify it to continue to scale in compute even after it reaches the collapse threshold and see if that actually does anything. That was the most frustrating part. I believe they only went to 100k tokens for some of these more complex puzzles and even then the model stopped using as many tokens. I wish they had just attempted to create a modified in house model that attempted to scale inference time compute and see how that effected the whole collapse regime.
+
+I think analyzing thinking traces is a little bit fraught with the recent paper on LLMs lying/omitting their real thinking processes in the recent anthropic paper. I would have at least liked a little bit of discussion on how that could have effected the intermediate results.
+
+
+Upvote
+1
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+u/AcidCommunist_AC avatar
+AcidCommunist_AC
+•
+9mo ago
+Ok, now prove humans are "actually reasoning".
+
+
+Upvote
+1
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+u/Purplekeyboard avatar
+Purplekeyboard
+•
+9mo ago
+I couldn't solve these extended Tower of Hanoi puzzles either. Shit, I guess I only have the illusion of thinking, and can't reason.
+
+
+Upvote
+1
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+u/Anyusername7294 avatar
+Anyusername7294
+•
+9mo ago
+I'm too lazy to read, what this paper is about? Reasoning models?
+
+
+
+Upvote
+0
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+Current-Ticket4214
+OP
+•
+9mo ago
+I haven’t read the entire paper, but the abstract does actually provide some powerful insight. I would argue the insights can be gleaned through practice, but this is a pretty strong confirmation. The insights:
+
+non-reasoning models are better at simple tasks
+
+reasoning models are better at moderately complex tasks
+
+even reasoning models collapse beyond a certain level of complexity
+
+enormous token budget isn’t meaningful at high levels of complexity
+
+
+Upvote
+5
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+
+1 more reply
+u/sapoepsilon avatar
+sapoepsilon
+•
+9mo ago
+Basically the whole paper is that the reasoning models don't reason but are really good at pattern matching. Which has been true in my experience.
+
+
+Upvote
+6
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+
+16 more replies
+Professional_Job_307
+•
+9mo ago
+What? Ofcourse they are reasoning. They are capable of inventing new, novel things and solve very complex problems.
+
+
+Upvote
+0
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+u/squatsdownunder avatar
+squatsdownunder
+•
+9mo ago
+I saw this embedded in one of the dumbest articles I have read on Linkedin for a while. Read and weep: https://www.linkedin.com/posts/stephenbklein_apple-just-blew-the-doors-off-the-generative-activity-7337545423194136576-_CYg?utm_source=share&utm_medium=member_ios&rcm=ACoAAAAvNcMBu6PHvMQ7vLf6XsNnfK3jYvhuPI0
+
+
+Upvote
+0
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+Training-Event3388
+•
+9mo ago
+reasoning = tag/label for AI that uses a system to validate itself… ITS NOT HUMAN
+
+
+Upvote
+0
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+u/crusoe avatar
+crusoe
+•
+9mo ago
+Most people don't reason EITHER, Reasoning is HARD.
+
+Westworld was right in that regard.
+
+Most people engage with the world, 99% of the time, in a reflexive manner.
+
+If you gave towers of Hanoi to people, most would fail to discover the optimal move list or the optimal way to plan for n towers of hanoi.
+
+The vast majority of people never make it the Abstract Thinking Stage of development, per Jean Piaget.
+
+We keep expecting AI to act like computers and be super-logical, but it is definitely a mirror, as it were.
+
+
+Upvote
+0
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+u/crusoe avatar
+crusoe
+•
+9mo ago
+Their study just reads mostly like sour grapes. "Fine, we didn't want AI anyways".
+
+
+Upvote
+0
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+tyty657
+•
+9mo ago
+Everything is math it still works
+
+
+Upvote
+1
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+Local_Beach
+•
+9mo ago
+How is it related to function calls? I mean, it determines what makes the most sense. That's some thinking, at least.
+
+
+Upvote
+1
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+u/shiftingsmith avatar
+shiftingsmith
+•
+9mo ago
+Comment Image
+
+Upvote
+1
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+Halfwise2
+•
+9mo ago
+If you'll allow a bit of cheekiness, human thinking can be reduced to basically just math too. Extremely complex math, but math nonetheless.
+
+
+Upvote
+1
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+change_of_basis
+•
+9mo ago
+Unsupervised next token prediction followed by Reinforcement Learning with a "good answer" reward does not optimize for intelligence or "thinking"; it optimizes for exactly the former. Useful, still.
+
+
+Upvote
+1
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+perth_girl-V
+•
+9mo ago
+But but BUT BuTt fucking tokens
+
+
+Upvote
+1
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+Svedorovski
+•
+9mo ago
+No Shit
+
+Sun Tzu, The Art of War
+
+
+Upvote
+1
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+rorowhat
+•
+9mo ago
+Is that siri on the corner?
+
+
+
+Upvote
+1
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+CheatCodesOfLife
+•
+9mo ago
+Nah, Siri would be butting it abruptly and answering questions nobody asked.
+
+
+Upvote
+2
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+
+1 more reply
+Commercial_Stand5086
+•
+9mo ago
+@grok is this true
+
+
+Upvote
+1
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+Teetota
+•
+9mo ago
+Reasoning can be seen as adding a few more ai-generated shots to the conversation. If you send your initial prompt and ask to analyze it, break it down to steps and enrich with examples to a non reasoning model and then use the output plus original prompt in a new chat you kinda reproduce the reasoning model.
+
+
+Upvote
+1
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+u/LetsileJulien avatar
+LetsileJulien
+•
+9mo ago
+Yeah, they dont , its just a buzz word for marketing
+
+
+Upvote
+1
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+TheTomatoes2
+•
+9mo ago
+Who would've guessed??? Thank god Tim Cook is here to rescue us
+
+
+Upvote
+1
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+TheRealVRLP
+•
+9mo ago
+I remember having a standard prompt on ChatGPT 1 that would give extra instructions on being specific and reasoning it's answers first to make them better etc.
+
+
+Upvote
+1
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+mitchins-au
+•
+9mo ago
+Reasoning isn’t magic. It just guides the prompt into known rails self-echoing alignment. And a lot of the time it works because it steers it back into territory the model was familiar with from training.
+
+
+Upvote
+1
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+[deleted]
+•
+9mo ago
+The problem with that is, are we actually thinking? Decision reasoning happens seconds after decision finding. Split brains showcase how we take responsibility for our actions and make up reasons even though we have no idea why we did something, and we would swear we did it because we had an internal monologue, a thought pattern, leading us to it.
+
+All those "LLM's" aren't really thinking leaves me with two questions:
+
+How do we define that.
+
+How do we prove any other human does this? Extrinsic checks, not intrinsic. We know we fool ourselves.
+
+Turing was right, the only test we can do is extrinsic and if the answer book inside a Chinese room is complex enough, it is aware. Even though the internals are as unimpressive as the observation of a single neuron.
+
+
+Upvote
+1
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+u/ortegaalfredo avatar
+ortegaalfredo
+•
+9mo ago
+emoji:Discord:
+Profile Badge for the Achievement Top 1% Poster Top 1% Poster
+It's not reasoning unless it's from the French region of Hypothalamus. Otherwise it's sparkling CoT.
+
+
+Upvote
+1
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+u/Soggy_Wallaby_8130 avatar
+Soggy_Wallaby_8130
+•
+9mo ago
+Obligatory “but everything is just math, doofus!” comment.
+
+
+Upvote
+1
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+DFEN5
+•
+9mo ago
+Isn’t it just a model doing self prompt engineering? :p
+
+
+Upvote
+1
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+jasont80
+•
+9mo ago
+Do we think? I'm feel less sure on the daily.
+
+
+Upvote
+1
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+Hyperion141
+•
+9mo ago
+Reasoning is not true or false, it’s a continuous variable. When you do maths, in the process of reasoning you can make mistakes. It is clear that models do reasoning but it is very abstract and shallow, and also sometimes unreasonable, but there definitely is reasoning.
+
+
+Upvote
+1
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+CupcakeSecure4094
+•
+9mo ago
+Smells like an apple rage quit to me.
+
+
+Upvote
+1
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+carnyzzle
+•
+9mo ago
+still applies
+
+Comment Image
+
+Upvote
+1
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+u/Mysterious_Flow226 avatar
+Mysterious_Flow226
+•
+9mo ago
+Lolz
+
+
+Upvote
+1
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+[deleted]
+•
+9mo ago
+Isn't our own reasoning just ...math. Often bad, erroneous and chaotic.
+
+The smartest of us, with brains in best shape and high IQ can answer any question because they are good at learning and memorizing. The worst of us, with low IQ, often don't even think. They just go around without discussion in their brain. (this is sadly true)
+
+At the end, whatever we create, is a reflection of us self.
+
+Let models constantly random hallucinate on low level, and there is your thinking. Add a camera to that, smell and touch senors, audio recording so it can look around and be aware of environment it is, and there you go. Thinking.
+
+
+Upvote
+1
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+Kitchen_Werewolf_952
+•
+9mo ago
+Everyone knows the model thinking isn't actually thinking but statistically we know that it certainly helps a lot.
+
+
+Upvote
+1
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+[deleted]
+•
+9mo ago
+Guys, the term TEST TIME COMPUTE is almost a year old now. People have been hinting at this since forever. Still we don't understand shit about llms. In the MATHEMATICAL sense too.
+
+
+Upvote
+1
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+u/economic-salami avatar
+economic-salami
+•
+9mo ago
+As if human brain isn't just a bunch of on and off cells.
+
+
+
+Upvote
+1
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+kaba40k
+•
+9mo ago
+Human brain reasons differently though.
+
+Being "a bunch of on and off cells" (which it isn't, but let's for a minute suppose it is) does not imply equivalence. You could also say that all software is just bytes, but it doesn't make all software equivalent or "reasoning".
+
+
+Upvote
+1
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+
+2 more replies
+SX-Reddit
+•
+9mo ago
+Attention is all Apple needs.
+
+They need to earn some credit in the area first.
+
+
+Upvote
+1
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+u/CHG__ avatar
+CHG__
+•
+9mo ago
+I mean it's potentially all just math, or at least math is the best representation of reality we've come up with so
+
+
+Upvote
+1
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+had12e1r
+•
+9mo ago
+It's all just statistics
+
+
+Upvote
+1
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+u/emergent-emergency avatar
+emergent-emergency
+•
+9mo ago
+Isomorphisms man, isomorphisms…
+
+
+Upvote
+1
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+u/RQManiac avatar
+RQManiac
+•
+9mo ago
+Convenient timing for the paper, just when Apple is falling o far behind in the AI race
+
+
+Upvote
+1
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+[deleted]
+•
+9mo ago
+AI companies know this but don’t want to impose the Ratner effect on themselves by being forthright.
+
+If modern AI models can’t actually reason, then it means we’re back to square one at least as far as AGI is concerned.
+
+Then all of this just becomes a repeat of expert systems from the ‘80s
+
+
+Upvote
+1
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+no_brains101
+•
+9mo ago
+I would assume they all knew this, but apple was the only one with a bad enough AI to have to point it out.
+
+
+Upvote
+1
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+Lazyworm1985
+•
+9mo ago
+It makes you think; Is our brain also just predicting the next token? A biological computer, nothing more. And somewhere something cyclical giving the experience of consciousness. Some wave function that recollapses on the quantum level again and again, as long as the blood flow is intact to provide energy? Who knows? I certainly don’t.
+
+
+Upvote
+1
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+SupeaTheDev
+•
+9mo ago
+I think the thoughts humans create is just maths in the neuronal/physics level. Max Tegmark has a brilliant book on how the whole Universe is probably Math
+
+
+Upvote
+1
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
+TheManni1000
+•
+8mo ago
+your brain is also just doing math lol
+
+
+Upvote
+1
+
+Downvote
+
+Reply
+
+Award
+
+Share
+
