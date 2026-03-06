@@ -4,7 +4,7 @@ Use this as public-safe source material for the product demo.
 
 ## Goal
 
-Explain that `local-storyboard-video` usually feels like a three-click workflow:
+Explain that `Cathode` usually feels like a three-click workflow:
 
 1. generate storyboard
 2. generate everything

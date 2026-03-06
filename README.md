@@ -1,86 +1,62 @@
-# local-storyboard-video
+<p align="center">
+  <img src="docs/assets/cathode-logo.png" alt="Cathode logo" width="220">
+</p>
 
-`local-storyboard-video` is a local-first Streamlit app for turning a brief, script, or rough notes into a narrated explainer video.
+# Cathode
 
-It is built for the practical workflow:
+Cathode is a local-first Streamlit app and MCP server for turning rough notes, source text, or a finished script into a narrated explainer video.
 
-1. Paste source material or a final script.
-2. Let the director model turn it into scenes.
-3. Use AI images, uploaded stills, uploaded clips, or a mix of both.
-4. Generate narration scene by scene.
-5. Render an MP4 on your own machine.
+The default pitch is simple:
 
-The point of the repo is straightforward: keep the workflow editable, keep the files local, and let people pay only for the underlying model calls they actually want to use.
+1. paste the source
+2. generate the storyboard
+3. generate the assets
+4. render the video
 
-In practice, the happy path is usually very short: generate the storyboard, batch-generate the assets, render the video. The scene-by-scene editor is there when you need surgical fixes, not because the default flow should feel heavy.
+Most of the time, that is enough. The scene editor is there for surgical fixes, not because the happy path should feel heavy.
+
+## What It Does
+
+- brief-driven storyboard generation
+- image scenes and uploaded video scenes
+- scene-by-scene narration, prompt, and asset editing
+- local project folders with inspectable files
+- local MP4 render
+- MCP tools for agent/client-driven video generation
 
 ## Demo Assets
 
-- Sample walkthrough brief: `docs/demo-brief.md`
-- Product demo rendered from this repo: `docs/assets/storyboard-demo.mp4`
-- Sample mixed-media workflow clip: `docs/assets/ui-workflow-clip.mp4`
+- Product demo: `docs/assets/storyboard-demo.mp4`
+- LocalLLaMA short demo: `docs/assets/localllama-demo.mp4`
+- Mixed-media workflow clip: `docs/assets/ui-workflow-clip.mp4`
 - Expanded scene editor screenshot: `docs/assets/scene-preview-expanded.png`
+- Sample prompt brief: `docs/demo-brief.md`
 
-![App home](docs/assets/app-home.png)
-
-## What The App Supports
-
-- Three source modes:
-  - `ideas_notes`: AI can create structure and wording from rough notes.
-  - `source_text`: AI preserves facts while rewriting for clarity.
-  - `final_script`: AI mostly segments an already-written script into scenes.
-- Two visual scene types:
-  - `image`: generated still or uploaded image
-  - `video`: uploaded clip with trim/speed/freeze controls
-- Project-level visual strategy:
-  - slides only
-  - mixed media
-  - video preferred
-- Scene-by-scene editing for narration, visual prompts, on-screen text, images, clips, audio, and preview renders
-- Local MP4 assembly with MoviePy/ffmpeg
+![Cathode app](docs/assets/app-home.png)
 
 ## Provider Model
 
-The UI is intentionally env-driven instead of exposing every possible backend knob.
+Cathode is env-driven on purpose.
 
-- LLM provider:
-  - `OPENAI_API_KEY` enables OpenAI
-  - `ANTHROPIC_API_KEY` enables Anthropic
-- Voice provider:
-  - `Kokoro` is always available locally
-  - `ELEVENLABS_API_KEY` enables ElevenLabs
-  - `OPENAI_API_KEY` enables OpenAI TTS
-  - `REPLICATE_API_TOKEN` enables Chatterbox on Replicate
-- Image generation:
-  - `REPLICATE_API_TOKEN` enables built-in AI image generation with Qwen Image 2512
-  - without it, the app stays in upload/local-asset mode for visuals
-- Image editing:
-  - Replicate-backed `qwen/qwen-image-edit-2511` is the default and recommended path in this repo right now
-  - `DASHSCOPE_API_KEY` or `ALIBABA_API_KEY` adds DashScope edit options in the sidebar
+- `OPENAI_API_KEY` and/or `ANTHROPIC_API_KEY`: storyboard LLMs
+- `REPLICATE_API_TOKEN`: Qwen image generation, image edit, and Chatterbox voice
+- `ELEVENLABS_API_KEY`: ElevenLabs narration
+- `DASHSCOPE_API_KEY` or `ALIBABA_API_KEY`: optional DashScope image edit
+- Kokoro remains the always-available local voice option
 
-Only configured providers appear in the relevant dropdowns. If you want a quieter setup, leave keys out of `.env` and the UI will stay narrower.
+Only configured providers appear in the UI. If you leave a key out, the UI stays quieter.
 
 ## Local Vs Cloud
 
-This repo is local-first, not cloud-hosted:
+Cathode is local-first, not cloud-hosted.
 
-- the Streamlit app runs locally
-- project files live under `projects/<project>/`
+- the app runs locally
+- projects live under `projects/<project>/`
 - previews and final renders happen locally
-- Kokoro voice is local
-- uploaded stills and uploaded clips are local
+- uploaded stills and clips stay local
+- Kokoro is local TTS
 
-Out of the box, the built-in AI image generator is cloud-backed through Replicate. If you want a fully local visual workflow today, use uploaded stills/clips and keep the rest of the pipeline on your machine.
-
-## Image Edit Caveat
-
-The image edit feature is more backend-constrained than the rest of the pipeline.
-
-- Type instructions into `Refine visual prompt`
-- Click `Refine Prompt` to rewrite the prompt text
-- Click `Edit Image` to apply those instructions directly to the current image
-
-This repo defaults to the Replicate-backed Qwen Image Edit path because it is the most reliable option in the current app. DashScope edit models are still available when configured, but they are not the default.
+For visuals, the built-in AI image path is currently cloud-backed through Replicate. If you want a fully local visual workflow today, use uploaded images and uploaded clips.
 
 ## Quick Start
 
@@ -88,13 +64,51 @@ This repo defaults to the Replicate-backed Qwen Image Edit path because it is th
 ./start.sh
 ```
 
-Manual launch:
+Manual app run:
 
 ```bash
 /opt/homebrew/bin/python3.10 -m streamlit run app.py --server.port 8517
 ```
 
 Default port is `8517`. Override it with `STREAMLIT_PORT` when using `./start.sh`.
+
+Final render now uses direct `ffmpeg` orchestration and auto-prefers hardware H.264 encoders when the local ffmpeg build supports them. Override with `CATHODE_VIDEO_ENCODER` or force CPU fallback with `CATHODE_DISABLE_HW_ENCODER=1`.
+
+## MCP Server
+
+Cathode also ships as an MCP server.
+
+Run over stdio:
+
+```bash
+/opt/homebrew/bin/python3.10 cathode_mcp_server.py --transport stdio
+```
+
+Run over Streamable HTTP:
+
+```bash
+CATHODE_MCP_PORT=8765 /opt/homebrew/bin/python3.10 cathode_mcp_server.py --transport streamable-http
+```
+
+Docker:
+
+```bash
+docker build -t cathode-mcp .
+docker run --rm -p 8765:8765 cathode-mcp
+```
+
+Primary MCP tools:
+
+- `make_video`
+- `get_job_status`
+- `cancel_job`
+- `rerun_stage`
+- `list_projects`
+
+Primary MCP resources:
+
+- `project://{project_name}/plan`
+- `project://{project_name}/artifacts`
 
 ## Setup
 
@@ -120,33 +134,29 @@ sudo apt-get install python3.10 ffmpeg espeak-ng
 
 ### Environment
 
-Copy `.env.example` to `.env` and fill in only the providers you want.
-
-Minimum useful setups:
-
-- OpenAI or Anthropic only: storyboard drafting only
-- OpenAI/Anthropic + Replicate: full AI storyboard + image generation
-- Kokoro only: local narration generation if you already have visuals and a plan
+Copy `.env.example` to `.env` and fill in only what you need.
 
 Example:
 
 ```bash
-OPENAI_API_KEY=...
-ANTHROPIC_API_KEY=...
-REPLICATE_API_TOKEN=...
+OPENAI_API_KEY=
+ANTHROPIC_API_KEY=
+REPLICATE_API_TOKEN=
 ELEVENLABS_API_KEY=
 DASHSCOPE_API_KEY=
 ALIBABA_API_KEY=
 IMAGE_EDIT_PROVIDER=
 IMAGE_EDIT_MODEL=qwen/qwen-image-edit-2511
 STREAMLIT_PORT=8517
+CATHODE_VIDEO_ENCODER=auto
+CATHODE_DISABLE_HW_ENCODER=0
 ```
 
 ## Workflow
 
-### Step 1: Build Project Brief
+### Step 1
 
-Fill in:
+Build the brief:
 
 - project name
 - source mode
@@ -155,33 +165,29 @@ Fill in:
 - target length
 - tone
 - visual style
-- must-include / must-avoid guidance
 - source material
 - optional footage notes
-- optional style reference images
 
-The app saves this to `meta.brief` inside `projects/<project>/plan.json`.
+### Step 2
 
-### Step 2: Edit Scenes
+Edit scenes if needed:
 
-For each scene you can:
+- narration
+- visual prompt
+- on-screen text
+- image generation or upload
+- video upload
+- image edit
+- per-scene preview
 
-- edit narration
-- refine narration
-- edit or refine the visual prompt
-- generate an AI image
-- upload/replace an image
-- edit an existing image
-- upload a video clip instead of using a still
-- generate audio
-- preview the scene
+### Step 3
 
-### Step 3: Render
+Render the final video.
 
-Render timing is narration-led:
+Timing is narration-led:
 
 - image scenes hold for narration duration
-- video scenes trim to narration length
+- video scenes trim to narration duration
 - short clips can freeze on the last frame to stay in sync
 
 ## Batch Rebuild
@@ -191,8 +197,6 @@ python3.10 batch_regenerate.py
 python3.10 batch_regenerate.py --projects demo_one,demo_two
 python3.10 batch_regenerate.py --dry-run
 ```
-
-Batch runs respect the project’s saved `tts_profile` and `image_profile`.
 
 ## Tests
 
@@ -205,11 +209,13 @@ PYTHONPATH=. /opt/homebrew/bin/python3.10 -m pytest -q
 ```text
 app.py
 batch_regenerate.py
+cathode_mcp_server.py
 core/
 prompts/
 tests/
-projects/              # generated at runtime; not populated in the repo
-output/                # scratch output; ignored
+docs/assets/
+projects/
+output/
 ```
 
 ## License

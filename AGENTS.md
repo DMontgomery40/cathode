@@ -1,57 +1,62 @@
-# Repository Agents (local-storyboard-video)
+# Repository Agents (Cathode)
 
 This file is for AI agents working in this repo.
 
 ## Start Here
 
-1. Read `CLAUDE.md` for architecture and constraints.
-2. `projects/<project>/plan.json` is the source of truth.
-3. Keep pipeline behavior generic. Do not add domain-specific assumptions.
+1. Read `CLAUDE.md` first.
+2. Treat `projects/<project>/plan.json` as the source of truth for storyboard state.
+3. Keep pipeline behavior generic and product-facing. Do not reintroduce domain-specific workflows.
 
-## Pipeline Contract
+## What Cathode Is
 
-- Input: brief-driven storyboard generation.
+Cathode has two main surfaces:
+
+- `app.py`: the local Streamlit app
+- `cathode_mcp_server.py`: the MCP server for agent/client integrations
+
+Both rely on the same underlying pipeline services and project store.
+
+## Core Contract
+
+- Input is brief-driven.
 - Source modes:
-  - `ideas_notes`: director can create structure and wording
-  - `source_text`: preserve facts while restructuring
-  - `final_script`: minimal rewrite, mostly segmentation
-- Scene type support in the shipped app:
-  - `image`: generated still or uploaded image
-  - `video`: uploaded clip with narration-aware trim/freeze behavior
+  - `ideas_notes`
+  - `source_text`
+  - `final_script`
+- Scene types:
+  - `image`
+  - `video`
+- Output is a local project folder plus a rendered MP4.
 
-## Image Actions (not interchangeable)
+## Important Files
 
-- **Generate/Regenerate Image**: new image from prompt via image generation model
-- **Edit Image**: surgical edits to existing image
-- **Refine Prompt**: LLM rewrites prompt text
+- `projects/<project>/plan.json`: normalized storyboard, metadata, and asset paths
+- `projects/<project>/.cathode/jobs/*.json`: persisted background job state
+- `prompts/`: director and refiner prompts
+- `core/pipeline_service.py`: shared app/batch/MCP execution helpers
+- `core/project_store.py`: project persistence
+- `core/job_runner.py`: background execution
+- `core/runtime.py`: provider discovery and profile resolution
 
-## Important Defaults
+## Provider UX
 
-- `meta.pipeline_mode = "generic_slides_v1"`
-- `meta.render_profile`: 16:9, 1664x928, 24fps default
-- `meta.image_profile`: persisted image provider defaults
-- `meta.tts_profile`: persisted voice defaults
-- Backfill legacy plans at load time; do not require one-time migrations.
+- Keep provider selection env-driven.
+- Only surface providers in the UI when they are actually configured.
+- Preserve the local/manual visual path when cloud image generation is unavailable.
+- Do not turn the UI into a giant provider control panel.
 
-## Quick Commands
+## Image Actions
 
-- Run app: `./start.sh`
-- Manual run: `/opt/homebrew/bin/python3.10 -m streamlit run app.py`
-- Batch rebuild: `python3.10 batch_regenerate.py`
+These are intentionally different:
 
-## Environment Variables
-
-- `OPENAI_API_KEY` and/or `ANTHROPIC_API_KEY` (director + refiners)
-- `REPLICATE_API_TOKEN` (Qwen image generation, Replicate image edit, Chatterbox voice)
-- `ELEVENLABS_API_KEY` (optional ElevenLabs TTS)
-- `DASHSCOPE_API_KEY` or `ALIBABA_API_KEY` (optional DashScope image edit)
-
-Provider UX:
-- Keep provider selection env-driven. Only surface providers in the UI when they are actually configured.
-- Preserve the local/manual visual workflow when cloud image generation is unavailable.
+- `Generate/Regenerate Image`: create a new image from prompt
+- `Edit Image`: surgically modify an existing image
+- `Refine Prompt`: rewrite prompt text with the LLM
 
 ## Guardrails
 
-- Keep prompts domain-agnostic.
-- Keep docs and UI labels domain-agnostic.
-- Do not introduce QC/publish flows tied to external systems in this fork.
+- Keep docs, prompts, and UI labels domain-agnostic.
+- Favor the fast default workflow first; present fine-tuning as optional power.
+- Keep MCP tool behavior practical and bounded.
+- Do not add external publish/QC systems or work-specific automations to this fork.

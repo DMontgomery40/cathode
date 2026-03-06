@@ -328,7 +328,7 @@ def _generate_with_openai(text: str, output_path: Path, voice: str = "nova") -> 
     mp3_path = output_path.with_suffix(".mp3")
     response.stream_to_file(str(mp3_path))
 
-    # Convert to WAV for consistency (MoviePy works better with WAV)
+    # Convert to WAV for consistency with the local render pipeline.
     if output_path.suffix == ".wav":
         _convert_mp3_to_wav(mp3_path, output_path)
         mp3_path.unlink()  # Remove temporary MP3
