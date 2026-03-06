@@ -1,0 +1,117 @@
+"""Project storage and local artifact helpers."""
+
+from __future__ import annotations
+
+import json
+import shutil
+from pathlib import Path
+from typing import Any
+
+from .project_schema import backfill_plan, sanitize_project_name
+from .runtime import PROJECTS_DIR
+
+
+def get_project_path(project_name: str, overwrite: bool = False) -> Path:
+    """Return a project path, incrementing the folder name unless overwrite is requested."""
+    clean_name = sanitize_project_name(project_name)
+    base_path = PROJECTS_DIR / clean_name
+    if overwrite or not base_path.exists():
+        return base_path
+
+    counter = 2
+    while True:
+        candidate = PROJECTS_DIR / f"{clean_name}__{counter:02d}"
+        if not candidate.exists():
+            return candidate
+        counter += 1
+
+
+def ensure_project_dir(project_name: str, overwrite: bool = False) -> Path:
+    """Create and return the project directory."""
+    project_dir = get_project_path(project_name, overwrite=overwrite)
+    if overwrite and project_dir.exists():
+        shutil.rmtree(project_dir)
+    project_dir.mkdir(parents=True, exist_ok=True)
+    return project_dir
+
+
+def load_plan(project_dir: Path) -> dict[str, Any] | None:
+    """Load and normalize a project's plan.json."""
+    plan_path = Path(project_dir) / "plan.json"
+    if not plan_path.exists():
+        return None
+
+    raw = json.loads(plan_path.read_text())
+    plan = backfill_plan(raw)
+    if plan != raw:
+        plan_path.write_text(json.dumps(plan, indent=2))
+    return plan
+
+
+def save_plan(project_dir: Path, plan: dict[str, Any]) -> dict[str, Any]:
+    """Normalize and persist a project's plan.json."""
+    project_dir = Path(project_dir)
+    project_dir.mkdir(parents=True, exist_ok=True)
+    normalized = backfill_plan(plan)
+    (project_dir / "plan.json").write_text(json.dumps(normalized, indent=2))
+    return normalized
+
+
+def list_projects() -> list[str]:
+    """List all projects that currently contain a plan.json."""
+    names: list[str] = []
+    for path in sorted(PROJECTS_DIR.iterdir()):
+        if path.is_dir() and (path / "plan.json").exists():
+            names.append(path.name)
+    return names
+
+
+def copy_external_files(
+    project_dir: Path,
+    source_paths: list[str | Path],
+    *,
+    subdir: str,
+    stem_prefix: str,
+) -> list[Path]:
+    """Copy external files into the project under a stable local naming scheme."""
+    output_dir = Path(project_dir) / subdir
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    copied: list[Path] = []
+    for index, source in enumerate(source_paths, start=1):
+        src = Path(source)
+        if not src.exists() or not src.is_file():
+            continue
+        suffix = src.suffix.lower() or ".bin"
+        dest = output_dir / f"{stem_prefix}_{index:02d}{suffix}"
+        if src.resolve() != dest.resolve():
+            dest.write_bytes(src.read_bytes())
+        copied.append(dest)
+    return copied
+
+
+def collect_project_artifacts(project_dir: Path) -> dict[str, Any]:
+    """Return a compact inventory of files generated for a project."""
+    root = Path(project_dir)
+
+    def _files(name: str) -> list[str]:
+        folder = root / name
+        if not folder.exists():
+            return []
+        return sorted(str(path) for path in folder.iterdir() if path.is_file())
+
+    mp4_files = sorted(str(path) for path in root.glob("*.mp4") if path.is_file())
+    jobs_dir = root / ".cathode" / "jobs"
+    job_files = sorted(str(path) for path in jobs_dir.glob("*.json")) if jobs_dir.exists() else []
+    return {
+        "project_dir": str(root),
+        "plan_path": str(root / "plan.json"),
+        "images": _files("images"),
+        "clips": _files("clips"),
+        "audio": _files("audio"),
+        "previews": _files("previews"),
+        "style_refs": _files("style_refs"),
+        "videos": mp4_files,
+        "jobs": job_files,
+    }
+

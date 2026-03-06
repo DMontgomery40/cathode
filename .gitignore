@@ -1,0 +1,61 @@
+# Project outputs (contains generated assets)
+projects/*
+!projects/.gitkeep
+output/*
+!output/.gitkeep
+.v1-videos/
+batch_output.log
+reference_frames/
+.claude/
+.logos/
+
+# Environment variables
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.mypy_cache/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+.agents/
+
+# Virtual environments
+venv/
+ENV/
+env/
+.venv/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp
+
+# Experiments
+experiments/

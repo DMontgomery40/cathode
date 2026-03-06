@@ -1,0 +1,9 @@
+[server]
+port = 8517
+
+[theme]
+base = "dark"
+primaryColor = "#7fd0ff"
+backgroundColor = "#07131f"
+secondaryBackgroundColor = "#102234"
+textColor = "#eef4f8"
