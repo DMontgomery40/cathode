@@ -10,8 +10,9 @@ from .director import analyze_style_references
 from .image_gen import generate_scene_image
 from .project_schema import default_image_profile, normalize_brief
 from .project_store import copy_external_files, ensure_project_dir, load_plan, save_plan
-from .runtime import choose_llm_provider, resolve_image_profile, resolve_tts_profile
+from .runtime import choose_llm_provider, resolve_image_profile, resolve_tts_profile, resolve_video_profile
 from .video_assembly import assemble_video
+from .video_gen import generate_scene_video
 from .voice_gen import generate_scene_audio
 from .workflow import create_plan_from_brief, rebuild_plan_from_meta
 
@@ -70,6 +71,7 @@ def create_project_from_brief_service(
     overwrite: bool = False,
     provider: str | None = None,
     image_profile: dict[str, Any] | None = None,
+    video_profile: dict[str, Any] | None = None,
     tts_profile: dict[str, Any] | None = None,
     render_profile: dict[str, Any] | None = None,
     project_dir: Path | None = None,
@@ -77,6 +79,7 @@ def create_project_from_brief_service(
     """Create a project directory, persist style refs, and generate the initial storyboard."""
     chosen_provider = choose_llm_provider(provider)
     resolved_image_profile = resolve_image_profile(image_profile)
+    resolved_video_profile = resolve_video_profile(video_profile)
     resolved_tts_profile = resolve_tts_profile(tts_profile)
     project_dir = Path(project_dir) if project_dir is not None else ensure_project_dir(project_name, overwrite=overwrite)
     if project_dir is not None:
@@ -106,6 +109,7 @@ def create_project_from_brief_service(
         brief=normalized_brief,
         provider=chosen_provider,
         image_profile=resolved_image_profile,
+        video_profile=resolved_video_profile,
         tts_profile=resolved_tts_profile,
         render_profile=render_profile,
     )
@@ -151,8 +155,10 @@ def generate_project_assets_service(
     project_dir: Path,
     *,
     generate_images: bool = True,
+    generate_videos: bool = True,
     generate_audio: bool = True,
     regenerate_images: bool = False,
+    regenerate_videos: bool = False,
     regenerate_audio: bool = False,
 ) -> dict[str, Any]:
     """Generate image and audio assets for a project, preserving existing files by default."""
@@ -167,6 +173,9 @@ def generate_project_assets_service(
     image_generation_model = str(
         image_profile.get("generation_model") or default_image_profile()["generation_model"]
     )
+    video_profile = resolve_video_profile(meta.get("video_profile"))
+    video_provider = str(video_profile.get("provider") or "manual")
+    video_generation_model = str(video_profile.get("generation_model") or "")
     tts_profile = resolve_tts_profile(meta.get("tts_profile"))
     tts_kwargs = tts_kwargs_from_profile(tts_profile)
 
@@ -174,6 +183,9 @@ def generate_project_assets_service(
         "images_generated": 0,
         "images_skipped": 0,
         "image_failures": [],
+        "videos_generated": 0,
+        "videos_skipped": 0,
+        "video_failures": [],
         "audio_generated": 0,
         "audio_skipped": 0,
         "audio_failures": [],
@@ -181,6 +193,19 @@ def generate_project_assets_service(
 
     for scene in plan.get("scenes", []):
         scene_type = _scene_type(scene)
+        has_audio = scene.get("audio_path") and Path(str(scene["audio_path"])).exists()
+        if generate_audio and (regenerate_audio or not has_audio):
+            try:
+                path = generate_scene_audio(scene, project_dir, **tts_kwargs)
+                scene["audio_path"] = str(path)
+                result["audio_generated"] += 1
+            except Exception as exc:  # pragma: no cover - provider/network failure
+                result["audio_failures"].append(
+                    {"scene_id": int(scene.get("id", 0)), "error": str(exc)}
+                )
+        elif generate_audio:
+            result["audio_skipped"] += 1
+
         if scene_type == "image" and generate_images:
             has_image = _scene_has_image(scene)
             if image_provider != "replicate":
@@ -211,18 +236,35 @@ def generate_project_assets_service(
             else:
                 result["images_skipped"] += 1
 
-        has_audio = scene.get("audio_path") and Path(str(scene["audio_path"])).exists()
-        if generate_audio and (regenerate_audio or not has_audio):
-            try:
-                path = generate_scene_audio(scene, project_dir, **tts_kwargs)
-                scene["audio_path"] = str(path)
-                result["audio_generated"] += 1
-            except Exception as exc:  # pragma: no cover - provider/network failure
-                result["audio_failures"].append(
-                    {"scene_id": int(scene.get("id", 0)), "error": str(exc)}
-                )
-        elif generate_audio:
-            result["audio_skipped"] += 1
+        if scene_type == "video" and generate_videos:
+            has_video = _scene_has_video(scene)
+            if video_provider != "local":
+                if has_video:
+                    result["videos_skipped"] += 1
+                else:
+                    result["video_failures"].append(
+                        {
+                            "scene_id": int(scene.get("id", 0)),
+                            "error": "Video generation is configured for upload/local-manual clips only.",
+                        }
+                    )
+            elif regenerate_videos or not has_video:
+                try:
+                    path = generate_scene_video(
+                        scene,
+                        project_dir,
+                        brief=brief,
+                        provider=video_provider,
+                        model=video_generation_model,
+                    )
+                    scene["video_path"] = str(path)
+                    result["videos_generated"] += 1
+                except Exception as exc:  # pragma: no cover - provider/runtime failure
+                    result["video_failures"].append(
+                        {"scene_id": int(scene.get("id", 0)), "error": str(exc)}
+                    )
+            else:
+                result["videos_skipped"] += 1
 
         save_plan(project_dir, plan)
 
@@ -288,7 +330,9 @@ def process_existing_project_service(
     *,
     rebuild_storyboard: bool = False,
     generate_images: bool = True,
+    generate_videos: bool = True,
     generate_audio: bool = True,
+    regenerate_videos: bool = False,
     regenerate_audio: bool = False,
     assemble_final: bool = True,
     fps: int | None = None,
@@ -299,12 +343,14 @@ def process_existing_project_service(
         rebuild_storyboard_service(project_dir)
 
     result: dict[str, Any] = {"assets": None, "render": None}
-    if generate_images or generate_audio or regenerate_audio:
+    if generate_images or generate_videos or generate_audio or regenerate_videos or regenerate_audio:
         result["assets"] = generate_project_assets_service(
             project_dir,
             generate_images=generate_images,
+            generate_videos=generate_videos,
             generate_audio=generate_audio or regenerate_audio,
             regenerate_images=False,
+            regenerate_videos=regenerate_videos,
             regenerate_audio=regenerate_audio,
         )
     if assemble_final:

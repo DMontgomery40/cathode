@@ -35,12 +35,20 @@ from core.project_store import (
     load_plan as _load_plan,
     save_plan as _save_plan,
 )
-from core.project_schema import backfill_plan, default_image_profile, normalize_brief, sanitize_project_name
+from core.project_schema import (
+    backfill_plan,
+    default_image_profile,
+    default_video_profile,
+    normalize_brief,
+    sanitize_project_name,
+)
 from core.runtime import (
     PROJECTS_DIR,
     available_image_generation_providers as _available_image_generation_providers_impl,
+    available_video_generation_providers as _available_video_generation_providers_impl,
     available_tts_providers as _available_tts_providers_impl,
     check_api_keys as _check_api_keys_impl,
+    resolve_video_profile as _resolve_video_profile_impl,
 )
 from core.video_assembly import (
     assemble_video,
@@ -49,6 +57,7 @@ from core.video_assembly import (
     get_video_scene_timing,
     preview_scene,
 )
+from core.video_gen import generate_scene_video
 from core.voice_gen import (
     DEFAULT_ELEVENLABS_MODEL,
     DEFAULT_ELEVENLABS_SIMILARITY_BOOST,
@@ -136,6 +145,11 @@ IMAGE_PROVIDER_LABELS: dict[str, str] = {
     "manual": "Upload / Local Assets Only",
 }
 
+VIDEO_PROVIDER_LABELS: dict[str, str] = {
+    "manual": "Upload / Local Clips Only",
+    "local": "Local Video Backend",
+}
+
 
 def check_api_keys() -> dict[str, bool]:
     """Check which API keys are configured."""
@@ -148,6 +162,10 @@ def _available_tts_providers(keys: dict[str, bool]) -> dict[str, str]:
 
 def _available_image_generation_providers(keys: dict[str, bool]) -> list[str]:
     return _available_image_generation_providers_impl(keys)
+
+
+def _available_video_generation_providers() -> list[str]:
+    return _available_video_generation_providers_impl()
 
 
 def get_project_path(project_name: str, overwrite: bool = False) -> Path:
@@ -196,6 +214,10 @@ def init_session_state():
         st.session_state.image_provider = default_image_profile()["provider"]
     if "image_generation_model" not in st.session_state:
         st.session_state.image_generation_model = default_image_profile()["generation_model"]
+    if "video_provider" not in st.session_state:
+        st.session_state.video_provider = default_video_profile()["provider"]
+    if "video_generation_model" not in st.session_state:
+        st.session_state.video_generation_model = default_video_profile()["generation_model"]
 
     # ElevenLabs-specific settings (kept separate from Kokoro voice/speed)
     if "tts_elevenlabs_voice" not in st.session_state:
@@ -338,6 +360,15 @@ def _image_profile_from_state() -> dict:
     }
 
 
+def _video_profile_from_state() -> dict:
+    return _resolve_video_profile_impl(
+        {
+            "provider": str(st.session_state.video_provider or "manual"),
+            "generation_model": str(st.session_state.video_generation_model or ""),
+        }
+    )
+
+
 def _sync_provider_state_from_plan(plan: dict | None) -> None:
     if not isinstance(plan, dict):
         return
@@ -345,6 +376,7 @@ def _sync_provider_state_from_plan(plan: dict | None) -> None:
     meta = plan.get("meta") if isinstance(plan.get("meta"), dict) else {}
     tts_profile = meta.get("tts_profile") if isinstance(meta.get("tts_profile"), dict) else {}
     image_profile = meta.get("image_profile") if isinstance(meta.get("image_profile"), dict) else {}
+    video_profile = meta.get("video_profile") if isinstance(meta.get("video_profile"), dict) else {}
 
     provider = str(tts_profile.get("provider") or "kokoro")
     if provider in {"kokoro", "elevenlabs", "chatterbox", "openai"}:
@@ -385,6 +417,13 @@ def _sync_provider_state_from_plan(plan: dict | None) -> None:
         image_profile.get("edit_model") or default_image_edit_model()
     )
 
+    video_provider = str(video_profile.get("provider") or default_video_profile()["provider"])
+    if video_provider in VIDEO_PROVIDER_LABELS:
+        st.session_state.video_provider = video_provider
+    st.session_state.video_generation_model = str(
+        video_profile.get("generation_model") or default_video_profile()["generation_model"]
+    )
+
 
 def _persist_sidebar_profiles_to_plan() -> None:
     project_dir = st.session_state.project_dir
@@ -405,6 +444,12 @@ def _persist_sidebar_profiles_to_plan() -> None:
     if meta.get("image_profile") != image_profile:
         meta["image_profile"] = image_profile
         meta["image_model"] = image_profile["generation_model"]
+        changed = True
+
+    video_profile = _video_profile_from_state()
+    if meta.get("video_profile") != video_profile:
+        meta["video_profile"] = video_profile
+        meta["video_model"] = video_profile["generation_model"]
         changed = True
 
     if changed:
@@ -590,6 +635,31 @@ def render_sidebar():
                 value=str(st.session_state.dashscope_edit_negative_prompt),
                 key="dashscope_negative_prompt_input",
             )
+
+        st.divider()
+
+        st.subheader("Video Settings")
+        video_provider_options = _available_video_generation_providers()
+        if st.session_state.video_provider not in video_provider_options:
+            st.session_state.video_provider = video_provider_options[0]
+        st.selectbox(
+            "Video Generation",
+            options=video_provider_options,
+            format_func=lambda value: VIDEO_PROVIDER_LABELS[value],
+            key="video_provider",
+            help="Choose between upload-only clips and a configured local video generation backend.",
+        )
+        resolved_video_profile = _video_profile_from_state()
+        st.session_state.video_generation_model = str(resolved_video_profile.get("generation_model") or "")
+        if st.session_state.video_provider == "local":
+            model_label = str(st.session_state.video_generation_model or "").strip()
+            if model_label:
+                st.caption(f"Configured local video model: `{model_label}`")
+            st.caption(
+                "Local video generation is env-driven. Cathode will call the configured local command or HTTP endpoint when you generate video clips."
+            )
+        else:
+            st.caption("Upload video clips manually in Step 2.")
 
         st.divider()
 
@@ -981,6 +1051,7 @@ def render_step_1():
                     },
                     provider=provider,
                     image_profile=_image_profile_from_state(),
+                    video_profile=_video_profile_from_state(),
                     tts_profile=_tts_profile_from_state(),
                 )
                 st.session_state.project_dir = project_dir
@@ -997,7 +1068,7 @@ def render_step_2():
     st.header("Step 2: Edit Scenes")
     st.info(
         "Each scene can be either an Image Slide or a Video Clip. Image scenes use a generated or uploaded still. "
-        "Video scenes use an uploaded clip, optional trim/speed settings, and narration-aware timing during preview/render."
+        "Video scenes use an uploaded or locally generated clip, optional trim/speed settings, and narration-aware timing during preview/render."
     )
 
     plan = st.session_state.plan
@@ -1010,6 +1081,10 @@ def render_step_2():
         image_profile.get("generation_model") or default_image_profile()["generation_model"]
     )
     image_generation_enabled = image_provider == "replicate"
+    video_profile = plan.get("meta", {}).get("video_profile", {})
+    video_provider = str(video_profile.get("provider") or "manual")
+    video_generation_model = str(video_profile.get("generation_model") or "")
+    video_generation_enabled = video_provider == "local"
 
     if st.button("<- Back to Brief"):
         st.session_state.step = 1
@@ -1058,7 +1133,7 @@ def render_step_2():
                 index=["image", "video"].index(current_scene_type),
                 key=f"scene_type_{scene_uid}",
                 format_func=lambda value: "Image Slide" if value == "image" else "Video Clip",
-                help="Image scenes use a still image. Video scenes use an uploaded clip with trim/speed controls and narration-aligned timing.",
+                help="Image scenes use a still image. Video scenes use an uploaded or locally generated clip with trim/speed controls and narration-aligned timing.",
             )
             if selected_scene_type != current_scene_type:
                 scene["scene_type"] = selected_scene_type
@@ -1067,7 +1142,7 @@ def render_step_2():
 
             scene_type = selected_scene_type
             st.caption(
-                "Image scenes generate or upload a still. Video scenes upload a clip and optionally trim it to the narration."
+                "Image scenes generate or upload a still. Video scenes upload or generate a clip and optionally trim it to the narration."
             )
             st.divider()
 
@@ -1121,7 +1196,7 @@ def render_step_2():
                 prompt_help = (
                     "Describe the still image you want to generate for this scene."
                     if scene_type == "image"
-                    else "Optional planning notes for the clip moment you want to use. This is not used by the renderer directly, but it helps keep the scene intent clear."
+                    else "Describe the clip moment you want. Cathode uses this for planning and, when local video generation is enabled, as part of the generation prompt."
                 )
                 new_prompt = st.text_area(
                     prompt_label,
@@ -1157,7 +1232,7 @@ def render_step_2():
                     help=(
                         "For image scenes, this same instruction can either refine the prompt text or directly edit the existing image."
                         if scene_type == "image"
-                        else "Use this note to tighten the clip direction before you upload or trim footage."
+                        else "Use this note to tighten the clip direction before you upload, generate, or trim footage."
                     ),
                 )
 
@@ -1297,7 +1372,7 @@ def render_step_2():
                         "Upload / Replace Video Clip",
                         type=["mp4", "mov", "m4v", "webm", "mkv"],
                         key=f"upload_video_{scene_uid}",
-                        help="Upload the footage for this scene. The renderer will trim it, speed it up if requested, and sync it to narration timing.",
+                        help="Upload the exact footage for this scene. The renderer will trim it, speed it up if requested, and sync it to narration timing.",
                     )
                     if uploaded_video is not None:
                         if st.button("Use Uploaded Video Clip", key=f"use_upload_video_{scene_uid}"):
@@ -1312,10 +1387,40 @@ def render_step_2():
                             except Exception as e:
                                 st.error(f"Upload failed: {e}")
 
+                    if st.button(
+                        "Regenerate Video Clip" if _scene_has_video(scene) else "Generate Video Clip",
+                        key=f"gen_video_{scene_uid}",
+                        disabled=not video_generation_enabled,
+                        type="primary" if not _scene_has_video(scene) else "secondary",
+                    ):
+                        with st.spinner("Generating video clip..."):
+                            try:
+                                path = generate_scene_video(
+                                    scene,
+                                    project_dir,
+                                    brief=brief,
+                                    provider=video_provider,
+                                    model=video_generation_model,
+                                )
+                                scene["video_path"] = str(path)
+                                save_plan(project_dir, plan)
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"Error: {e}")
+
+                    if video_generation_enabled:
+                        st.caption(
+                            "Local video generation uses the clip notes plus scene narration context. Generate audio first if you want exact duration matching."
+                        )
+                    else:
+                        st.caption(
+                            "Video generation is set to upload-only mode. Switch the sidebar Video Generation dropdown to a configured local backend to generate clips here."
+                        )
+
                     if _scene_has_video(scene):
                         st.video(scene["video_path"])
                     else:
-                        st.info("No video clip uploaded yet.")
+                        st.info("No video clip generated or uploaded yet.")
 
                     source_duration = (
                         get_media_duration(scene["video_path"]) if _scene_has_video(scene) else None
@@ -1487,14 +1592,17 @@ def render_step_2():
 
     st.divider()
     st.subheader("Batch Generation")
-    st.caption("Image batch actions skip video scenes automatically. Audio batch actions still run for every scene.")
+    st.caption(
+        "Image batch actions skip video scenes automatically. Video batch actions only run for video scenes. Audio batch actions still run for every scene."
+    )
 
-    col1, col2, col3 = st.columns(3)
+    col1, col2, col3, col4 = st.columns(4)
     with col1:
         if st.button("Generate Missing Images", key="batch_gen_images", disabled=not image_generation_enabled):
             result = generate_project_assets_service(
                 project_dir,
                 generate_images=True,
+                generate_videos=False,
                 generate_audio=False,
                 regenerate_images=False,
             )
@@ -1513,6 +1621,42 @@ def render_step_2():
 
     with col2:
         a, b = st.columns(2)
+        gen_missing_video = a.button(
+            "Generate Missing Video Clips",
+            key="batch_gen_videos",
+            disabled=not video_generation_enabled,
+        )
+        regen_all_video = b.button(
+            "Regenerate All Video Clips",
+            key="batch_regen_videos",
+            disabled=not video_generation_enabled,
+        )
+        if gen_missing_video or regen_all_video:
+            current_plan = backfill_plan(plan)
+            current_plan.setdefault("meta", {})["video_profile"] = _video_profile_from_state()
+            save_plan(project_dir, current_plan)
+            result = generate_project_assets_service(
+                project_dir,
+                generate_images=False,
+                generate_videos=True,
+                generate_audio=False,
+                regenerate_videos=regen_all_video,
+            )
+            st.session_state.plan = load_plan(project_dir)
+            failed_scenes = result.get("video_failures", [])
+            generated = int(result.get("videos_generated") or 0)
+            skipped = int(result.get("videos_skipped") or 0)
+            if failed_scenes:
+                st.error(
+                    f"Video clips complete: generated {generated}, skipped {skipped}, failed {len(failed_scenes)}."
+                )
+            else:
+                st.success(f"Video clips complete: generated {generated}, skipped {skipped}.")
+        if not video_generation_enabled:
+            st.caption("Batch video generation is disabled in upload-only video mode.")
+
+    with col3:
+        a, b = st.columns(2)
         gen_missing = a.button("Generate Missing Audio", key="batch_gen_audio")
         regen_all = b.button("Regenerate All Audio", key="batch_regen_audio")
         if gen_missing or regen_all:
@@ -1522,6 +1666,7 @@ def render_step_2():
             result = generate_project_assets_service(
                 project_dir,
                 generate_images=False,
+                generate_videos=False,
                 generate_audio=True,
                 regenerate_audio=regen_all,
             )
@@ -1536,7 +1681,7 @@ def render_step_2():
             else:
                 st.success(f"Audio complete: generated {generated}, skipped {skipped}.")
 
-    with col3:
+    with col4:
         if st.button("Go to Render ->", type="primary"):
             st.session_state.step = 3
             st.rerun()
@@ -1550,7 +1695,7 @@ def render_step_2():
 
     st.divider()
     st.subheader("Regenerate Everything")
-    st.caption("Regenerates all AI images and all audio in parallel. Uploaded video clips are preserved.")
+    st.caption("Regenerates all AI images and all audio in parallel. Local video clips have their own batch actions above.")
 
     if st.button("Regenerate Everything (Images + Audio)", type="primary", key="regen_everything_parallel"):
         tts_kwargs = _tts_kwargs_from_state()
@@ -1765,6 +1910,7 @@ def render_batch_queue():
             value=False,
         )
         generate_images = st.checkbox("Generate missing images", value=True)
+        generate_videos = st.checkbox("Generate missing video clips", value=True)
         generate_audio = st.checkbox("Generate missing audio", value=True)
     with col2:
         regenerate_audio = st.checkbox("Regenerate all audio", value=False)
@@ -1783,6 +1929,7 @@ def render_batch_queue():
                 "name": project_name,
                 "rebuild": False,
                 "images": 0,
+                "clips": 0,
                 "audio": 0,
                 "video": False,
                 "errors": [],
@@ -1798,6 +1945,7 @@ def render_batch_queue():
                     project_dir,
                     rebuild_storyboard=rebuild_storyboards,
                     generate_images=generate_images,
+                    generate_videos=generate_videos,
                     generate_audio=generate_audio,
                     regenerate_audio=regenerate_audio,
                     assemble_final=assemble_videos,
@@ -1806,11 +1954,16 @@ def render_batch_queue():
                 assets = shared_result.get("assets") or {}
                 render = shared_result.get("render") or {}
                 project_result["images"] = int(assets.get("images_generated") or 0)
+                project_result["clips"] = int(assets.get("videos_generated") or 0)
                 project_result["audio"] = int(assets.get("audio_generated") or 0)
                 project_result["video"] = render.get("status") == "succeeded"
                 for failure in assets.get("image_failures", []):
                     project_result["errors"].append(
                         f"Image scene {failure.get('scene_id')}: {failure.get('error')}"
+                    )
+                for failure in assets.get("video_failures", []):
+                    project_result["errors"].append(
+                        f"Video scene {failure.get('scene_id')}: {failure.get('error')}"
                     )
                 for failure in assets.get("audio_failures", []):
                     project_result["errors"].append(
@@ -1837,7 +1990,7 @@ def render_batch_queue():
             status_icon = "FAIL" if r["errors"] else "OK"
             st.write(
                 f"{status_icon} {r['name']}: rebuild={r['rebuild']} "
-                f"images={r['images']} audio={r['audio']} video={r['video']}"
+                f"images={r['images']} clips={r['clips']} audio={r['audio']} video={r['video']}"
             )
             if r["errors"]:
                 for err in r["errors"]:
