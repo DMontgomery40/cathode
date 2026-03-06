@@ -66,6 +66,12 @@ def regenerate_project(project_dir: Path, dry_run: bool = False) -> bool:
         f"failed={len(asset_result.get('image_failures', []))}"
     )
     print(
+        "  clips: "
+        f"generated={asset_result.get('videos_generated', 0)} "
+        f"skipped={asset_result.get('videos_skipped', 0)} "
+        f"failed={len(asset_result.get('video_failures', []))}"
+    )
+    print(
         "  audio: "
         f"generated={asset_result.get('audio_generated', 0)} "
         f"skipped={asset_result.get('audio_skipped', 0)} "
@@ -80,7 +86,11 @@ def regenerate_project(project_dir: Path, dry_run: bool = False) -> bool:
         if render_result.get("suggestion"):
             print(f"  note={render_result['suggestion']}")
 
-    failed = bool(asset_result.get("image_failures") or asset_result.get("audio_failures"))
+    failed = bool(
+        asset_result.get("image_failures")
+        or asset_result.get("video_failures")
+        or asset_result.get("audio_failures")
+    )
     failed = failed or render_result.get("status") == "error"
     if render_result.get("status") == "partial_success":
         print(f"\nPARTIAL {project_name}")

@@ -18,7 +18,7 @@ Most of the time, that is enough. The scene editor is there for surgical fixes, 
 ## What It Does
 
 - brief-driven storyboard generation
-- image scenes and uploaded video scenes
+- image scenes and uploaded or locally generated video scenes
 - scene-by-scene narration, prompt, and asset editing
 - local project folders with inspectable files
 - local MP4 render
@@ -42,6 +42,8 @@ Cathode is env-driven on purpose.
 - `REPLICATE_API_TOKEN`: Qwen image generation, image edit, and Chatterbox voice
 - `ELEVENLABS_API_KEY`: ElevenLabs narration
 - `DASHSCOPE_API_KEY` or `ALIBABA_API_KEY`: optional DashScope image edit
+- `CATHODE_LOCAL_VIDEO_COMMAND` and/or `CATHODE_LOCAL_VIDEO_ENDPOINT`: optional local video generation for video scenes
+- `CATHODE_LOCAL_VIDEO_MODEL`: optional local model label or path passed through to that backend
 - Kokoro remains the always-available local voice option
 
 Only configured providers appear in the UI. If you leave a key out, the UI stays quieter.
@@ -55,8 +57,39 @@ Cathode is local-first, not cloud-hosted.
 - previews and final renders happen locally
 - uploaded stills and clips stay local
 - Kokoro is local TTS
+- video scenes can use a local generation backend when configured
 
-For visuals, the built-in AI image path is currently cloud-backed through Replicate. If you want a fully local visual workflow today, use uploaded images and uploaded clips.
+For visuals, the built-in AI image path is still cloud-backed through Replicate unless you upload stills yourself. Video scenes now have a fully local generation path when you configure a local backend and switch the sidebar `Video Generation` dropdown to `Local Video Backend`.
+
+## Local Video Backend
+
+Cathode keeps local video generation generic and env-driven rather than baking in one model family.
+
+Configure one of these:
+
+- `CATHODE_LOCAL_VIDEO_COMMAND`: Cathode runs a local command and passes scene data through env vars such as `CATHODE_VIDEO_PROMPT`, `CATHODE_VIDEO_OUTPUT_PATH`, `CATHODE_VIDEO_DURATION_SECONDS`, `CATHODE_VIDEO_MODEL`, and `CATHODE_VIDEO_REQUEST_JSON`.
+- `CATHODE_LOCAL_VIDEO_ENDPOINT`: Cathode sends a JSON POST request with `prompt`, `output_path`, `duration_seconds`, `width`, `height`, `fps`, `scene`, and `brief`.
+
+Your local backend can satisfy the request in any of these ways:
+
+- write the clip directly to `CATHODE_VIDEO_OUTPUT_PATH` / the request `output_path`
+- return JSON with `output_path`
+- return JSON with `url`
+- return JSON with `b64_json`
+
+Typical setup looks like this:
+
+```bash
+CATHODE_LOCAL_VIDEO_COMMAND='python /path/to/local_video_wrapper.py'
+CATHODE_LOCAL_VIDEO_MODEL=/models/wan
+```
+
+Or:
+
+```bash
+CATHODE_LOCAL_VIDEO_ENDPOINT=http://127.0.0.1:8787/generate
+CATHODE_LOCAL_VIDEO_MODEL=wan2.1
+```
 
 ## Quick Start
 
@@ -150,6 +183,11 @@ IMAGE_EDIT_MODEL=qwen/qwen-image-edit-2511
 STREAMLIT_PORT=8517
 CATHODE_VIDEO_ENCODER=auto
 CATHODE_DISABLE_HW_ENCODER=0
+CATHODE_LOCAL_VIDEO_COMMAND=
+CATHODE_LOCAL_VIDEO_ENDPOINT=
+CATHODE_LOCAL_VIDEO_MODEL=
+CATHODE_LOCAL_VIDEO_API_KEY=
+CATHODE_LOCAL_VIDEO_TIMEOUT_SECONDS=900
 ```
 
 ## Workflow
@@ -176,7 +214,7 @@ Edit scenes if needed:
 - visual prompt
 - on-screen text
 - image generation or upload
-- video upload
+- video upload or local video generation
 - image edit
 - per-scene preview
 
