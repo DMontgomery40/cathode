@@ -11,6 +11,7 @@ SOURCE_MODES = ("ideas_notes", "source_text", "final_script")
 SCENE_TYPES = ("image", "video")
 VISUAL_SOURCE_STRATEGIES = ("images_only", "mixed_media", "video_preferred")
 IMAGE_PROVIDERS = ("replicate", "manual")
+VIDEO_PROVIDERS = ("manual", "local")
 
 
 def default_brief() -> dict[str, Any]:
@@ -53,6 +54,14 @@ def default_image_profile() -> dict[str, Any]:
         "provider": "replicate",
         "generation_model": "qwen/qwen-image-2512",
         "edit_model": "qwen/qwen-image-edit-2511",
+    }
+
+
+def default_video_profile() -> dict[str, Any]:
+    """Default video generation settings persisted in plan metadata."""
+    return {
+        "provider": "manual",
+        "generation_model": "",
     }
 
 
@@ -233,7 +242,7 @@ def backfill_plan(plan: Any) -> dict[str, Any]:
 
     raw_image_profile = meta.get("image_profile") if isinstance(meta.get("image_profile"), dict) else {}
     image_profile = _merge_with_defaults(default_image_profile(), raw_image_profile)
-    if meta.get("image_provider") and not image_profile.get("provider"):
+    if meta.get("image_provider") and "provider" not in raw_image_profile:
         image_profile["provider"] = str(meta["image_provider"])
     if meta.get("image_model") and "generation_model" not in raw_image_profile:
         image_profile["generation_model"] = str(meta["image_model"])
@@ -241,6 +250,16 @@ def backfill_plan(plan: Any) -> dict[str, Any]:
     image_profile["provider"] = provider if provider in IMAGE_PROVIDERS else "replicate"
     image_profile["generation_model"] = str(image_profile.get("generation_model") or "qwen/qwen-image-2512").strip()
     image_profile["edit_model"] = str(image_profile.get("edit_model") or "qwen/qwen-image-edit-2511").strip()
+
+    raw_video_profile = meta.get("video_profile") if isinstance(meta.get("video_profile"), dict) else {}
+    video_profile = _merge_with_defaults(default_video_profile(), raw_video_profile)
+    if meta.get("video_provider") and "provider" not in raw_video_profile:
+        video_profile["provider"] = str(meta["video_provider"])
+    if meta.get("video_model") and "generation_model" not in raw_video_profile:
+        video_profile["generation_model"] = str(meta["video_model"])
+    video_provider = str(video_profile.get("provider") or "manual").strip().lower()
+    video_profile["provider"] = video_provider if video_provider in VIDEO_PROVIDERS else "manual"
+    video_profile["generation_model"] = str(video_profile.get("generation_model") or "").strip()
 
     tts_profile = _merge_with_defaults(default_tts_profile(), meta.get("tts_profile"))
 
@@ -264,6 +283,8 @@ def backfill_plan(plan: Any) -> dict[str, Any]:
     meta["render_profile"] = render_profile
     meta["image_profile"] = image_profile
     meta["image_model"] = image_profile["generation_model"]
+    meta["video_profile"] = video_profile
+    meta["video_model"] = video_profile["generation_model"]
     meta["tts_profile"] = tts_profile
 
     # Keep legacy fallback for older tooling that expects input_text.

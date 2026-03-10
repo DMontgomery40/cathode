@@ -22,7 +22,13 @@ from core.intake import (
 )
 from core.job_runner import cancel_job, create_make_video_job, create_rerun_stage_job, get_job_status, list_project_jobs
 from core.project_store import collect_project_artifacts, list_projects, load_plan
-from core.runtime import PROJECTS_DIR, choose_llm_provider, resolve_image_profile, resolve_tts_profile
+from core.runtime import (
+    PROJECTS_DIR,
+    choose_llm_provider,
+    resolve_image_profile,
+    resolve_tts_profile,
+    resolve_video_profile,
+)
 
 SERVER_INSTRUCTIONS = (
     "Cathode turns a user's intent into a local video project. "
@@ -183,6 +189,8 @@ def build_server() -> FastMCP:
         llm_provider: Annotated[str | None, Field(description="Optional storyboard provider override.", default=None)] = None,
         image_provider: Annotated[Literal["replicate", "manual"] | None, Field(description="Optional image provider override.", default=None)] = None,
         image_generation_model: Annotated[str | None, Field(description="Optional image generation model override.", default=None)] = None,
+        video_provider: Annotated[Literal["manual", "local"] | None, Field(description="Optional video provider override.", default=None)] = None,
+        video_generation_model: Annotated[str | None, Field(description="Optional local video model label or path override.", default=None)] = None,
         tts_provider: Annotated[str | None, Field(description="Optional TTS provider override.", default=None)] = None,
         tts_voice: Annotated[str | None, Field(description="Optional TTS voice override.", default=None)] = None,
         tts_speed: Annotated[float | None, Field(description="Optional TTS speed override.", default=None, ge=0.25, le=4.0)] = None,
@@ -250,6 +258,12 @@ def build_server() -> FastMCP:
                 "generation_model": image_generation_model,
             }
         )
+        video_profile = resolve_video_profile(
+            {
+                "provider": video_provider,
+                "generation_model": video_generation_model,
+            }
+        )
         tts_profile = resolve_tts_profile(
             {
                 "provider": tts_provider,
@@ -264,6 +278,7 @@ def build_server() -> FastMCP:
             run_until=run_until,
             provider=provider,
             image_profile=image_profile,
+            video_profile=video_profile,
             tts_profile=tts_profile,
             overwrite=overwrite,
         )
