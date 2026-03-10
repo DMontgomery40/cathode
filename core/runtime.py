@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from .project_schema import default_image_profile, default_tts_profile
+from .project_schema import default_image_profile, default_tts_profile, default_video_profile
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 PROJECTS_DIR = REPO_ROOT / "projects"
@@ -42,6 +42,27 @@ def available_image_generation_providers(keys: dict[str, bool] | None = None) ->
     providers = ["manual"]
     if keys.get("replicate"):
         providers.insert(0, "replicate")
+    return providers
+
+
+def local_video_generation_available() -> bool:
+    """Return whether a local video backend is configured."""
+    return bool(
+        str(os.getenv("CATHODE_LOCAL_VIDEO_COMMAND") or "").strip()
+        or str(os.getenv("CATHODE_LOCAL_VIDEO_ENDPOINT") or "").strip()
+    )
+
+
+def default_local_video_generation_model() -> str:
+    """Return the configured local video model label or path, if any."""
+    return str(os.getenv("CATHODE_LOCAL_VIDEO_MODEL") or "").strip()
+
+
+def available_video_generation_providers() -> list[str]:
+    """Return supported video-generation providers in UI preference order."""
+    providers = ["manual"]
+    if local_video_generation_available():
+        providers.insert(0, "local")
     return providers
 
 
@@ -87,3 +108,20 @@ def resolve_tts_profile(profile: dict | None = None) -> dict:
     resolved["provider"] = provider
     return resolved
 
+
+def resolve_video_profile(profile: dict | None = None) -> dict:
+    """Resolve a persisted video profile against current provider availability."""
+    resolved = dict(default_video_profile())
+    if isinstance(profile, dict):
+        resolved.update(profile)
+
+    provider = str(resolved.get("provider") or "manual").strip().lower()
+    if provider == "local" and not local_video_generation_available():
+        provider = "manual"
+    if provider not in {"manual", "local"}:
+        provider = "manual"
+    resolved["provider"] = provider
+    resolved["generation_model"] = str(
+        resolved.get("generation_model") or default_local_video_generation_model()
+    ).strip()
+    return resolved

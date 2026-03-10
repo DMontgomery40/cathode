@@ -270,6 +270,7 @@ def _run_make_video_job(job_file: Path, job: dict[str, Any]) -> dict[str, Any]:
     brief = dict(request.get("brief") or {})
     provider = request.get("provider")
     image_profile = request.get("image_profile")
+    video_profile = request.get("video_profile")
     tts_profile = request.get("tts_profile")
     render_profile = request.get("render_profile")
     run_until = str(request.get("run_until") or "render")
@@ -282,6 +283,7 @@ def _run_make_video_job(job_file: Path, job: dict[str, Any]) -> dict[str, Any]:
         overwrite=False,
         provider=provider,
         image_profile=image_profile,
+        video_profile=video_profile,
         tts_profile=tts_profile,
         render_profile=render_profile,
     )
@@ -299,12 +301,17 @@ def _run_make_video_job(job_file: Path, job: dict[str, Any]) -> dict[str, Any]:
         assets_result = generate_project_assets_service(
             project_dir,
             regenerate_images=bool(request.get("regenerate_images")),
+            regenerate_videos=bool(request.get("regenerate_videos")),
             regenerate_audio=bool(request.get("regenerate_audio")),
         )
         result["current_stage"] = "assets"
         result["assets"] = assets_result
 
-        if assets_result["image_failures"] or assets_result["audio_failures"]:
+        if (
+            assets_result.get("image_failures")
+            or assets_result.get("video_failures")
+            or assets_result.get("audio_failures")
+        ):
             result["retryable"] = True
             result["suggestion"] = "Review missing providers or failed scenes, then rerun the assets stage."
 
@@ -327,7 +334,11 @@ def _run_make_video_job(job_file: Path, job: dict[str, Any]) -> dict[str, Any]:
 
     if run_until == "render" and result.get("render", {}).get("status") == "partial_success":
         status = JOB_STATUS_PARTIAL
-    elif result.get("assets", {}).get("image_failures") or result.get("assets", {}).get("audio_failures"):
+    elif (
+        result.get("assets", {}).get("image_failures")
+        or result.get("assets", {}).get("video_failures")
+        or result.get("assets", {}).get("audio_failures")
+    ):
         status = JOB_STATUS_PARTIAL
     else:
         status = JOB_STATUS_SUCCEEDED
@@ -357,10 +368,15 @@ def _run_rerun_stage_job(job_file: Path, job: dict[str, Any]) -> dict[str, Any]:
         assets_result = generate_project_assets_service(
             project_dir,
             regenerate_images=force,
+            regenerate_videos=force,
             regenerate_audio=force,
         )
         result["assets"] = assets_result
-        if assets_result["image_failures"] or assets_result["audio_failures"]:
+        if (
+            assets_result.get("image_failures")
+            or assets_result.get("video_failures")
+            or assets_result.get("audio_failures")
+        ):
             result["retryable"] = True
             result["suggestion"] = "Review failed scenes or provider configuration, then rerun assets."
     elif stage == "render":
@@ -384,7 +400,14 @@ def _run_rerun_stage_job(job_file: Path, job: dict[str, Any]) -> dict[str, Any]:
 
     result["artifacts"] = collect_project_artifacts(project_dir)
     status = JOB_STATUS_SUCCEEDED
-    if stage == "assets" and result.get("assets", {}).get("image_failures"):
+    if (
+        stage == "assets"
+        and (
+            result.get("assets", {}).get("image_failures")
+            or result.get("assets", {}).get("video_failures")
+            or result.get("assets", {}).get("audio_failures")
+        )
+    ):
         status = JOB_STATUS_PARTIAL
     if stage == "render" and result.get("render", {}).get("status") == "partial_success":
         status = JOB_STATUS_PARTIAL
@@ -424,6 +447,7 @@ def create_make_video_job(
     run_until: str = "render",
     provider: str | None = None,
     image_profile: dict[str, Any] | None = None,
+    video_profile: dict[str, Any] | None = None,
     tts_profile: dict[str, Any] | None = None,
     render_profile: dict[str, Any] | None = None,
     overwrite: bool = False,
@@ -440,6 +464,7 @@ def create_make_video_job(
             "brief": brief,
             "provider": provider,
             "image_profile": image_profile,
+            "video_profile": video_profile,
             "tts_profile": tts_profile,
             "render_profile": render_profile,
             "run_until": run_until,

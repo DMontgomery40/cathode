@@ -42,6 +42,7 @@ def test_backfill_legacy_plan_adds_generic_defaults():
     assert meta["brief"]["source_material"] == "Legacy source text"
     assert meta["render_profile"]["aspect_ratio"] == "16:9"
     assert meta["tts_profile"]["provider"] == "kokoro"
+    assert meta["video_profile"]["provider"] == "manual"
     assert scene["scene_type"] == "image"
     assert scene["on_screen_text"] == []
     assert scene["video_path"] is None
@@ -119,6 +120,25 @@ def test_backfill_plan_adds_image_profile_defaults_and_compatibility():
     assert image_profile["generation_model"] == "custom/model"
     assert image_profile["edit_model"] == "qwen/qwen-image-edit-2511"
     assert plan["meta"]["image_model"] == "custom/model"
+
+
+def test_backfill_plan_adds_video_profile_defaults_and_compatibility():
+    plan = backfill_plan(
+        {
+            "meta": {
+                "project_name": "video_profile_demo",
+                "video_provider": "local",
+                "video_model": "/models/wan",
+            },
+            "scenes": [],
+        }
+    )
+
+    video_profile = plan["meta"]["video_profile"]
+
+    assert video_profile["provider"] == "local"
+    assert video_profile["generation_model"] == "/models/wan"
+    assert plan["meta"]["video_model"] == "/models/wan"
 
 
 def test_normalize_brief_preserves_visual_source_strategy_and_footage_notes():
