@@ -39,6 +39,25 @@ Both rely on the same underlying pipeline services and project store.
 - `core/job_runner.py`: background execution
 - `core/runtime.py`: provider discovery and profile resolution
 
+## Live Demo Skill
+
+Cathode now ships a packaged live-demo skill:
+
+- canonical path: `skills/cathode-project-demo/`
+- Claude mirror: `.claude/skills/cathode-project-demo/`
+
+Treat this as a generic product-demo workflow, not a repo-specific shortcut. It is for:
+
+- booting or attaching to a live app
+- capturing fresh footage
+- reviewing the capture through a spawned reviewer sub-agent before handoff
+- passing reviewed clips into Cathode as `footage_paths` or `footage_manifest`
+
+Do not assume README screenshots exist or are good enough. Fresh captured footage is the default.
+The reviewer sub-agent should be given frames and a short gut-check prompt, not a long JSON-heavy briefing.
+Save the raw reviewer reply in the bundle, then have the parent agent translate it into the structured observations/report that Cathode uses for retry logic and handoff.
+Use the packaged `capture_live_demo.py` script for deterministic browser capture and `apply_retry_actions.py` when the review report recommends another bounded attempt.
+
 ## Provider UX
 
 - Keep provider selection env-driven.
@@ -60,3 +79,4 @@ These are intentionally different:
 - Favor the fast default workflow first; present fine-tuning as optional power.
 - Keep MCP tool behavior practical and bounded.
 - Do not add external publish/QC systems or work-specific automations to this fork.
+- Keep reviewed footage plumbing generic. Do not add domain-specific capture or review logic to core Cathode.

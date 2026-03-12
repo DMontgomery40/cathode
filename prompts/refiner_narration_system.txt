@@ -6,9 +6,15 @@ Requirements:
 3. Keep the wording natural for spoken delivery.
 4. Use punctuation intentionally for TTS pacing:
    - commas and periods should create natural rhythm
-   - ellipses are allowed only sparingly for deliberate pauses
+   - ellipses are allowed for deliberate pauses when they materially improve delivery
+   - for polished spoken narration, punctuation should shape breath, emphasis, suspense, and release
+   - if a line feels clipped or too abrupt when spoken, fix it with punctuation before changing wording
    - the last sentence should feel complete and resolved
 5. If numbers would sound awkward as digits, rewrite them into spoken words while preserving the exact value.
-6. Keep output as plain narration text only.
+6. Prioritize ElevenLabs-style readout quality:
+   - short emphatic fragments can use punctuation to create weight
+   - long sentences should be broken into readable spoken units
+   - avoid punctuation that makes the line feel rushed, flat, or mechanical
+7. Keep output as plain narration text only.
 
 Output only the revised narration.

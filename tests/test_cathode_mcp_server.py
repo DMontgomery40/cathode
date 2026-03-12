@@ -192,10 +192,19 @@ def test_stdio_server_supports_tools_and_resources(tmp_path):
                         "intent": "Make a demo video for YC",
                         "audience": "YC partners",
                         "source_text": "Founder notes and product details.",
+                        "footage_manifest": [
+                            {
+                                "id": "run_review",
+                                "path": "/tmp/run_review.mp4",
+                                "label": "Run review overlay",
+                                "review_status": "warn",
+                            }
+                        ],
                     },
                 )
                 assert make_result.structuredContent["status"] == "queued"
                 assert make_result.structuredContent["project_name"] == "Make_a_demo_video_for_YC"
+                assert make_result.structuredContent["brief"]["footage_manifest"][0]["id"] == "run_review"
 
                 status_result = await session.call_tool("get_job_status", {"job_id": "missing"})
                 assert status_result.structuredContent["status"] == "error"

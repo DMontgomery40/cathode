@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Live Demo Fixture</title>
+    <link rel="stylesheet" href="./styles.css">
+  </head>
+  <body data-theme="dark">
+    <div class="page">
+      <header class="hero">
+        <div>
+          <p class="eyebrow">Fixture App</p>
+          <h1>Fresh capture only</h1>
+          <p class="lede">Use this app to test explicit theme, tab state, and capture review logic.</p>
+        </div>
+        <div class="theme-switcher">
+          <button id="theme-dark" type="button">Dark</button>
+          <button id="theme-light" type="button">Light</button>
+        </div>
+      </header>
+
+      <div class="layout">
+        <aside class="sidebar">
+          <h2>Workspace</h2>
+          <button class="tab-button active" data-target="overview">Overview</button>
+          <button class="tab-button" data-target="metrics">Metrics</button>
+          <button class="tab-button" data-target="review">Run Review</button>
+        </aside>
+
+        <main class="panel-shell">
+          <section class="panel active" id="overview">
+            <h2>Analysis Workspace</h2>
+            <p>The strongest story is usually the saved run review, not the weak metrics panel.</p>
+          </section>
+
+          <section class="panel" id="metrics">
+            <h2>Training Metrics</h2>
+            <div class="metric-card bad-hero">
+              <span class="metric-label">mAP50</span>
+              <strong>4.1%</strong>
+              <p>This is the intentionally weak hero state.</p>
+            </div>
+          </section>
+
+          <section class="panel" id="review">
+            <h2>Run Review</h2>
+            <div class="video-shell">
+              <div class="fake-video">Overlay preview with diagnostics</div>
+            </div>
+            <div class="diagnostic-grid">
+              <article class="diagnostic-card good">
+                <h3>Tracker churn is workable</h3>
+                <p>Readable overlay, stable enough to explain the product.</p>
+              </article>
+              <article class="diagnostic-card warn">
+                <h3>Metrics panel is not the hero</h3>
+                <p>Use the run review state as the primary proof moment.</p>
+              </article>
+            </div>
+          </section>
+        </main>
+      </div>
+    </div>
+    <script src="./app.js"></script>
+  </body>
+</html>

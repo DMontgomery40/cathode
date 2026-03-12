@@ -1,6 +1,7 @@
 """Text-to-speech generation using Kokoro, ElevenLabs, Chatterbox, or OpenAI."""
 
 import os
+import re
 from pathlib import Path
 from typing import Literal
 
@@ -8,13 +9,14 @@ import requests
 import soundfile as sf
 
 from core.rate_limiter import elevenlabs_limiter, openai_limiter, image_limiter
+from core.runtime import available_tts_providers
 
 # ElevenLabs voices - curated selection for narration
 # Full library at: https://elevenlabs.io/voice-library
 ELEVENLABS_VOICES = {
     # Female voices
     "Rachel": ("21m00Tcm4TlvDq8ikWAM", "Warm, calm female - great for explainers"),
-    "Bella": ("EXAVITQu4vr4xnSDxMaL", "Friendly, conversational female"),
+    "Bella": ("hpp4J3VqNfWAUOO0d1Us", "Professional, bright, warm female"),
     "Elli": ("MF3mGyEYCl7XYWbV9V6O", "Young, energetic female"),
     "Domi": ("AZnzlk1XvdvUeBnXmlld", "Strong, confident female"),
     # Male voices
@@ -22,6 +24,8 @@ ELEVENLABS_VOICES = {
     "Josh": ("TxGEqnHWrfWFTfGW9XjX", "Deep, authoritative male"),
     "Adam": ("pNInz6obpgDQGcFmaJgB", "Deep, warm male"),
     "Arnold": ("VR6AewLTigWG4xSOukaG", "Bold, energetic male"),
+    "George": ("JBFqnCBsd6RMkjVDRZzb", "Warm, captivating British male storyteller"),
+    "Daniel": ("onwK4e9ZLuTAKqWW03F9", "Steady, measured British male broadcaster"),
 }
 
 DEFAULT_ELEVENLABS_VOICE = "Bella"
@@ -78,6 +82,40 @@ DEFAULT_EXAGGERATION = 0.6  # Slightly more expressive than neutral (0.5)
 TTSProvider = Literal["kokoro", "elevenlabs", "chatterbox", "openai"]
 
 
+def _safe_float(value, fallback: float) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return fallback
+
+
+def _normalize_tts_text(text: str) -> str:
+    """Normalize a few known brand/style cases for better TTS pronunciation."""
+    value = str(text or "")
+
+    replacements = [
+        ("MS SQL", "M.S. S.Q.L."),
+        ("MLOps", "M.L. ops"),
+        ("LLMs", "L.L.M.s"),
+        ("LLM", "L.L.M."),
+        ("APIs", "A.P.I.s"),
+        ("API", "A.P.I."),
+        ("KPIs", "K.P.I.s"),
+        ("KPI", "K.P.I."),
+        ("HTTP", "H.T.T.P."),
+        ("GCP", "G.C.P."),
+        ("SQL", "S.Q.L."),
+        ("AML", "A.M.L."),
+        ("HR", "H.R."),
+        ("UK", "U.K."),
+        ("AI", "A.I."),
+        ("ML", "M.L."),
+    ]
+    for source, target in replacements:
+        value = re.sub(rf"\b{re.escape(source)}\b", target, value)
+    return value
+
+
 def generate_audio(
     text: str,
     output_path: str | Path,
@@ -113,6 +151,8 @@ def generate_audio(
     Returns:
         Path to the saved audio file
     """
+    text = _normalize_tts_text(text)
+
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -386,19 +426,69 @@ def generate_scene_audio(
     scene_id = scene["id"]
     narration = scene["narration"]
 
+    override_enabled = bool(scene.get("tts_override_enabled"))
+    available_providers = available_tts_providers()
+    base_provider = str(tts_provider or "kokoro").strip().lower()
+    if base_provider not in available_providers:
+        base_provider = "kokoro"
+
+    requested_provider = (
+        str(scene.get("tts_provider") or "").strip().lower()
+        if override_enabled and scene.get("tts_provider")
+        else ""
+    )
+    invalid_override_provider = bool(requested_provider and requested_provider not in available_providers)
+    apply_scene_overrides = override_enabled and not invalid_override_provider
+
+    resolved_provider: TTSProvider = (
+        requested_provider if requested_provider and apply_scene_overrides else base_provider
+    )  # type: ignore[assignment]
+    resolved_voice = str(scene.get("tts_voice") or voice) if apply_scene_overrides else voice
+    resolved_speed = _safe_float(scene.get("tts_speed"), speed) if apply_scene_overrides else speed
+    resolved_elevenlabs_model_id = (
+        str(scene.get("elevenlabs_model_id") or elevenlabs_model_id)
+        if apply_scene_overrides
+        else elevenlabs_model_id
+    )
+    resolved_elevenlabs_text_normalization = (
+        str(scene.get("elevenlabs_text_normalization") or elevenlabs_apply_text_normalization)
+        if apply_scene_overrides
+        else elevenlabs_apply_text_normalization
+    )
+    resolved_elevenlabs_stability = (
+        _safe_float(scene.get("elevenlabs_stability"), elevenlabs_stability)
+        if apply_scene_overrides
+        else elevenlabs_stability
+    )
+    resolved_elevenlabs_similarity_boost = (
+        _safe_float(scene.get("elevenlabs_similarity_boost"), elevenlabs_similarity_boost)
+        if apply_scene_overrides
+        else elevenlabs_similarity_boost
+    )
+    resolved_elevenlabs_style = (
+        _safe_float(scene.get("elevenlabs_style"), elevenlabs_style)
+        if apply_scene_overrides
+        else elevenlabs_style
+    )
+    resolved_elevenlabs_use_speaker_boost = (
+        bool(scene.get("elevenlabs_use_speaker_boost"))
+        if apply_scene_overrides and scene.get("elevenlabs_use_speaker_boost") is not None
+        else elevenlabs_use_speaker_boost
+    )
+
     output_path = project_dir / "audio" / f"scene_{scene_id:03d}.wav"
 
     return generate_audio(
         narration,
         output_path,
-        voice=voice,
-        speed=speed,
-        tts_provider=tts_provider,
+        voice=resolved_voice,
+        speed=resolved_speed,
+        tts_provider=resolved_provider,
         exaggeration=exaggeration,
-        elevenlabs_model_id=elevenlabs_model_id,
-        elevenlabs_apply_text_normalization=elevenlabs_apply_text_normalization,
-        elevenlabs_stability=elevenlabs_stability,
-        elevenlabs_similarity_boost=elevenlabs_similarity_boost,
-        elevenlabs_style=elevenlabs_style,
-        elevenlabs_use_speaker_boost=elevenlabs_use_speaker_boost,
+        elevenlabs_model_id=resolved_elevenlabs_model_id,
+        elevenlabs_apply_text_normalization=resolved_elevenlabs_text_normalization,  # type: ignore[arg-type]
+        elevenlabs_stability=resolved_elevenlabs_stability,
+        elevenlabs_similarity_boost=resolved_elevenlabs_similarity_boost,
+        elevenlabs_style=resolved_elevenlabs_style,
+        elevenlabs_use_speaker_boost=resolved_elevenlabs_use_speaker_boost,
     )

@@ -1,0 +1,120 @@
+body {
+  margin: 0;
+  font-family: "Avenir Next", "Segoe UI", sans-serif;
+  background: #0d1722;
+  color: #eef4fb;
+}
+
+body[data-theme="light"] {
+  background: #eef3f8;
+  color: #162232;
+}
+
+.page {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 28px;
+}
+
+.hero {
+  display: flex;
+  justify-content: space-between;
+  align-items: start;
+  margin-bottom: 24px;
+  padding: 24px;
+  border-radius: 18px;
+  background: rgba(18, 34, 52, 0.88);
+}
+
+body[data-theme="light"] .hero {
+  background: rgba(255, 255, 255, 0.92);
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: 240px 1fr;
+  gap: 20px;
+}
+
+.sidebar,
+.panel {
+  padding: 20px;
+  border-radius: 18px;
+  background: rgba(18, 34, 52, 0.88);
+}
+
+body[data-theme="light"] .sidebar,
+body[data-theme="light"] .panel {
+  background: rgba(255, 255, 255, 0.92);
+}
+
+.tab-button {
+  display: block;
+  width: 100%;
+  margin-bottom: 10px;
+  padding: 12px 14px;
+  border: none;
+  border-radius: 12px;
+  background: rgba(110, 165, 214, 0.16);
+  color: inherit;
+  text-align: left;
+}
+
+.tab-button.active {
+  background: #3f9be0;
+  color: #081421;
+}
+
+.panel {
+  display: none;
+}
+
+.panel.active {
+  display: block;
+}
+
+.metric-card,
+.diagnostic-card,
+.fake-video {
+  border-radius: 16px;
+  padding: 18px;
+}
+
+.metric-card {
+  max-width: 260px;
+  background: rgba(168, 76, 46, 0.24);
+}
+
+.metric-label {
+  display: block;
+  margin-bottom: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 12px;
+}
+
+.video-shell {
+  margin-bottom: 16px;
+}
+
+.fake-video {
+  min-height: 320px;
+  background: linear-gradient(135deg, #102439, #163f5d);
+  display: grid;
+  place-items: center;
+  font-size: 28px;
+  font-weight: 600;
+}
+
+.diagnostic-grid {
+  display: grid;
+  gap: 16px;
+}
+
+.diagnostic-card.good {
+  background: rgba(46, 118, 77, 0.24);
+}
+
+.diagnostic-card.warn {
+  background: rgba(168, 116, 46, 0.24);
+}

@@ -5,12 +5,15 @@ from __future__ import annotations
 import copy
 import re
 import uuid
+from pathlib import Path
 from typing import Any
+
+from .demo_assets import build_footage_summary, normalize_footage_manifest
 
 SOURCE_MODES = ("ideas_notes", "source_text", "final_script")
 SCENE_TYPES = ("image", "video")
 VISUAL_SOURCE_STRATEGIES = ("images_only", "mixed_media", "video_preferred")
-IMAGE_PROVIDERS = ("replicate", "manual")
+IMAGE_PROVIDERS = ("replicate", "local", "manual")
 VIDEO_PROVIDERS = ("manual", "local")
 
 
@@ -30,6 +33,7 @@ def default_brief() -> dict[str, Any]:
         "ending_cta": "",
         "visual_source_strategy": "images_only",
         "available_footage": "",
+        "footage_manifest": [],
         "style_reference_summary": "",
         "style_reference_paths": [],
         "raw_brief": "",
@@ -116,7 +120,89 @@ def _normalize_optional_nonnegative_float(value: Any) -> float | None:
     return parsed
 
 
-def normalize_brief(brief: Any) -> dict[str, Any]:
+def _clean_speaker_label(value: str) -> str:
+    label = str(value or "").strip()
+    label = re.sub(r"^\[|\]$", "", label)
+    label = re.sub(r"\*+", "", label).strip()
+    label = re.sub(r"\s*\([^)]*\)\s*$", "", label).strip()
+    if not label:
+        return ""
+    if "narrator" in label.lower():
+        return "Narrator"
+    return label.title()
+
+
+def _looks_like_speaker_cue(value: str, *, allow_titlecase_names: bool) -> bool:
+    raw = str(value or "").strip()
+    if not raw:
+        return False
+
+    cue = re.sub(r"\*+", "", raw).strip()
+    inner = cue[1:-1].strip() if cue.startswith("[") and cue.endswith("]") else cue
+    bare = re.sub(r"\s*\([^)]*\)\s*$", "", inner).strip()
+    words = re.findall(r"[A-Za-z]+(?:['-][A-Za-z]+)?", bare)
+    if not words:
+        return False
+
+    normalized = " ".join(word.lower() for word in words)
+    if normalized in {"narrator", "host", "speaker", "voiceover", "voice over"}:
+        return True
+    if cue.startswith("[") and cue.endswith("]"):
+        return True
+    if "(" in cue and ")" in cue:
+        return True
+
+    if len(words) < 2:
+        return False
+
+    if all(word.isupper() for word in words):
+        return True
+    if allow_titlecase_names and all(word[0].isupper() and word[1:].islower() for word in words):
+        return True
+    return False
+
+
+def _extract_speaker_and_narration(value: Any) -> tuple[str | None, str]:
+    text = str(value or "").strip()
+    if not text:
+        return None, ""
+
+    # First handle a standalone cue line followed by narration text.
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
+    if len(lines) >= 2:
+        cue = re.sub(r"\*+", "", lines[0]).strip().rstrip(":").strip()
+        if re.fullmatch(r"\[?[A-Za-z .'\-]+(?:\s*\([^)]*\))?\]?", cue) and _looks_like_speaker_cue(
+            cue,
+            allow_titlecase_names=True,
+        ):
+            speaker = _clean_speaker_label(cue)
+            body = "\n".join(lines[1:]).strip()
+            if speaker and body:
+                return speaker, body
+
+    # Then handle inline prefixes like "NARRATOR (V.O.): Text".
+    inline_match = re.match(
+        r"^\*{0,2}\[?([A-Za-z .'\-]+(?:\s*\([^)]*\))?)\]?\*{0,2}:\s*(.+)$",
+        text,
+        flags=re.S,
+    )
+    if inline_match:
+        cue = inline_match.group(1)
+        if not _looks_like_speaker_cue(cue, allow_titlecase_names=False):
+            return None, text
+        speaker = _clean_speaker_label(cue)
+        body = inline_match.group(2).strip()
+        if speaker and body:
+            return speaker, body
+
+    return None, text
+
+
+def normalize_brief(
+    brief: Any,
+    *,
+    base_dir: str | Path | None = None,
+) -> dict[str, Any]:
     """Normalize arbitrary brief-like input into the canonical brief schema."""
     result = default_brief()
     data = brief if isinstance(brief, dict) else {}
@@ -155,6 +241,11 @@ def normalize_brief(brief: Any) -> dict[str, Any]:
     else:
         result["style_reference_paths"] = []
 
+    result["footage_manifest"] = normalize_footage_manifest(
+        result.get("footage_manifest"),
+        base_dir=base_dir,
+    )
+
     visual_source_strategy = str(result.get("visual_source_strategy") or "").strip()
     result["visual_source_strategy"] = (
         visual_source_strategy if visual_source_strategy in VISUAL_SOURCE_STRATEGIES else "images_only"
@@ -175,7 +266,8 @@ def normalize_scene(scene: Any, index: int) -> dict[str, Any]:
     out["id"] = index
     out["uid"] = str(src.get("uid") or str(uuid.uuid4())[:8])
     out["title"] = str(src.get("title") or f"Scene {index + 1}")
-    out["narration"] = str(src.get("narration") or "").strip()
+    parsed_speaker, cleaned_narration = _extract_speaker_and_narration(src.get("narration") or "")
+    out["narration"] = cleaned_narration
     out["visual_prompt"] = str(src.get("visual_prompt") or "").strip()
     scene_type = str(src.get("scene_type") or "image").strip().lower()
     out["scene_type"] = scene_type if scene_type in SCENE_TYPES else "image"
@@ -188,6 +280,8 @@ def normalize_scene(scene: Any, index: int) -> dict[str, Any]:
 
     history = src.get("refinement_history")
     out["refinement_history"] = history if isinstance(history, list) else []
+    if src.get("speaker_name") or parsed_speaker:
+        out["speaker_name"] = str(src.get("speaker_name") or parsed_speaker).strip()
     out["image_path"] = src.get("image_path") or None
     out["video_path"] = src.get("video_path") or None
     out["video_trim_start"] = _normalize_nonnegative_float(src.get("video_trim_start"), 0.0)
@@ -211,7 +305,11 @@ def _merge_with_defaults(defaults: dict[str, Any], value: Any) -> dict[str, Any]
     return merged
 
 
-def backfill_plan(plan: Any) -> dict[str, Any]:
+def backfill_plan(
+    plan: Any,
+    *,
+    base_dir: str | Path | None = None,
+) -> dict[str, Any]:
     """
     Normalize an existing plan to the v1 generic schema.
 
@@ -224,8 +322,15 @@ def backfill_plan(plan: Any) -> dict[str, Any]:
 
     inferred_project_name = sanitize_project_name(meta.get("project_name") or "my_video")
 
-    brief = normalize_brief(meta.get("brief"))
+    brief = normalize_brief(meta.get("brief"), base_dir=base_dir)
     brief["project_name"] = inferred_project_name
+    if meta.get("footage_manifest") and not brief.get("footage_manifest"):
+        brief["footage_manifest"] = normalize_footage_manifest(
+            meta.get("footage_manifest"),
+            base_dir=base_dir,
+        )
+    if brief.get("footage_manifest") and not brief.get("available_footage"):
+        brief["available_footage"] = build_footage_summary(brief["footage_manifest"])
 
     input_text = str(meta.get("input_text") or "").strip()
     if not brief.get("source_material") and input_text:
@@ -279,6 +384,7 @@ def backfill_plan(plan: Any) -> dict[str, Any]:
 
     meta["project_name"] = inferred_project_name
     meta["brief"] = brief
+    meta["footage_manifest"] = brief.get("footage_manifest", [])
     meta["pipeline_mode"] = str(meta.get("pipeline_mode") or "generic_slides_v1")
     meta["render_profile"] = render_profile
     meta["image_profile"] = image_profile

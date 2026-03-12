@@ -1,15 +1,16 @@
 # Dev Demo Workflow
 
-Use this reference when the user wants a video about a software project, product repo, SDK, CLI, or internal tool.
+Use this reference when the user wants a video about a software project, product repo, SDK, CLI, internal tool, or live web app.
 
 ## Fast Path
 
 1. Confirm the repo to showcase.
 2. Bootstrap Cathode with `scripts/bootstrap_cathode.py`.
-3. Start Cathode over MCP when the whole flow should stay agent-driven.
-4. Pass the target repo as `workspace_path`.
-5. Add only the most useful `source_paths`.
-6. Render first, then tighten scenes only if the first pass misses the story.
+3. Prepare a fresh live-capture session and capture walkthrough footage before you build the final Cathode payload.
+4. Start Cathode over MCP when the whole flow should stay agent-driven.
+5. Pass the target repo as `workspace_path`.
+6. Add only the most useful `source_paths`.
+7. Render first, then tighten scenes only if the first pass misses the story.
 
 ## What To Pull From The Repo
 
@@ -56,9 +57,10 @@ This keeps the story clear while still proving the product is real.
 When the demo depends on showing a running app:
 
 1. Inspect the target repo or running environment first so the walkthrough uses real states.
-2. Capture the strongest interaction path with browser automation or manual screen recording.
-3. Prefer a short sequence with deliberate clicks, option changes, hovers, or result states over a long raw session.
-4. Feed those clips or screenshots into Cathode as footage or scene assets, then let slides carry the framing and transitions.
+2. Capture the strongest interaction path with browser automation in a real browser.
+3. Use explicit viewport and explicit theme on every attempt.
+4. Prefer short deliberate beats with meaningful state changes over a long raw session.
+5. Postprocess raw browser video into focused clips, extract review frames, run a short-prompt spawned sub-agent gut check, save that raw reply, then feed only the approved clips into Cathode.
 
 Use this pattern for flows like:
 

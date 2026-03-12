@@ -522,7 +522,7 @@ def _archive_existing_video(output_path: Path, project_dir: Path) -> Path | None
 def _write_concat_list(paths: list[Path], concat_list_path: Path) -> None:
     lines = []
     for path in paths:
-        escaped = str(path).replace("'", "'\\''")
+        escaped = str(path.resolve()).replace("'", "'\\''")
         lines.append(f"file '{escaped}'")
     concat_list_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
