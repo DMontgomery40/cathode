@@ -7,6 +7,10 @@ output/*
 batch_output.log
 reference_frames/
 .claude/
+!.claude/
+!.claude/skills/
+!.claude/skills/cathode-project-demo/
+!.claude/skills/cathode-project-demo/**
 .logos/
 
 # Environment variables

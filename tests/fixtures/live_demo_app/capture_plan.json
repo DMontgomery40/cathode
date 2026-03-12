@@ -1,0 +1,51 @@
+{
+  "theme": "dark",
+  "steps": [
+    {
+      "id": "metrics_panel",
+      "label": "Metrics panel",
+      "actions": [
+        { "type": "click", "selector": "#theme-dark" },
+        { "type": "click", "selector": ".tab-button[data-target='metrics']" }
+      ],
+      "checkpoint_selector": "#metrics",
+      "focus_selector": "#metrics .metric-card",
+      "text_selector": "#metrics",
+      "hold_ms": 700,
+      "clip": {
+        "id": "metrics_panel",
+        "label": "Weak metrics hero",
+        "notes": "Intentionally weak metrics state for review testing.",
+        "review_status": "warn"
+      }
+    },
+    {
+      "id": "run_review",
+      "label": "Run review",
+      "actions": [
+        { "type": "click", "selector": ".tab-button[data-target='review']" }
+      ],
+      "checkpoint_selector": "#review",
+      "focus_selector": "#review .video-shell",
+      "text_selector": "#review",
+      "hold_ms": 900,
+      "clip": {
+        "id": "run_review",
+        "label": "Run review overlay",
+        "notes": "The strongest proof state in the fixture app.",
+        "review_status": "accept"
+      }
+    }
+  ],
+  "retry_overrides": {
+    "switch_theme": {
+      "theme": "light"
+    },
+    "expand_viewport": {
+      "viewport": {
+        "width": 1920,
+        "height": 1072
+      }
+    }
+  }
+}

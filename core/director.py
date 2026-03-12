@@ -102,9 +102,38 @@ def _target_words_from_minutes(minutes: float) -> tuple[int, int]:
     return low, high
 
 
+def _scene_count_guidance_from_minutes(minutes: float) -> str:
+    """Return scene-count guidance that keeps still-image videos moving."""
+    value = max(1.0, float(minutes))
+    if value <= 3.0:
+        return "Produce 10-18 scenes."
+    if value <= 6.0:
+        return "Produce 16-28 scenes."
+    if value <= 10.0:
+        return "Produce 22-36 scenes."
+    return (
+        "Produce enough scenes to keep the visuals moving. "
+        "For image-led videos, prefer a new scene every 8-18 seconds unless a moment truly benefits from a slower hold."
+    )
+
+
 def _brief_for_prompt(payload: dict[str, Any]) -> dict[str, Any]:
     """Limit prompt payload to fields the director should consume."""
     brief = normalize_brief(payload)
+    footage_manifest = []
+    for item in brief.get("footage_manifest") or []:
+        if not isinstance(item, dict):
+            continue
+        footage_manifest.append(
+            {
+                "id": str(item.get("id") or "").strip(),
+                "label": str(item.get("label") or "").strip(),
+                "path": Path(str(item.get("path") or "")).name if item.get("path") else "",
+                "notes": str(item.get("notes") or "").strip(),
+                "review_status": str(item.get("review_status") or "").strip(),
+                "review_summary": str(item.get("review_summary") or "").strip(),
+            }
+        )
     return {
         "source_mode": brief["source_mode"],
         "video_goal": brief["video_goal"],
@@ -118,6 +147,7 @@ def _brief_for_prompt(payload: dict[str, Any]) -> dict[str, Any]:
         "ending_cta": brief["ending_cta"],
         "visual_source_strategy": brief["visual_source_strategy"],
         "available_footage": brief["available_footage"],
+        "footage_manifest": footage_manifest,
         "style_reference_summary": brief["style_reference_summary"],
         "raw_brief": brief["raw_brief"],
     }
@@ -141,6 +171,7 @@ def _build_storyboard_user_prompt_from_brief(brief: dict[str, Any]) -> str:
     source_mode = normalized["source_mode"]
     behavior = SOURCE_MODE_BEHAVIOR.get(source_mode, SOURCE_MODE_BEHAVIOR["source_text"])
     low_words, high_words = _target_words_from_minutes(normalized["target_length_minutes"])
+    scene_count_guidance = _scene_count_guidance_from_minutes(normalized["target_length_minutes"])
 
     prompt_payload = json.dumps(normalized, indent=2, ensure_ascii=False)
 
@@ -160,7 +191,7 @@ User brief JSON:
 Output requirements:
 - Return JSON only.
 - Prefer an object with key "scenes"; a top-level array is also acceptable.
-- Produce 6-15 scenes depending on complexity.
+- {scene_count_guidance}
 - Each scene must include:
   - "id" (integer, zero-based)
   - "title" (short scene title)
@@ -169,9 +200,13 @@ Output requirements:
 - Optional scene fields:
   - "scene_type" ("image" or "video"; default to "image")
   - "on_screen_text" (array of exact strings intended to be visible on the slide)
+  - "footage_asset_id" (string id of a provided footage asset when a scene should use supplied video)
 
 Quality constraints:
 - Keep narration conversational, vivid, and easy to follow for the specified audience.
+- If a brand, product, or identifier contains digits and a TTS engine could misread it, rewrite it the way it should be spoken.
+- For image-led videos, err toward more scenes and shorter visual holds rather than a small number of long-held stills.
+- If a still image would likely need to sit on screen for longer than about 8-18 seconds, split that beat into another scene, angle, or visual idea.
 - Use punctuation intentionally for spoken delivery: commas and periods for pacing, occasional ellipses only when a dramatic pause is truly useful.
 - The opening should usually orient the viewer before heavy detail:
   - scene 0 should usually be a cover or hook scene that clearly says what this video is about and why it matters
@@ -193,6 +228,11 @@ Quality constraints:
   - "mixed_media": use video scenes only where footage would clearly improve the explanation.
   - "video_preferred": prefer video scenes when the brief or available footage supports them.
 - When available_footage is provided, use it to decide which scenes could realistically be video scenes.
+- When footage_manifest is present:
+  - prefer assets marked "accept" for central proof moments
+  - assets marked "warn" can support the story, but should not become the hero proof without an obvious caveat
+  - ignore assets marked "retry" unless the brief explicitly says otherwise
+  - set "footage_asset_id" on video scenes when a supplied asset should be used
 - If visual_source_strategy is "mixed_media" or "video_preferred" and available_footage is strong, include at least one purposeful video scene where the footage meaningfully helps.
 - Respect must_include, must_avoid, and ending_cta.
 """
@@ -350,51 +390,66 @@ def _generate_with_openai(system_prompt: str, user_prompt: str) -> list[dict]:
 
 
 def _generate_with_anthropic(system_prompt: str, user_prompt: str) -> list[dict]:
-    """Generate storyboard using Anthropic Claude Sonnet 4.6 with extended thinking."""
+    """Generate storyboard using Anthropic Claude Sonnet 4.6 with forced structured tool output."""
     client = _get_anthropic_client()
+
+    storyboard_tool = {
+        "name": "emit_storyboard",
+        "description": "Return the full storyboard as structured JSON.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "scenes": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "id": {"type": "integer"},
+                            "title": {"type": "string"},
+                            "narration": {"type": "string"},
+                            "visual_prompt": {"type": "string"},
+                            "scene_type": {"type": "string", "enum": ["image", "video"]},
+                            "footage_asset_id": {"type": "string"},
+                            "on_screen_text": {
+                                "type": "array",
+                                "items": {"type": "string"},
+                            },
+                        },
+                        "required": ["id", "title", "narration", "visual_prompt"],
+                    },
+                }
+            },
+            "required": ["scenes"],
+        },
+    }
 
     response = client.messages.create(
         model="claude-sonnet-4-6",
         max_tokens=12000,
-        thinking={
-            "type": "enabled",
-            "budget_tokens": 10240,
-        },
         system=system_prompt,
         messages=[
             {"role": "user", "content": user_prompt},
         ],
+        tools=[storyboard_tool],
+        tool_choice={"type": "tool", "name": "emit_storyboard"},
     )
 
-    # With extended thinking, find the text block (not thinking block)
-    content = None
+    tool_input = None
     for block in response.content:
-        if block.type == "text":
-            content = block.text
+        if block.type == "tool_use" and getattr(block, "name", "") == "emit_storyboard":
+            tool_input = block.input
             break
 
-    if not content:
-        raise ValueError("No text response from model")
-
-    # Extract JSON from response (Claude may wrap it in markdown)
-    if "```json" in content:
-        start = content.index("```json") + 7
-        end = content.index("```", start)
-        content = content[start:end].strip()
-    elif "```" in content:
-        start = content.index("```") + 3
-        end = content.index("```", start)
-        content = content[start:end].strip()
-
-    result = json.loads(content)
+    if not tool_input:
+        raise ValueError("No structured storyboard tool output from Anthropic")
 
     # Handle both direct array and wrapped object responses
-    if isinstance(result, list):
-        scenes = result
-    elif isinstance(result, dict) and "scenes" in result:
-        scenes = result["scenes"]
+    if isinstance(tool_input, list):
+        scenes = tool_input
+    elif isinstance(tool_input, dict) and "scenes" in tool_input:
+        scenes = tool_input["scenes"]
     else:
-        for value in result.values():
+        for value in tool_input.values():
             if isinstance(value, list):
                 scenes = value
                 break
@@ -430,9 +485,12 @@ def _validate_scenes(scenes: list[dict]) -> list[dict]:
                 "narration": narration,
                 "visual_prompt": visual_prompt,
                 "scene_type": str(scene.get("scene_type") or "image").strip().lower(),
+                "footage_asset_id": str(scene.get("footage_asset_id") or "").strip() or None,
                 "on_screen_text": normalized_on_screen,
                 "refinement_history": scene.get("refinement_history", []),
                 "image_path": scene.get("image_path"),
+                # Model output should not be allowed to point directly at local files.
+                "video_path": None,
                 "audio_path": scene.get("audio_path"),
                 "preview_path": scene.get("preview_path"),
             }
