@@ -6,6 +6,14 @@
 
 Cathode is a local-first Streamlit app and MCP server for turning rough notes, source text, or a finished script into a narrated explainer video.
 
+## Watch The Demo
+
+<p align="center">
+  <a href="https://youtu.be/HHHbcHobg-A">
+    <img src="docs/assets/cathode-demo-youtube-card.png" alt="Watch the Cathode demo on YouTube" width="720">
+  </a>
+</p>
+
 Cathode now has three practical lanes:
 
 1. `App workflow`
