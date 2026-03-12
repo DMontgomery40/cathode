@@ -6,6 +6,12 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from .demo_assets import (
+    apply_footage_manifest_to_scenes,
+    build_footage_summary,
+    copy_footage_manifest_into_project,
+    normalize_footage_manifest,
+)
 from .director import analyze_style_references
 from .image_gen import generate_scene_image
 from .project_schema import default_image_profile, normalize_brief
@@ -64,6 +70,16 @@ def _persist_style_references(
     )
 
 
+def _persist_footage_manifest(
+    project_dir: Path,
+    footage_manifest: list[dict[str, Any]] | None,
+) -> list[dict[str, Any]]:
+    normalized = normalize_footage_manifest(footage_manifest or [])
+    if not normalized:
+        return []
+    return copy_footage_manifest_into_project(project_dir, normalized)
+
+
 def create_project_from_brief_service(
     *,
     project_name: str,
@@ -88,7 +104,9 @@ def create_project_from_brief_service(
     normalized_brief = normalize_brief(brief)
     normalized_brief["project_name"] = project_dir.name
 
+    requested_footage_manifest = list(normalized_brief.get("footage_manifest") or [])
     saved_style_refs = _persist_style_references(project_dir, normalized_brief.get("style_reference_paths"))
+    saved_footage_manifest = _persist_footage_manifest(project_dir, normalized_brief.get("footage_manifest"))
     style_reference_summary = str(normalized_brief.get("style_reference_summary") or "").strip()
     if saved_style_refs and not style_reference_summary:
         style_reference_summary = analyze_style_references(
@@ -103,6 +121,11 @@ def create_project_from_brief_service(
 
     normalized_brief["style_reference_paths"] = [str(path) for path in saved_style_refs]
     normalized_brief["style_reference_summary"] = style_reference_summary
+    normalized_brief["footage_manifest"] = saved_footage_manifest
+    if requested_footage_manifest:
+        normalized_brief["available_footage"] = build_footage_summary(saved_footage_manifest)
+    elif not str(normalized_brief.get("available_footage") or "").strip() and saved_footage_manifest:
+        normalized_brief["available_footage"] = build_footage_summary(saved_footage_manifest)
 
     plan = create_plan_from_brief(
         project_name=project_dir.name,
@@ -113,6 +136,9 @@ def create_project_from_brief_service(
         tts_profile=resolved_tts_profile,
         render_profile=render_profile,
     )
+    plan["scenes"] = apply_footage_manifest_to_scenes(plan.get("scenes", []), saved_footage_manifest)
+    plan.setdefault("meta", {})["brief"] = normalize_brief(normalized_brief, base_dir=project_dir)
+    plan.setdefault("meta", {})["footage_manifest"] = saved_footage_manifest
     plan.setdefault("meta", {})["created_by"] = "cathode"
     plan = save_plan(project_dir, plan)
     return project_dir, plan
@@ -128,6 +154,18 @@ def rebuild_storyboard_service(
     if not plan:
         raise ValueError(f"Missing plan.json for project: {project_dir}")
     rebuilt = rebuild_plan_from_meta(plan, provider=provider)
+    footage_manifest = normalize_footage_manifest(
+        rebuilt.get("meta", {}).get("footage_manifest")
+        or rebuilt.get("meta", {}).get("brief", {}).get("footage_manifest")
+    )
+    rebuilt["scenes"] = apply_footage_manifest_to_scenes(rebuilt.get("scenes", []), footage_manifest)
+    rebuilt.setdefault("meta", {})["footage_manifest"] = footage_manifest
+    rebuilt.setdefault("meta", {}).setdefault("brief", {})
+    rebuilt["meta"]["brief"]["footage_manifest"] = footage_manifest
+    if footage_manifest:
+        rebuilt["meta"]["brief"]["available_footage"] = build_footage_summary(footage_manifest)
+    elif not str(rebuilt["meta"]["brief"].get("available_footage") or "").strip():
+        rebuilt["meta"]["brief"]["available_footage"] = ""
     rebuilt.setdefault("meta", {})["regenerated_by"] = "cathode"
     return save_plan(project_dir, rebuilt)
 
@@ -208,7 +246,7 @@ def generate_project_assets_service(
 
         if scene_type == "image" and generate_images:
             has_image = _scene_has_image(scene)
-            if image_provider != "replicate":
+            if image_provider == "manual":
                 if has_image:
                     result["images_skipped"] += 1
                 else:

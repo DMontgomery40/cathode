@@ -88,6 +88,8 @@ The product is intentionally env-driven.
 
 - LLM providers appear when `OPENAI_API_KEY` and/or `ANTHROPIC_API_KEY` are present
 - image generation uses Replicate when `REPLICATE_API_TOKEN` is present
+- local image generation appears when `CATHODE_LOCAL_IMAGE_MODEL` is set
+  - local image runtime can use torch/diffusers or Apple Silicon MLX, selected via `CATHODE_LOCAL_IMAGE_RUNTIME`
 - image editing defaults to Replicate-backed `qwen/qwen-image-edit-2511`
 - DashScope edit options appear only when `DASHSCOPE_API_KEY` or `ALIBABA_API_KEY` are present
 - Kokoro is the always-available local voice path

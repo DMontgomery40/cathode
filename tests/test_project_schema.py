@@ -122,6 +122,24 @@ def test_backfill_plan_adds_image_profile_defaults_and_compatibility():
     assert plan["meta"]["image_model"] == "custom/model"
 
 
+def test_backfill_plan_accepts_local_image_provider():
+    plan = backfill_plan(
+        {
+            "meta": {
+                "project_name": "local_image_demo",
+                "image_provider": "local",
+                "image_model": "Qwen/Qwen-Image-2512",
+            },
+            "scenes": [],
+        }
+    )
+
+    image_profile = plan["meta"]["image_profile"]
+
+    assert image_profile["provider"] == "local"
+    assert image_profile["generation_model"] == "Qwen/Qwen-Image-2512"
+
+
 def test_backfill_plan_adds_video_profile_defaults_and_compatibility():
     plan = backfill_plan(
         {
@@ -141,11 +159,39 @@ def test_backfill_plan_adds_video_profile_defaults_and_compatibility():
     assert plan["meta"]["video_model"] == "/models/wan"
 
 
+def test_normalize_scene_strips_inline_speaker_label_into_metadata():
+    plan = backfill_plan(
+        {
+            "meta": {"project_name": "speaker_demo"},
+            "scenes": [
+                {
+                    "title": "Cold Open",
+                    "narration": "NARRATOR (V.O.): Six billion. That's how many requests hit the servers every day.",
+                    "visual_prompt": "Dark screen with a single number.",
+                }
+            ],
+        }
+    )
+
+    scene = plan["scenes"][0]
+    assert scene["speaker_name"] == "Narrator"
+    assert scene["narration"].startswith("Six billion.")
+
+
 def test_normalize_brief_preserves_visual_source_strategy_and_footage_notes():
     brief = normalize_brief(
         {
             "visual_source_strategy": "mixed_media",
             "available_footage": "Dashboard recording, onboarding flow, alert moment",
+            "footage_manifest": [
+                {
+                    "id": "hero_capture",
+                    "path": "/tmp/hero.mp4",
+                    "label": "Hero capture",
+                    "review_status": "warn",
+                    "review_summary": "Good frame, but weak state.",
+                }
+            ],
             "style_reference_summary": "Muted cinematic grade, premium editorial finish.",
             "style_reference_paths": ["/tmp/ref1.png", "", None, "/tmp/ref2.jpg"],
         }
@@ -153,5 +199,78 @@ def test_normalize_brief_preserves_visual_source_strategy_and_footage_notes():
 
     assert brief["visual_source_strategy"] == "mixed_media"
     assert brief["available_footage"] == "Dashboard recording, onboarding flow, alert moment"
+    assert brief["footage_manifest"][0]["id"] == "hero_capture"
+    assert brief["footage_manifest"][0]["review_status"] == "warn"
     assert brief["style_reference_summary"] == "Muted cinematic grade, premium editorial finish."
     assert brief["style_reference_paths"] == ["/tmp/ref1.png", "/tmp/ref2.jpg"]
+
+
+def test_normalize_brief_resolves_relative_footage_paths_from_base_dir(tmp_path):
+    captures_dir = tmp_path / "captures"
+    captures_dir.mkdir()
+    clip_path = captures_dir / "hero.mp4"
+    clip_path.write_bytes(b"demo")
+
+    brief = normalize_brief(
+        {
+            "footage_manifest": [
+                {
+                    "id": "hero",
+                    "path": "captures/hero.mp4",
+                    "label": "Hero clip",
+                }
+            ]
+        },
+        base_dir=tmp_path,
+    )
+
+    assert brief["footage_manifest"][0]["path"] == str(clip_path.resolve())
+
+
+def test_backfill_plan_resolves_relative_footage_paths_against_project_dir(tmp_path):
+    project_dir = tmp_path / "demo_project"
+    clips_dir = project_dir / "clips"
+    clips_dir.mkdir(parents=True)
+    clip_path = clips_dir / "hero.mp4"
+    clip_path.write_bytes(b"demo")
+
+    plan = backfill_plan(
+        {
+            "meta": {
+                "project_name": "demo_project",
+                "brief": {
+                    "source_material": "Text",
+                    "footage_manifest": [
+                        {
+                            "id": "hero",
+                            "path": "clips/hero.mp4",
+                            "label": "Hero clip",
+                        }
+                    ],
+                },
+            },
+            "scenes": [],
+        },
+        base_dir=project_dir,
+    )
+
+    assert plan["meta"]["brief"]["footage_manifest"][0]["path"] == str(clip_path.resolve())
+
+
+def test_normalize_scene_keeps_heading_prefixes_as_narration_text():
+    plan = backfill_plan(
+        {
+            "meta": {"project_name": "heading_demo"},
+            "scenes": [
+                {
+                    "title": "Overview",
+                    "narration": "Overview: the pipeline starts locally.",
+                    "visual_prompt": "Simple timeline.",
+                }
+            ],
+        }
+    )
+
+    scene = plan["scenes"][0]
+    assert "speaker_name" not in scene
+    assert scene["narration"] == "Overview: the pipeline starts locally."

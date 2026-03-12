@@ -42,7 +42,7 @@ def load_plan(project_dir: Path) -> dict[str, Any] | None:
         return None
 
     raw = json.loads(plan_path.read_text())
-    plan = backfill_plan(raw)
+    plan = backfill_plan(raw, base_dir=project_dir)
     if plan != raw:
         plan_path.write_text(json.dumps(plan, indent=2))
     return plan
@@ -52,7 +52,7 @@ def save_plan(project_dir: Path, plan: dict[str, Any]) -> dict[str, Any]:
     """Normalize and persist a project's plan.json."""
     project_dir = Path(project_dir)
     project_dir.mkdir(parents=True, exist_ok=True)
-    normalized = backfill_plan(plan)
+    normalized = backfill_plan(plan, base_dir=project_dir)
     (project_dir / "plan.json").write_text(json.dumps(normalized, indent=2))
     return normalized
 
@@ -114,4 +114,3 @@ def collect_project_artifacts(project_dir: Path) -> dict[str, Any]:
         "videos": mp4_files,
         "jobs": job_files,
     }
-

@@ -46,3 +46,18 @@ def test_merge_elicitation_into_brief_fills_missing_fields():
     assert merged["visual_style"] == "clean editorial product demo"
     assert missing_brief_fields(merged) == []
 
+
+def test_build_brief_from_intent_promotes_footage_inputs_into_manifest(tmp_path):
+    clip_path = tmp_path / "fresh_capture.mp4"
+    clip_path.write_bytes(b"demo")
+
+    brief, metadata = build_brief_from_intent(
+        intent="Make a live demo video",
+        source_text="Product notes.",
+        footage_paths=[clip_path],
+    )
+
+    assert brief["footage_manifest"][0]["label"] == "fresh capture"
+    assert brief["footage_manifest"][0]["path"] == str(clip_path.resolve())
+    assert "fresh capture" in brief["available_footage"]
+    assert metadata["footage_manifest"][0]["id"] == brief["footage_manifest"][0]["id"]
