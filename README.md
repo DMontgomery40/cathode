@@ -6,14 +6,20 @@
 
 Cathode is a local-first Streamlit app and MCP server for turning rough notes, source text, or a finished script into a narrated explainer video.
 
-The default pitch is simple:
+Cathode now has three practical lanes:
 
-1. paste the source
-2. generate the storyboard
-3. generate the assets
-4. render the video
+1. `App workflow`
+   Paste the brief, generate the storyboard, generate the assets, render the video.
+2. `MCP workflow`
+   Call `make_video` from an agent or client and let Cathode build the local project in the background.
+3. `Live demo workflow`
+   Launch or attach to a real app, capture fresh footage, review it, then feed the approved clips into Cathode for final render.
 
-Most of the time, that is enough. The scene editor is there for surgical fixes, not because the happy path should feel heavy.
+If you only remember one thing, remember this:
+
+- most users only need the app or MCP path
+- the packaged live-demo skill is for cases where real UI footage is the story
+- the scene editor is there for surgical fixes, not because the happy path should feel heavy
 
 ## What It Does
 
@@ -23,6 +29,67 @@ Most of the time, that is enough. The scene editor is there for surgical fixes, 
 - local project folders with inspectable files
 - local MP4 render
 - MCP tools for agent/client-driven video generation
+
+## Pick A Lane
+
+### 1. Manual App
+
+Use this when you want the fast happy path plus optional human edits.
+
+```bash
+./start.sh
+```
+
+Then:
+
+1. build the brief
+2. generate storyboard
+3. generate assets
+4. render
+
+### 2. Agent / MCP
+
+Use this when an agent or client should drive Cathode programmatically.
+
+```bash
+/opt/homebrew/bin/python3.10 cathode_mcp_server.py --transport stdio
+```
+
+The core tool is `make_video`. It can inspect a bounded workspace, accept explicit source files, and now accepts reviewed `footage_paths` / `footage_manifest` inputs for mixed-media demos.
+
+### 3. Live Product Demo Skill
+
+Use this when the video should prove a real running product.
+
+The packaged skill now lives in:
+
+- `skills/cathode-project-demo/`
+- `.claude/skills/cathode-project-demo/`
+
+Its flow is:
+
+1. bootstrap Cathode
+2. prepare a live capture session
+3. launch or attach to the target app
+4. capture fresh states in a real browser
+5. review the footage
+6. hand approved clips into Cathode
+7. render
+
+This path is capture-first and review-first. It does not assume existing README screenshots are good enough.
+The QC pass is supposed to run inside Codex or Claude as a spawned reviewer sub-agent looking at extracted images only, not as some separate external “vision model” workflow. The reviewer prompt should stay tiny and human, more like “hey, check out my demo vid” than a schema dump.
+The parent agent should save that raw reviewer reply, translate it into Cathode’s structured `accept / warn / retry` observations, and then let the deterministic review rules decide retries and handoff safety.
+
+In practice, that review loop is:
+
+1. `extract_review_frames.py` creates the image bundle.
+2. A spawned worker sub-agent sees only those frames plus the short gut-check prompt.
+3. The parent agent saves the raw reply, seeds `review_observations.template.json` with `init_review_observations.py`, fills the structured observations, and runs `review_bundle.py`.
+
+The packaged live-demo lane now also has a real capture driver and retry-plan tool:
+
+- `capture_live_demo.py`: run a Playwright-backed walkthrough from a capture plan and keep raw browser video, trace, screenshots, and a step manifest.
+- `apply_retry_actions.py`: mutate the capture plan from bounded retry actions before rerunning capture.
 
 ## Demo Assets
 
@@ -40,6 +107,7 @@ Cathode is env-driven on purpose.
 
 - `OPENAI_API_KEY` and/or `ANTHROPIC_API_KEY`: storyboard LLMs
 - `REPLICATE_API_TOKEN`: Qwen image generation, image edit, and Chatterbox voice
+- `CATHODE_LOCAL_IMAGE_MODEL`: optional local Hugging Face image generation for image scenes
 - `ELEVENLABS_API_KEY`: ElevenLabs narration
 - `DASHSCOPE_API_KEY` or `ALIBABA_API_KEY`: optional DashScope image edit
 - `CATHODE_LOCAL_VIDEO_COMMAND` and/or `CATHODE_LOCAL_VIDEO_ENDPOINT`: optional local video generation for video scenes
@@ -59,7 +127,45 @@ Cathode is local-first, not cloud-hosted.
 - Kokoro is local TTS
 - video scenes can use a local generation backend when configured
 
-For visuals, the built-in AI image path is still cloud-backed through Replicate unless you upload stills yourself. Video scenes now have a fully local generation path when you configure a local backend and switch the sidebar `Video Generation` dropdown to `Local Video Backend`.
+For visuals, the built-in AI image path can now run either through Replicate or through a configured local Hugging Face Qwen model. If neither is configured, you can still upload stills yourself. Video scenes also have a fully local generation path when you configure a local backend and switch the sidebar `Video Generation` dropdown to `Local Video Backend`.
+
+## Local Image Backend
+
+Cathode can run Qwen Image locally in two ways:
+
+- `torch` runtime for CUDA, CPU, or MPS through Hugging Face `diffusers`
+- `mlx` runtime for Apple Silicon through `mflux`
+
+Typical CUDA / generic torch setup:
+
+```bash
+/opt/homebrew/bin/python3.10 -m pip install -r requirements-local-image.txt
+export CATHODE_LOCAL_IMAGE_RUNTIME=torch
+export CATHODE_LOCAL_IMAGE_MODEL=Qwen/Qwen-Image-2512
+```
+
+Typical Apple Silicon MLX setup:
+
+```bash
+uv tool install --upgrade mflux
+export CATHODE_LOCAL_IMAGE_RUNTIME=mlx
+export CATHODE_LOCAL_IMAGE_MODEL=Qwen/Qwen-Image-2512
+export CATHODE_LOCAL_IMAGE_MLX_MODEL=mlx-community/Qwen-Image-2512-8bit
+```
+
+Auto mode keeps the single product-facing provider in the UI and picks MLX on Apple Silicon when `mflux` is installed; otherwise it falls back to the torch path.
+
+Optional tuning:
+
+```bash
+export CATHODE_LOCAL_IMAGE_RUNTIME=auto
+export CATHODE_LOCAL_IMAGE_DEVICE=auto
+export CATHODE_LOCAL_IMAGE_DTYPE=auto
+export CATHODE_LOCAL_IMAGE_STEPS=50
+export CATHODE_LOCAL_IMAGE_TRUE_CFG_SCALE=4.0
+export CATHODE_LOCAL_IMAGE_MLX_CACHE_LIMIT_GB=
+export CATHODE_LOCAL_IMAGE_MLX_LOW_RAM=0
+```
 
 ## Local Video Backend
 
@@ -180,6 +286,16 @@ DASHSCOPE_API_KEY=
 ALIBABA_API_KEY=
 IMAGE_EDIT_PROVIDER=
 IMAGE_EDIT_MODEL=qwen/qwen-image-edit-2511
+CATHODE_LOCAL_IMAGE_MODEL=
+CATHODE_LOCAL_IMAGE_RUNTIME=auto
+CATHODE_LOCAL_IMAGE_MLX_MODEL=mlx-community/Qwen-Image-2512-8bit
+CATHODE_LOCAL_IMAGE_DEVICE=auto
+CATHODE_LOCAL_IMAGE_DTYPE=auto
+CATHODE_LOCAL_IMAGE_STEPS=50
+CATHODE_LOCAL_IMAGE_TRUE_CFG_SCALE=4.0
+CATHODE_LOCAL_IMAGE_NEGATIVE_PROMPT=
+CATHODE_LOCAL_IMAGE_MLX_CACHE_LIMIT_GB=
+CATHODE_LOCAL_IMAGE_MLX_LOW_RAM=0
 STREAMLIT_PORT=8517
 CATHODE_VIDEO_ENCODER=auto
 CATHODE_DISABLE_HW_ENCODER=0
@@ -192,11 +308,23 @@ CATHODE_LOCAL_VIDEO_TIMEOUT_SECONDS=900
 
 ## Workflow
 
-### Step 1
+### Standard Cathode Project
 
-Build the brief:
+Every Cathode project stores:
 
-- project name
+- a normalized brief
+- storyboard scenes
+- image, clip, audio, and preview paths
+- render metadata
+- optional style references
+- optional reviewed footage manifest
+
+`projects/<project>/plan.json` is the source of truth.
+
+### Brief Inputs
+
+The core brief still revolves around:
+
 - source mode
 - goal
 - audience
@@ -206,27 +334,14 @@ Build the brief:
 - source material
 - optional footage notes
 
-### Step 2
+For live demos, add reviewed `footage_paths` or `footage_manifest` instead of only prose.
 
-Edit scenes if needed:
-
-- narration
-- visual prompt
-- on-screen text
-- image generation or upload
-- video upload or local video generation
-- image edit
-- per-scene preview
-
-### Step 3
-
-Render the final video.
-
-Timing is narration-led:
+### Scene Behavior
 
 - image scenes hold for narration duration
 - video scenes trim to narration duration
 - short clips can freeze on the last frame to stay in sync
+- reviewed footage clips can be copied into `clips/` and auto-assigned to `video` scenes
 
 ## Batch Rebuild
 

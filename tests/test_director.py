@@ -1,6 +1,6 @@
 import base64
 
-from core.director import _build_storyboard_user_prompt_from_brief, analyze_style_references
+from core.director import _build_storyboard_user_prompt_from_brief, _validate_scenes, analyze_style_references
 from core.project_schema import normalize_brief
 
 
@@ -30,6 +30,34 @@ def test_director_prompt_includes_source_mode_behavior_and_brief_payload():
     assert '"visual_style": "modern infographic"' in prompt
     assert '"style_reference_summary": "High-contrast editorial lighting, restrained teal-and-amber palette, premium product-demo polish, crisp typography, dense but organized composition."' in prompt
     assert "target narration words" in prompt
+
+
+def test_director_prompt_mentions_reviewed_footage_assets():
+    brief = normalize_brief(
+        {
+            "project_name": "demo",
+            "video_goal": "Explain the product",
+            "audience": "Developers",
+            "source_material": "Feature walkthrough.",
+            "visual_source_strategy": "mixed_media",
+            "footage_manifest": [
+                {
+                    "id": "run_review",
+                    "path": "/tmp/run_review.mp4",
+                    "label": "Run review overlay",
+                    "notes": "Saved overlay playback with diagnostics visible.",
+                    "review_status": "warn",
+                    "review_summary": "Use with a caveat; the state is real but not ideal.",
+                }
+            ],
+        }
+    )
+
+    prompt = _build_storyboard_user_prompt_from_brief(brief)
+
+    assert '"footage_manifest"' in prompt
+    assert '"review_status": "warn"' in prompt
+    assert '"footage_asset_id"' in prompt
 
 
 def test_analyze_style_references_openai_builds_multimodal_request(tmp_path, monkeypatch):
@@ -91,3 +119,22 @@ def test_analyze_style_references_anthropic_builds_multimodal_request(tmp_path, 
     assert captured["system"] == "system prompt"
     assert captured["messages"][0]["content"][0]["type"] == "image"
     assert captured["messages"][0]["content"][-1]["type"] == "text"
+
+
+def test_validate_scenes_drops_model_supplied_video_path():
+    scenes = _validate_scenes(
+        [
+            {
+                "id": 0,
+                "title": "Footage Scene",
+                "narration": "Show the reviewed clip.",
+                "visual_prompt": "Use the supplied footage.",
+                "scene_type": "video",
+                "footage_asset_id": "hero_capture",
+                "video_path": "/tmp/hallucinated.mp4",
+            }
+        ]
+    )
+
+    assert scenes[0]["footage_asset_id"] == "hero_capture"
+    assert scenes[0]["video_path"] is None

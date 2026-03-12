@@ -1,4 +1,4 @@
-"""Image generation/editing using Replicate (Qwen Image) and DashScope (Alibaba Model Studio)."""
+"""Image generation/editing using Replicate, local Hugging Face Qwen Image, and DashScope."""
 
 from pathlib import Path
 import base64
@@ -11,6 +11,7 @@ import replicate
 from replicate import Client
 import requests
 
+from core.local_image_gen import DEFAULT_LOCAL_IMAGE_MODEL, generate_local_image
 from core.rate_limiter import image_limiter
 
 # Target dimensions for all generated/edited images (16:9 aspect ratio)
@@ -444,6 +445,31 @@ def generate_image(
     return output_path
 
 
+def generate_image_local(
+    prompt: str,
+    output_path: str | Path,
+    model: str = DEFAULT_LOCAL_IMAGE_MODEL,
+    apply_style: bool = True,
+    seed: int | None = None,
+    brief: dict | None = None,
+) -> Path:
+    """Generate an image locally with the configured Hugging Face Qwen Image model."""
+    output_path = Path(output_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    style_suffix = build_style_suffix(brief=brief)
+    full_prompt = f"{prompt}{style_suffix}" if apply_style else prompt
+
+    return generate_local_image(
+        prompt=full_prompt,
+        output_path=output_path,
+        model=str(model or DEFAULT_LOCAL_IMAGE_MODEL).strip() or DEFAULT_LOCAL_IMAGE_MODEL,
+        width=TARGET_WIDTH,
+        height=TARGET_HEIGHT,
+        seed=seed,
+    )
+
+
 def edit_image(
     prompt: str,
     input_image_path: str | Path | list[str | Path],
@@ -541,13 +567,17 @@ def generate_scene_image(
     output_path = project_dir / "images" / f"scene_{scene_id:03d}.png"
     _log(f"  output_path: {output_path}")
 
-    if str(provider).strip().lower() != "replicate":
+    normalized_provider = str(provider).strip().lower()
+    if normalized_provider == "manual":
         raise ValueError(
             "AI image generation is disabled for this project because it is set to local/manual visuals. Upload a still image instead."
         )
 
     try:
-        result = generate_image(prompt, output_path, model=model, brief=brief)
+        if normalized_provider == "local":
+            result = generate_image_local(prompt, output_path, model=model, brief=brief)
+        else:
+            result = generate_image(prompt, output_path, model=model, brief=brief)
         _log(f"=== generate_scene_image() SUCCESS: {result} ===")
         return result
     except Exception as e:

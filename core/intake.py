@@ -9,6 +9,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+from .demo_assets import build_footage_summary, normalize_footage_manifest
 from .project_schema import normalize_brief, sanitize_project_name
 
 TEXT_SUFFIX_ALLOWLIST = {
@@ -83,7 +84,7 @@ class BriefElicitationInput(BaseModel):
     )
     visual_style: str = Field(
         default="",
-        description="Optional art direction. Example: product demo, editorial, cinematic infographic, documentary.",
+        description="Optional art direction. Example: product demo, editorial, cinematic infographic, case-study.",
     )
 
 
@@ -187,6 +188,8 @@ def build_brief_from_intent(
     source_text: str | None = None,
     workspace_path: str | Path | None = None,
     source_paths: list[str | Path] | None = None,
+    footage_paths: list[str | Path] | None = None,
+    footage_manifest: list[dict[str, Any]] | None = None,
     brief_overrides: dict[str, Any] | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     """Build a normalized brief from natural-language intent plus optional local context."""
@@ -195,6 +198,12 @@ def build_brief_from_intent(
 
     source_parts = [str(source_text or "").strip(), workspace["source_material"]]
     source_material = "\n\n".join(part for part in source_parts if part).strip()
+    normalized_footage_manifest = normalize_footage_manifest(
+        list(footage_manifest or [])
+        + [{"path": str(path)} for path in (footage_paths or []) if path],
+        base_dir=workspace_path,
+    )
+    derived_footage_summary = build_footage_summary(normalized_footage_manifest)
 
     explicit_source_mode = str(overrides.get("source_mode") or "").strip()
     if explicit_source_mode:
@@ -220,7 +229,8 @@ def build_brief_from_intent(
             "must_avoid": overrides.get("must_avoid") or "",
             "ending_cta": overrides.get("ending_cta") or "",
             "visual_source_strategy": overrides.get("visual_source_strategy") or "images_only",
-            "available_footage": overrides.get("available_footage") or "",
+            "available_footage": overrides.get("available_footage") or derived_footage_summary,
+            "footage_manifest": normalized_footage_manifest,
             "style_reference_paths": overrides.get("style_reference_paths") or [],
             "style_reference_summary": overrides.get("style_reference_summary") or "",
             "raw_brief": overrides.get("raw_brief") or f"User intent: {intent.strip()}",
@@ -230,6 +240,7 @@ def build_brief_from_intent(
         "workspace_context": workspace,
         "intent": intent.strip(),
         "source_paths": [str(Path(p).expanduser().resolve()) for p in (source_paths or []) if Path(p).exists()],
+        "footage_manifest": normalized_footage_manifest,
     }
     return brief, metadata
 

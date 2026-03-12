@@ -48,6 +48,8 @@ from core.runtime import (
     available_video_generation_providers as _available_video_generation_providers_impl,
     available_tts_providers as _available_tts_providers_impl,
     check_api_keys as _check_api_keys_impl,
+    default_local_image_generation_model as _default_local_image_generation_model_impl,
+    resolve_image_profile as _resolve_image_profile_impl,
     resolve_video_profile as _resolve_video_profile_impl,
 )
 from core.video_assembly import (
@@ -142,6 +144,7 @@ VISUAL_SOURCE_STRATEGY_GUIDANCE: dict[str, str] = {
 
 IMAGE_PROVIDER_LABELS: dict[str, str] = {
     "replicate": "Replicate Qwen (Cloud)",
+    "local": "Local Qwen (Hugging Face)",
     "manual": "Upload / Local Assets Only",
 }
 
@@ -351,13 +354,15 @@ def _tts_profile_from_state() -> dict:
 
 
 def _image_profile_from_state() -> dict:
-    return {
-        "provider": str(st.session_state.image_provider or "manual"),
-        "generation_model": str(
-            st.session_state.image_generation_model or default_image_profile()["generation_model"]
-        ),
-        "edit_model": str(st.session_state.image_edit_model or default_image_edit_model()),
-    }
+    return _resolve_image_profile_impl(
+        {
+            "provider": str(st.session_state.image_provider or "manual"),
+            "generation_model": str(
+                st.session_state.image_generation_model or default_image_profile()["generation_model"]
+            ),
+            "edit_model": str(st.session_state.image_edit_model or default_image_edit_model()),
+        }
+    )
 
 
 def _video_profile_from_state() -> dict:
@@ -410,9 +415,12 @@ def _sync_provider_state_from_plan(plan: dict | None) -> None:
     image_provider = str(image_profile.get("provider") or default_image_profile()["provider"])
     if image_provider in IMAGE_PROVIDER_LABELS:
         st.session_state.image_provider = image_provider
-    st.session_state.image_generation_model = str(
-        image_profile.get("generation_model") or default_image_profile()["generation_model"]
-    )
+    image_generation_model = str(image_profile.get("generation_model") or "").strip()
+    if image_provider == "local" and not image_generation_model:
+        image_generation_model = _default_local_image_generation_model_impl()
+    if not image_generation_model:
+        image_generation_model = default_image_profile()["generation_model"]
+    st.session_state.image_generation_model = image_generation_model
     st.session_state.image_edit_model = str(
         image_profile.get("edit_model") or default_image_edit_model()
     )
@@ -584,10 +592,21 @@ def render_sidebar():
             key="image_provider",
             help="Choose between cloud image generation and a fully local upload-first workflow.",
         )
+        if (
+            st.session_state.image_provider == "local"
+            and str(st.session_state.image_generation_model or "").strip()
+            in {"", default_image_profile()["generation_model"]}
+        ):
+            st.session_state.image_generation_model = _default_local_image_generation_model_impl()
         if st.session_state.image_provider == "replicate":
             st.caption("Cloud image generation uses Qwen Image 2512 on Replicate.")
+        elif st.session_state.image_provider == "local":
+            model_label = str(st.session_state.image_generation_model or _default_local_image_generation_model_impl()).strip()
+            if model_label:
+                st.caption(f"Configured local image model: `{model_label}`")
+            st.caption("Local image generation runs the configured Hugging Face Qwen model on this machine.")
         else:
-            st.caption("Local image mode skips AI generation. Upload stills or clips in Step 2 and keep the rest of the pipeline local.")
+            st.caption("Manual image mode skips AI generation. Upload stills or clips in Step 2 and keep the rest of the pipeline local.")
 
         edit_models = available_image_edit_models(
             include_replicate=bool(keys.get("replicate")),
@@ -964,7 +983,7 @@ def render_step_1():
         visual_style = st.text_input(
             "Visual Style",
             value=defaults["visual_style"],
-            help="How the visuals should feel. Examples: cinematic infographic, minimalist, product demo, editorial, documentary, bold motion-graphic style.",
+            help="How the visuals should feel. Examples: cinematic infographic, minimalist, product demo, editorial, case-study, bold motion-graphic style.",
         )
         must_include = st.text_area(
             "Must Include",
@@ -995,7 +1014,7 @@ def render_step_1():
         "Available Footage / Clip Notes (optional)",
         height=110,
         value=defaults["available_footage"],
-        placeholder="Optional. Describe any recordings or clips you already have or can capture: product demo, onboarding flow, dashboard alert moment, gameplay clip, interview B-roll, etc.",
+        placeholder="Optional. Describe any recordings or clips you already have or can capture: product demo, onboarding flow, dashboard alert moment, gameplay clip, speaker clip, etc.",
         help="Optional. Describe any video footage you want the storyboard to plan around. This helps the app decide when a scene should be a video clip instead of an image slide.",
     )
     raw_brief = st.text_area(
@@ -1080,7 +1099,7 @@ def render_step_2():
     image_generation_model = str(
         image_profile.get("generation_model") or default_image_profile()["generation_model"]
     )
-    image_generation_enabled = image_provider == "replicate"
+    image_generation_enabled = image_provider in {"replicate", "local"}
     video_profile = plan.get("meta", {}).get("video_profile", {})
     video_provider = str(video_profile.get("provider") or "manual")
     video_generation_model = str(video_profile.get("generation_model") or "")
@@ -1364,8 +1383,8 @@ def render_step_2():
                                     st.rerun()
                                 except Exception as e:
                                     st.error(f"Error: {e}")
-                        if not image_generation_enabled:
-                            st.caption("Image generation is set to local/manual mode. Upload a still image instead.")
+                        if image_provider == "manual":
+                            st.caption("Image generation is set to manual mode. Upload a still image instead.")
                 else:
                     st.subheader("Video Clip")
                     uploaded_video = st.file_uploader(
@@ -1541,6 +1560,93 @@ def render_step_2():
                 st.caption(
                     "Narration drives final timing. For video scenes, the clip is trimmed or held against this audio duration."
                 )
+                speaker_name = st.text_input(
+                    "Speaker / Character (optional)",
+                    value=str(scene.get("speaker_name") or ""),
+                    key=f"speaker_name_{scene_uid}",
+                    help="Useful for documentaries with a narrator plus interview recreations or other characters.",
+                )
+                if speaker_name != str(scene.get("speaker_name") or ""):
+                    scene["speaker_name"] = speaker_name.strip()
+                    save_plan(project_dir, plan)
+
+                override_enabled = st.checkbox(
+                    "Override project narrator for this scene",
+                    value=bool(scene.get("tts_override_enabled")),
+                    key=f"tts_override_enabled_{scene_uid}",
+                    help="Use a different provider or voice for this scene only.",
+                )
+                if override_enabled != bool(scene.get("tts_override_enabled")):
+                    scene["tts_override_enabled"] = bool(override_enabled)
+                    save_plan(project_dir, plan)
+
+                if override_enabled:
+                    scene_tts_providers = _available_tts_providers(check_api_keys())
+                    scene_provider_keys = list(scene_tts_providers.keys())
+                    default_scene_provider = str(scene.get("tts_provider") or st.session_state.tts_provider)
+                    if default_scene_provider not in scene_provider_keys:
+                        default_scene_provider = scene_provider_keys[0]
+                    selected_scene_provider = st.selectbox(
+                        "Scene TTS Provider",
+                        options=scene_provider_keys,
+                        index=scene_provider_keys.index(default_scene_provider),
+                        format_func=lambda p: scene_tts_providers[p],
+                        key=f"scene_tts_provider_{scene_uid}",
+                    )
+                    if selected_scene_provider != str(scene.get("tts_provider") or ""):
+                        scene["tts_provider"] = selected_scene_provider
+                        save_plan(project_dir, plan)
+
+                    if selected_scene_provider == "kokoro":
+                        voice_options = list(KOKORO_VOICES.keys())
+                        default_voice = str(scene.get("tts_voice") or st.session_state.tts_voice)
+                        if default_voice not in voice_options:
+                            default_voice = voice_options[0]
+                        selected_scene_voice = st.selectbox(
+                            "Scene Voice",
+                            options=voice_options,
+                            index=voice_options.index(default_voice),
+                            format_func=lambda v: f"{v} - {KOKORO_VOICES[v]}",
+                            key=f"scene_kokoro_voice_{scene_uid}",
+                        )
+                    elif selected_scene_provider == "elevenlabs":
+                        selected_scene_voice = st.text_input(
+                            "Scene Voice / Voice ID",
+                            value=str(scene.get("tts_voice") or st.session_state.tts_elevenlabs_voice),
+                            key=f"scene_elevenlabs_voice_{scene_uid}",
+                            help="Use a curated name like Bella or a raw ElevenLabs voice ID from your account.",
+                        )
+                    else:
+                        selected_scene_voice = st.text_input(
+                            "Scene Voice",
+                            value=str(scene.get("tts_voice") or ""),
+                            key=f"scene_generic_voice_{scene_uid}",
+                        )
+                    if selected_scene_voice != str(scene.get("tts_voice") or ""):
+                        scene["tts_voice"] = str(selected_scene_voice).strip()
+                        save_plan(project_dir, plan)
+
+                    scene_speed_default = (
+                        float(scene.get("tts_speed"))
+                        if scene.get("tts_speed") is not None
+                        else (
+                            float(st.session_state.tts_elevenlabs_speed)
+                            if selected_scene_provider == "elevenlabs"
+                            else float(st.session_state.tts_speed)
+                        )
+                    )
+                    selected_scene_speed = st.slider(
+                        "Scene Voice Speed",
+                        min_value=0.7,
+                        max_value=1.4,
+                        value=float(scene_speed_default),
+                        step=0.05,
+                        key=f"scene_tts_speed_{scene_uid}",
+                    )
+                    if float(selected_scene_speed) != float(scene.get("tts_speed") or scene_speed_default):
+                        scene["tts_speed"] = float(selected_scene_speed)
+                        save_plan(project_dir, plan)
+
                 if scene.get("audio_path") and Path(scene["audio_path"]).exists():
                     st.audio(scene["audio_path"])
                     if st.button("Regenerate Audio", key=f"regen_audio_{scene_uid}"):
