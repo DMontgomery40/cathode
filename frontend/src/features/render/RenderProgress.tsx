@@ -4,6 +4,7 @@ import type { Job } from '../../lib/api/jobs.ts'
 
 interface RenderProgressProps {
   job: Job | null
+  logContent?: string | null
   onCancel: () => void
 }
 
@@ -19,7 +20,7 @@ function stageLabel(status: string): string {
   }
 }
 
-export function RenderProgress({ job, onCancel }: RenderProgressProps) {
+export function RenderProgress({ job, logContent, onCancel }: RenderProgressProps) {
   if (!job) {
     return (
       <GlassPanel variant="default" padding="md">
@@ -45,6 +46,9 @@ export function RenderProgress({ job, onCancel }: RenderProgressProps) {
   const isActive = job.status === 'queued' || job.status === 'running'
   const isFailed = job.status === 'failed'
   const progress = job.progress ?? 0
+  const prettyError = typeof job.error === 'string' ? job.error : job.error?.operatorHint || job.error?.message
+  const progressLabel = job.progress_label || (isActive ? 'Working' : 'Last run')
+  const progressDetail = job.progress_detail || job.suggestion || ''
 
   return (
     <GlassPanel variant="default" padding="md">
@@ -93,20 +97,32 @@ export function RenderProgress({ job, onCancel }: RenderProgressProps) {
 
         {/* Progress bar */}
         {isActive && (
-          <div className="w-full rounded-[var(--radius-full)] bg-[var(--surface-stage)] overflow-hidden" style={{ height: 6 }}>
-            <div
-              className="h-full rounded-[var(--radius-full)] bg-[var(--accent-primary)] transition-all duration-[250ms]"
-              style={{ width: `${Math.max(progress * 100, 2)}%` }}
-              role="progressbar"
-              aria-valuenow={Math.round(progress * 100)}
-              aria-valuemin={0}
-              aria-valuemax={100}
-            />
+          <div className="flex flex-col gap-[var(--space-2)]">
+            <div className="w-full rounded-[var(--radius-full)] bg-[var(--surface-stage)] overflow-hidden" style={{ height: 6 }}>
+              <div
+                className="h-full rounded-[var(--radius-full)] bg-[var(--accent-primary)] transition-all duration-[250ms]"
+                style={{ width: `${Math.max(progress * 100, 2)}%` }}
+                role="progressbar"
+                aria-valuenow={Math.round(progress * 100)}
+                aria-valuemin={0}
+                aria-valuemax={100}
+              />
+            </div>
+            <div className="flex flex-col gap-[2px]">
+              <span className="text-[var(--text-primary)]" style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--weight-medium)' }}>
+                {progressLabel}
+              </span>
+              {progressDetail && (
+                <span className="text-[var(--text-tertiary)]" style={{ fontSize: 'var(--text-xs)', fontFamily: 'var(--font-mono)' }}>
+                  {progressDetail}
+                </span>
+              )}
+            </div>
           </div>
         )}
 
         {/* Error message */}
-        {isFailed && job.error && (
+        {isFailed && prettyError && (
           <div
             className="text-[var(--signal-danger)] bg-[rgba(200,90,90,0.08)] rounded-[var(--radius-md)] border border-[rgba(200,90,90,0.2)]"
             style={{
@@ -115,7 +131,34 @@ export function RenderProgress({ job, onCancel }: RenderProgressProps) {
               fontFamily: 'var(--font-mono)',
             }}
           >
-            {typeof job.error === 'string' ? job.error : job.error?.operatorHint || job.error?.message}
+            {prettyError}
+          </div>
+        )}
+
+        {!isActive && (job.progress_label || job.progress_detail || job.status === 'succeeded' || job.status === 'partial_success') && (
+          <div className="flex flex-col gap-[2px] rounded-[var(--radius-md)] border border-[var(--border-subtle)] bg-[var(--surface-stage)] px-[var(--space-3)] py-[var(--space-2)]">
+            <span className="text-[var(--text-primary)]" style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--weight-medium)' }}>
+              {progressLabel}
+            </span>
+            {progressDetail && (
+              <span className="text-[var(--text-tertiary)]" style={{ fontSize: 'var(--text-xs)', fontFamily: 'var(--font-mono)' }}>
+                {progressDetail}
+              </span>
+            )}
+          </div>
+        )}
+
+        {logContent && (
+          <div className="flex flex-col gap-[var(--space-2)]">
+            <div className="text-[var(--text-secondary)]" style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--weight-medium)' }}>
+              Live log tail
+            </div>
+            <pre
+              className="max-h-[20rem] overflow-auto rounded-[var(--radius-md)] border border-[var(--border-subtle)] bg-[var(--surface-void)]"
+              style={{ fontSize: '10px', fontFamily: 'var(--font-mono)', margin: 0, padding: 'var(--space-2)' }}
+            >
+              {logContent}
+            </pre>
           </div>
         )}
 

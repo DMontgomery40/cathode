@@ -17,16 +17,35 @@ async function main() {
   }
 
   const manifest = JSON.parse(await fs.readFile(manifestPath, 'utf8'))
+  const hardwareAcceleration = process.platform === 'darwin' ? 'required' : 'disable'
+  console.log(JSON.stringify({
+    type: 'status',
+    stage: 'bundle',
+    label: 'Bundling Remotion composition',
+    detail: `${manifest.scenes?.length ?? 0} scene(s)`,
+  }))
   const serveUrl = await bundle({
     entryPoint,
     onProgress: () => undefined,
   })
+  console.log(JSON.stringify({
+    type: 'status',
+    stage: 'select-composition',
+    label: 'Resolving Remotion composition',
+    detail: 'Preparing render metadata',
+  }))
 
   const composition = await selectComposition({
     serveUrl,
     id: 'CathodeRender',
     inputProps: manifest,
   })
+  console.log(JSON.stringify({
+    type: 'status',
+    stage: 'render',
+    label: 'Starting Remotion render',
+    detail: `codec=h264 hwaccel=${hardwareAcceleration}`,
+  }))
 
   await renderMedia({
     serveUrl,
@@ -34,10 +53,30 @@ async function main() {
     codec: 'h264',
     outputLocation: outputPath,
     inputProps: manifest,
+    hardwareAcceleration,
+    logLevel: 'verbose',
+    onProgress: (progress) => {
+      console.log(JSON.stringify({
+        type: 'progress',
+        stage: progress.stitchStage,
+        renderedFrames: progress.renderedFrames,
+        encodedFrames: progress.encodedFrames,
+        renderedDoneIn: progress.renderedDoneIn,
+        encodedDoneIn: progress.encodedDoneIn,
+        renderEstimatedTime: progress.renderEstimatedTime,
+        progress: progress.progress,
+      }))
+    },
     chromiumOptions: {
       disableWebSecurity: true,
     },
   })
+  console.log(JSON.stringify({
+    type: 'done',
+    stage: 'complete',
+    label: 'Render complete',
+    detail: outputPath,
+  }))
 }
 
 main().catch((error) => {

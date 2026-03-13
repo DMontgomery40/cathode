@@ -30,6 +30,18 @@ def test_health(client):
     assert resp.json() == {"status": "ok"}
 
 
+def test_health_allows_127001_frontend_origin(client):
+    resp = client.options(
+        "/api/health",
+        headers={
+            "Origin": "http://127.0.0.1:9322",
+            "Access-Control-Request-Method": "GET",
+        },
+    )
+    assert resp.status_code == 200
+    assert resp.headers["access-control-allow-origin"] == "http://127.0.0.1:9322"
+
+
 def test_unhandled_exception_returns_operator_hint():
     app = create_app()
     router = APIRouter()

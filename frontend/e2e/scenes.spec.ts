@@ -7,6 +7,7 @@ import { cleanupProjectFixture, cloneProjectFixture, readProjectPlan } from './h
 const PROJECT = 'bet365_feature_act_01'
 const DISPOSABLE_PROJECT = `e2e_scene_mutation_${Date.now()}`
 const MOTION_PROJECT = `e2e_motion_scene_${Date.now()}`
+const MANUAL_IMAGE_PROJECT = `e2e_manual_image_${Date.now()}`
 
 test.describe('Scene Timeline', () => {
   function setNarrowInspectorLayout() {
@@ -279,7 +280,7 @@ test.describe('Scene Timeline', () => {
     test.beforeAll(() => {
       cloneProjectFixture(PROJECT, MOTION_PROJECT)
       const planPath = path.resolve(process.cwd(), '..', 'projects', MOTION_PROJECT, 'plan.json')
-      const plan = JSON.parse(fs.readFileSync(planPath, 'utf8')) as Record<string, any>
+      const plan = JSON.parse(fs.readFileSync(planPath, 'utf8')) as Record<string, unknown>
       plan.meta.render_profile = {
         ...(plan.meta.render_profile || {}),
         render_backend: 'remotion',
@@ -319,6 +320,32 @@ test.describe('Scene Timeline', () => {
       await expect(page.getByRole('button', { name: 'Generate Motion Preview' })).toBeVisible()
       await expect(page.getByLabel('Motion headline')).toHaveValue('Prompts on prompts')
       await expect(page.getByRole('region', { name: 'Media stage' })).toContainText('Motion template')
+    })
+  })
+
+  test.describe.serial('manual image mode', () => {
+    test.beforeAll(() => {
+      cloneProjectFixture(PROJECT, MANUAL_IMAGE_PROJECT)
+      const planPath = path.resolve(process.cwd(), '..', 'projects', MANUAL_IMAGE_PROJECT, 'plan.json')
+      const plan = JSON.parse(fs.readFileSync(planPath, 'utf8')) as Record<string, unknown>
+      plan.meta.image_profile = {
+        ...(plan.meta.image_profile || {}),
+        provider: 'manual',
+      }
+      plan.scenes[0].scene_type = 'image'
+      plan.scenes[0].image_path = null
+      fs.writeFileSync(planPath, JSON.stringify(plan, null, 2))
+    })
+
+    test.afterAll(() => {
+      cleanupProjectFixture(MANUAL_IMAGE_PROJECT)
+    })
+
+    test('manual image mode disables generation and explains the upload-first path', async ({ page }) => {
+      await page.goto(`/projects/${MANUAL_IMAGE_PROJECT}/scenes`)
+      await expect(page.getByRole('region', { name: 'Scene inspector' })).toBeVisible()
+      await expect(page.getByRole('button', { name: 'Generate Image' })).toBeDisabled()
+      await expect(page.getByText('Manual image mode is upload-first.')).toBeVisible()
     })
   })
 
@@ -520,6 +547,48 @@ test.describe('Scene Timeline', () => {
       const progressStack = page.locator('.scene-inspector__progress-stack').first()
       await expect(progressStack.getByText(/Generating image|Regenerating image/)).toBeVisible()
       await expect(progressStack.getByText(`Scene 1 - ${currentSceneTitle}`, { exact: true })).toBeVisible()
+    })
+
+    test('pending scene edits are flushed before image generation starts', async ({ page }) => {
+      const plan = readProjectPlan(DISPOSABLE_PROJECT)
+      const firstScene = (plan.scenes as Array<Record<string, unknown>>)[0]
+      const sceneUid = String(firstScene.uid)
+      const updatedTitle = 'Title saved before generation'
+      let saveCompleted = false
+
+      await page.route(`**/api/projects/${DISPOSABLE_PROJECT}/plan`, async (route) => {
+        if (route.request().method() !== 'PUT') {
+          await route.continue()
+          return
+        }
+        const payload = route.request().postDataJSON() as Record<string, unknown>
+        expect(payload.scenes[0].title).toBe(updatedTitle)
+        await new Promise((resolve) => setTimeout(resolve, 150))
+        saveCompleted = true
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify(payload),
+        })
+      })
+
+      await page.route(`**/api/projects/${DISPOSABLE_PROJECT}/scenes/${sceneUid}/image-generate`, async (route) => {
+        expect(saveCompleted).toBe(true)
+        const updatedPlan = structuredClone(plan) as Record<string, unknown>
+        updatedPlan.scenes[0].title = updatedTitle
+        updatedPlan.scenes[0].image_path = `projects/${DISPOSABLE_PROJECT}/images/image_${sceneUid}.png`
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify(updatedPlan),
+        })
+      })
+
+      await page.getByLabel('Scene title').fill(updatedTitle)
+      await page.getByRole('button', { name: /Generate Image|Regenerate Image/ }).click()
+
+      await expect(page.getByLabel('Scene title')).toHaveValue(updatedTitle)
+      await expect(page.getByRole('region', { name: 'Media stage' }).locator('img')).toBeVisible()
     })
 
     test('preview generation targets the preview endpoint and shows the player', async ({ page }) => {

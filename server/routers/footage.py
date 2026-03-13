@@ -8,7 +8,7 @@ from typing import Any
 from fastapi import APIRouter, File, HTTPException, UploadFile
 
 from core.demo_assets import build_footage_summary, normalize_footage_manifest
-from core.project_store import load_plan, save_plan
+from core.project_store import annotate_plan_asset_existence, load_plan, save_plan
 from core.runtime import PROJECTS_DIR
 from server.services.uploads import IMAGE_UPLOAD_SPEC, VIDEO_UPLOAD_SPEC, persist_upload
 
@@ -82,4 +82,4 @@ async def upload_footage(project: str, files: list[UploadFile] = File(...)) -> d
     brief["footage_manifest"] = normalized
     brief["available_footage"] = build_footage_summary(normalized)
     plan.setdefault("meta", {})["footage_manifest"] = normalized
-    return save_plan(project_dir, plan)
+    return annotate_plan_asset_existence(project_dir, save_plan(project_dir, plan))

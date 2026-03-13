@@ -2,7 +2,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from core.remotion_render import build_remotion_manifest, motion_scene_is_ready, scene_has_renderable_visual
+from core.remotion_render import (
+    _progress_payload_from_remotion_event,
+    build_remotion_manifest,
+    motion_scene_is_ready,
+    scene_has_renderable_visual,
+)
 
 
 def test_motion_scene_is_ready_from_template_only():
@@ -54,6 +59,7 @@ def test_build_remotion_manifest_uses_api_media_urls_and_motion_templates(tmp_pa
                 "video_path": str(project_dir / "clips" / "scene_002.mp4"),
                 "audio_path": str(project_dir / "audio" / "scene_002.wav"),
                 "video_trim_start": 1.5,
+                "video_trim_end": 3.0,
                 "video_playback_speed": 1.25,
             },
             {
@@ -85,5 +91,50 @@ def test_build_remotion_manifest_uses_api_media_urls_and_motion_templates(tmp_pa
     assert len(manifest["scenes"]) == 3
     assert manifest["scenes"][0]["imageUrl"].endswith("/api/projects/demo_project/media/images/scene_001.png")
     assert manifest["scenes"][1]["videoUrl"].endswith("/api/projects/demo_project/media/clips/scene_002.mp4")
+    assert manifest["scenes"][1]["trimBeforeFrames"] == 36
+    assert manifest["scenes"][1]["trimAfterFrames"] == 72
     assert manifest["scenes"][2]["motion"]["templateId"] == "bullet_stack"
     assert manifest["totalDurationInFrames"] >= sum(scene["durationInFrames"] for scene in manifest["scenes"])
+
+
+def test_ffmpeg_motion_scene_accepts_rendered_preview_clip(tmp_path):
+    preview_path = tmp_path / "previews" / "motion_scene.mp4"
+    preview_path.parent.mkdir(parents=True)
+    preview_path.write_bytes(b"mp4")
+
+    scene = {
+        "scene_type": "motion",
+        "preview_path": str(preview_path),
+        "motion": {
+            "template_id": "kinetic_title",
+            "preview_path": str(preview_path),
+        },
+    }
+
+    assert scene_has_renderable_visual(scene, render_backend="ffmpeg") is True
+
+
+def test_progress_payload_maps_remotion_events_to_render_job_updates():
+    status_payload = _progress_payload_from_remotion_event(
+        {
+            "type": "status",
+            "stage": "render",
+            "label": "Starting Remotion render",
+            "detail": "codec=h264 hwaccel=required",
+        }
+    )
+    progress_payload = _progress_payload_from_remotion_event(
+        {
+            "type": "progress",
+            "stage": "encoding",
+            "progress": 0.42,
+            "renderedFrames": 120,
+            "encodedFrames": 98,
+        }
+    )
+
+    assert status_payload["progress_label"] == "Starting Remotion render"
+    assert status_payload["progress_detail"] == "codec=h264 hwaccel=required"
+    assert progress_payload["progress_label"] == "Encoding video"
+    assert progress_payload["progress_detail"] == "rendered 120 frames, encoded 98"
+    assert progress_payload["progress"] == 0.42

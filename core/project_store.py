@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 import json
 import shutil
 from pathlib import Path
@@ -55,6 +56,64 @@ def save_plan(project_dir: Path, plan: dict[str, Any]) -> dict[str, Any]:
     normalized = backfill_plan(plan, base_dir=project_dir)
     (project_dir / "plan.json").write_text(json.dumps(normalized, indent=2))
     return normalized
+
+
+def _resolve_asset_path(project_dir: Path, raw_path: Any) -> Path | None:
+    value = str(raw_path or "").strip()
+    if not value:
+        return None
+
+    normalized = value.replace("\\", "/").lstrip("/")
+    marker = f"projects/{project_dir.name}/"
+    index = normalized.rfind(marker)
+    if index >= 0:
+        suffix = normalized[index + len(marker) :].lstrip("/")
+        if not suffix:
+            return None
+        return (project_dir / suffix).resolve()
+
+    path = Path(value).expanduser()
+    if path.is_absolute():
+        return path.resolve()
+
+    return (project_dir / normalized).resolve()
+
+
+def asset_path_exists(project_dir: Path, raw_path: Any) -> bool:
+    """Return whether a persisted asset path currently resolves to a readable file."""
+    resolved = _resolve_asset_path(Path(project_dir), raw_path)
+    return bool(resolved and resolved.exists() and resolved.is_file())
+
+
+def annotate_plan_asset_existence(project_dir: Path, plan: dict[str, Any]) -> dict[str, Any]:
+    """Attach non-persisted asset existence hints used by the API/UI."""
+    annotated = copy.deepcopy(plan if isinstance(plan, dict) else {})
+    project_dir = Path(project_dir)
+
+    meta = annotated.get("meta")
+    if not isinstance(meta, dict):
+        meta = {}
+        annotated["meta"] = meta
+    meta["video_exists"] = asset_path_exists(project_dir, meta.get("video_path"))
+
+    scenes = annotated.get("scenes")
+    if not isinstance(scenes, list):
+        annotated["scenes"] = []
+        return annotated
+
+    for scene in scenes:
+        if not isinstance(scene, dict):
+            continue
+        scene["image_exists"] = asset_path_exists(project_dir, scene.get("image_path"))
+        scene["video_exists"] = asset_path_exists(project_dir, scene.get("video_path"))
+        scene["audio_exists"] = asset_path_exists(project_dir, scene.get("audio_path"))
+        scene["preview_exists"] = asset_path_exists(project_dir, scene.get("preview_path"))
+        motion = scene.get("motion")
+        if isinstance(motion, dict):
+            motion["render_exists"] = asset_path_exists(project_dir, motion.get("render_path"))
+            motion["preview_exists"] = asset_path_exists(project_dir, motion.get("preview_path"))
+
+    return annotated
 
 
 def list_projects() -> list[str]:

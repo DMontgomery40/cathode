@@ -38,12 +38,12 @@ function AssetDots({ scene, project, renderBackend }: { scene: Scene; project: s
       <span
         className={clsx(
           'inline-block rounded-full',
-          scene.audio_path
+          (typeof scene.audio_exists === 'boolean' ? scene.audio_exists : Boolean(scene.audio_path))
             ? 'bg-[var(--signal-success)]'
             : 'bg-[var(--text-tertiary)]',
         )}
         style={{ width: 5, height: 5 }}
-        title={scene.audio_path ? 'Has audio' : 'No audio'}
+        title={(typeof scene.audio_exists === 'boolean' ? scene.audio_exists : Boolean(scene.audio_path)) ? 'Has audio' : 'No audio'}
       />
       <span
         className={clsx(

@@ -369,6 +369,7 @@ def _run_make_video_job(job_file: Path, job: dict[str, Any]) -> dict[str, Any]:
             project_dir,
             output_filename=request.get("output_filename"),
             fps=request.get("fps"),
+            progress_callback=lambda payload: _update_job_progress(job_file, payload),
         )
         result["current_stage"] = "render"
         result["render"] = render_result
@@ -434,6 +435,7 @@ def _run_rerun_stage_job(job_file: Path, job: dict[str, Any]) -> dict[str, Any]:
             project_dir,
             output_filename=request.get("output_filename"),
             fps=request.get("fps"),
+            progress_callback=lambda payload: _update_job_progress(job_file, payload),
         )
         result["render"] = render_result
         result["video_path"] = render_result.get("video_path")

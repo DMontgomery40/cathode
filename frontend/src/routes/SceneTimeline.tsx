@@ -41,6 +41,8 @@ interface SceneActionTrace {
   error?: string | null
 }
 
+const EMPTY_SCENES: Scene[] = []
+
 export function SceneTimeline() {
   const { projectId = '' } = useParams<{ projectId: string }>()
   const navigate = useNavigate()
@@ -78,6 +80,9 @@ export function SceneTimeline() {
 
   const [liveMsg, setLiveMsg] = useState('')
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const savePromiseRef = useRef<Promise<Plan> | null>(null)
+  const pendingSaveRef = useRef<Plan | null>(null)
+  const latestPlanRef = useRef<Plan | null>(null)
   const [saving, setSaving] = useState(false)
   const [actionTrace, setActionTrace] = useState<SceneActionTrace | null>(null)
 
@@ -88,22 +93,93 @@ export function SceneTimeline() {
     }
   }, [plan, selectedSceneId, setSelectedScene])
 
-  const scenes = plan?.scenes ?? []
+  useEffect(() => {
+    latestPlanRef.current = plan ?? null
+  }, [plan])
+
+  useEffect(() => () => {
+    if (saveTimer.current) {
+      clearTimeout(saveTimer.current)
+    }
+  }, [])
+
+  const scenes = plan?.scenes ?? EMPTY_SCENES
   const selectedScene = scenes.find((s) => s.uid === selectedSceneId) ?? null
   const selectedIndex = scenes.findIndex((s) => s.uid === selectedSceneId)
   const renderWorkspacePath = `/projects/${encodeURIComponent(projectId)}/render`
 
+  const persistPlan = useCallback(async (nextPlan: Plan) => {
+    latestPlanRef.current = nextPlan
+    pendingSaveRef.current = null
+    setSaving(true)
+    const priorSave = savePromiseRef.current
+    const pendingSave = (async () => {
+      if (priorSave) {
+        await priorSave.catch(() => undefined)
+      }
+      return savePlan.mutateAsync(nextPlan)
+    })().finally(() => {
+      if (savePromiseRef.current === pendingSave) {
+        savePromiseRef.current = null
+      }
+      setSaving(false)
+    })
+    savePromiseRef.current = pendingSave
+    return pendingSave
+  }, [savePlan])
+
+  const flushPendingSave = useCallback(async () => {
+    if (saveTimer.current) {
+      clearTimeout(saveTimer.current)
+      saveTimer.current = null
+    }
+
+    if (pendingSaveRef.current) {
+      await persistPlan(pendingSaveRef.current)
+      return
+    }
+
+    if (savePromiseRef.current) {
+      await savePromiseRef.current
+    }
+  }, [persistPlan])
+
+  const runWithCommittedPlan = useCallback(
+    (trace: SceneActionTrace, action: () => void) => {
+      void (async () => {
+        try {
+          await flushPendingSave()
+        } catch (commitError) {
+          const message = getApiErrorMessage(commitError, 'Could not save your scene changes before starting this action.')
+          setLiveMsg(message)
+          setActionTrace({ ...trace, status: 'error', error: message })
+          return
+        }
+
+        setActionTrace(trace)
+        action()
+      })()
+    },
+    [flushPendingSave],
+  )
+
   const debouncedSave = useCallback(
     (updatedPlan: Plan) => {
+      latestPlanRef.current = updatedPlan
+      pendingSaveRef.current = updatedPlan
       if (saveTimer.current) clearTimeout(saveTimer.current)
       setSaving(true)
       saveTimer.current = setTimeout(() => {
-        savePlan.mutate(updatedPlan, {
-          onSettled: () => setSaving(false),
-        })
+        const nextPlan = pendingSaveRef.current
+        saveTimer.current = null
+        if (!nextPlan) {
+          setSaving(false)
+          return
+        }
+        void persistPlan(nextPlan).catch(() => undefined)
       }, 500)
     },
-    [savePlan],
+    [persistPlan],
   )
 
   const handleReorder = useCallback(
@@ -187,7 +263,7 @@ export function SceneTimeline() {
     (file: File) => {
       if (!selectedScene) return
       const isVideo = file.type.startsWith('video/')
-      setActionTrace({
+      const trace: SceneActionTrace = {
         title: isVideo ? 'Upload scene video' : 'Upload scene image',
         endpoint: `/api/projects/${projectId}/scenes/${selectedScene.uid}/${isVideo ? 'video-upload' : 'image-upload'}`,
         request: {
@@ -198,22 +274,26 @@ export function SceneTimeline() {
         status: 'running',
         happenedAt: new Date().toISOString(),
         error: null,
-      })
-      if (file.type.startsWith('video/')) {
-        uploadVideo.mutate(
-          { sceneUid: selectedScene.uid, file },
-          {
-            onSuccess: () => {
-              setLiveMsg('Scene video uploaded')
-              setActionTrace((current) => current ? { ...current, status: 'succeeded', error: null } : current)
+      }
+
+      runWithCommittedPlan(trace, () => {
+        if (isVideo) {
+          uploadVideo.mutate(
+            { sceneUid: selectedScene.uid, file },
+            {
+              onSuccess: () => {
+                setLiveMsg('Scene video uploaded')
+                setActionTrace((current) => current ? { ...current, status: 'succeeded', error: null } : current)
+              },
+              onError: (mutationError) => {
+                const message = getApiErrorMessage(mutationError, 'Video upload failed.')
+                setActionTrace((current) => current ? { ...current, status: 'error', error: message } : current)
+              },
             },
-            onError: (mutationError) => {
-              const message = getApiErrorMessage(mutationError, 'Video upload failed.')
-              setActionTrace((current) => current ? { ...current, status: 'error', error: message } : current)
-            },
-          },
-        )
-      } else {
+          )
+          return
+        }
+
         uploadImage.mutate(
           { sceneUid: selectedScene.uid, file },
           {
@@ -227,9 +307,9 @@ export function SceneTimeline() {
             },
           },
         )
-      }
+      })
     },
-    [projectId, selectedScene, uploadImage, uploadVideo],
+    [projectId, runWithCommittedPlan, selectedScene, uploadImage, uploadVideo],
   )
 
   const hasRenderActivity = startRender.isPending || Boolean((jobs ?? []).find((job) => (job.requested_stage === 'render' || job.current_stage === 'render') && (job.status === 'queued' || job.status === 'running')))
@@ -289,12 +369,17 @@ export function SceneTimeline() {
     (job) => (job.requested_stage === 'render' || job.current_stage === 'render') && (job.status === 'queued' || job.status === 'running'),
   )
   const scenesWithVisual = scenes.filter((scene) => sceneHasRenderableVisual(projectId, scene, renderBackend))
-  const scenesWithAudio = scenes.filter((scene) => hasProjectMediaPath(projectId, scene.audio_path))
+  const scenesWithAudio = scenes.filter((scene) => (
+    typeof scene.audio_exists === 'boolean'
+      ? scene.audio_exists
+      : hasProjectMediaPath(projectId, scene.audio_path)
+  ))
   const allReadyToRender = scenes.length > 0 && scenesWithVisual.length === scenes.length && scenesWithAudio.length === scenes.length
   const projectVideoPath = typeof plan?.meta?.video_path === 'string' ? plan.meta.video_path : null
+  const projectVideoExists = typeof plan?.meta?.video_exists === 'boolean' ? plan.meta.video_exists : undefined
   const renderOutputFilename = projectVideoPath?.split('/').pop() ?? 'final_video.mp4'
   const renderReadinessCopy = allReadyToRender
-    ? (projectVideoPath ? 'Ready to re-render from the current storyboard.' : 'All visuals and audio are in place. Ready to render.')
+    ? (projectVideoExists ? 'Ready to re-render from the current storyboard.' : 'All visuals and audio are in place. Ready to render.')
     : `${scenesWithVisual.length}/${scenes.length} visuals and ${scenesWithAudio.length}/${scenes.length} audio ready for render.`
 
   useInvalidateProjectOnJobCompletion(projectId, jobs, ['assets', 'render'])
@@ -712,7 +797,7 @@ export function SceneTimeline() {
                   imageActionHistory={imageActionHistory}
                   onEditImage={(feedback) => {
                     if (!selectedScene) return
-                    setActionTrace({
+                    const trace: SceneActionTrace = {
                       title: 'Edit scene image',
                       endpoint: `/api/projects/${projectId}/scenes/${selectedScene.uid}/image-edit`,
                       request: {
@@ -726,26 +811,28 @@ export function SceneTimeline() {
                       status: 'running',
                       happenedAt: new Date().toISOString(),
                       error: null,
+                    }
+                    runWithCommittedPlan(trace, () => {
+                      editImage.mutate(
+                        { sceneUid: selectedScene.uid, feedback, opts: imageEditModel ? { model: imageEditModel } : undefined },
+                        {
+                          onSuccess: () => {
+                            setLiveMsg('Image edit completed')
+                            setActionTrace((current) => current ? { ...current, status: 'succeeded', error: null } : current)
+                          },
+                          onError: (mutationError) => {
+                            const message = getApiErrorMessage(mutationError, 'Image edit failed.')
+                            setActionTrace((current) => current ? { ...current, status: 'error', error: message } : current)
+                          },
+                        },
+                      )
                     })
-                    editImage.mutate(
-                      { sceneUid: selectedScene.uid, feedback, opts: imageEditModel ? { model: imageEditModel } : undefined },
-                      {
-                        onSuccess: () => {
-                          setLiveMsg('Image edit completed')
-                          setActionTrace((current) => current ? { ...current, status: 'succeeded', error: null } : current)
-                        },
-                        onError: (mutationError) => {
-                          const message = getApiErrorMessage(mutationError, 'Image edit failed.')
-                          setActionTrace((current) => current ? { ...current, status: 'error', error: message } : current)
-                        },
-                      },
-                    )
                   }}
                   imageEditPending={editImage.isPending}
                   imageEditError={imageEditError}
                   onGenerateImage={() => {
                     if (!selectedScene) return
-                    setActionTrace({
+                    const trace: SceneActionTrace = {
                       title: 'Generate scene image',
                       endpoint: `/api/projects/${projectId}/scenes/${selectedScene.uid}/image-generate`,
                       request: {
@@ -755,16 +842,18 @@ export function SceneTimeline() {
                       status: 'running',
                       happenedAt: new Date().toISOString(),
                       error: null,
-                    })
-                    genImage.mutate({ sceneUid: selectedScene.uid, opts: { provider: imageGenerationProvider, model: imageGenerationModel } }, {
-                      onSuccess: () => {
-                        setLiveMsg('Scene image generated')
-                        setActionTrace((current) => current ? { ...current, status: 'succeeded', error: null } : current)
-                      },
-                      onError: (mutationError) => {
-                        const message = getApiErrorMessage(mutationError, 'Image generation failed.')
-                        setActionTrace((current) => current ? { ...current, status: 'error', error: message } : current)
-                      },
+                    }
+                    runWithCommittedPlan(trace, () => {
+                      genImage.mutate({ sceneUid: selectedScene.uid, opts: { provider: imageGenerationProvider, model: imageGenerationModel } }, {
+                        onSuccess: () => {
+                          setLiveMsg('Scene image generated')
+                          setActionTrace((current) => current ? { ...current, status: 'succeeded', error: null } : current)
+                        },
+                        onError: (mutationError) => {
+                          const message = getApiErrorMessage(mutationError, 'Image generation failed.')
+                          setActionTrace((current) => current ? { ...current, status: 'error', error: message } : current)
+                        },
+                      })
                     })
                   }}
                   videoGenerationProvider={videoGenerationProvider}
@@ -773,7 +862,7 @@ export function SceneTimeline() {
                   onVideoProfileChange={handleVideoProfileChange}
                   onGenerateVideo={() => {
                     if (!selectedScene) return
-                    setActionTrace({
+                    const trace: SceneActionTrace = {
                       title: 'Generate scene video',
                       endpoint: `/api/projects/${projectId}/scenes/${selectedScene.uid}/video-generate`,
                       request: {
@@ -783,103 +872,112 @@ export function SceneTimeline() {
                       status: 'running',
                       happenedAt: new Date().toISOString(),
                       error: null,
+                    }
+                    runWithCommittedPlan(trace, () => {
+                      genVideo.mutate(
+                        {
+                          sceneUid: selectedScene.uid,
+                          opts: { provider: videoGenerationProvider, model: videoGenerationModel || undefined },
+                        },
+                        {
+                          onSuccess: () => {
+                            setLiveMsg('Scene video generated')
+                            setActionTrace((current) => current ? { ...current, status: 'succeeded', error: null } : current)
+                          },
+                          onError: (mutationError) => {
+                            const message = getApiErrorMessage(mutationError, 'Video generation failed.')
+                            setActionTrace((current) => current ? { ...current, status: 'error', error: message } : current)
+                          },
+                        },
+                      )
                     })
-                    genVideo.mutate(
-                      {
-                        sceneUid: selectedScene.uid,
-                        opts: { provider: videoGenerationProvider, model: videoGenerationModel || undefined },
-                      },
-                      {
-                        onSuccess: () => {
-                          setLiveMsg('Scene video generated')
-                          setActionTrace((current) => current ? { ...current, status: 'succeeded', error: null } : current)
-                        },
-                        onError: (mutationError) => {
-                          const message = getApiErrorMessage(mutationError, 'Video generation failed.')
-                          setActionTrace((current) => current ? { ...current, status: 'error', error: message } : current)
-                        },
-                      },
-                    )
                   }}
                   videoGeneratePending={genVideo.isPending}
                   videoGenerateError={videoGenerateError}
                   onGenerateAudio={() => {
                     if (!selectedScene) return
-                    setActionTrace({
+                    const trace: SceneActionTrace = {
                       title: 'Generate scene audio',
                       endpoint: `/api/projects/${projectId}/scenes/${selectedScene.uid}/audio-generate`,
                       request: {},
                       status: 'running',
                       happenedAt: new Date().toISOString(),
                       error: null,
+                    }
+                    runWithCommittedPlan(trace, () => {
+                      genAudio.mutate(
+                        { sceneUid: selectedScene.uid },
+                        {
+                          onSuccess: () => {
+                            setLiveMsg('Scene audio generated')
+                            setActionTrace((current) => current ? { ...current, status: 'succeeded', error: null } : current)
+                          },
+                          onError: (mutationError) => {
+                            const message = getApiErrorMessage(mutationError, 'Audio generation failed.')
+                            setActionTrace((current) => current ? { ...current, status: 'error', error: message } : current)
+                          },
+                        },
+                      )
                     })
-                    genAudio.mutate(
-                      { sceneUid: selectedScene.uid },
-                      {
-                        onSuccess: () => {
-                          setLiveMsg('Scene audio generated')
-                          setActionTrace((current) => current ? { ...current, status: 'succeeded', error: null } : current)
-                        },
-                        onError: (mutationError) => {
-                          const message = getApiErrorMessage(mutationError, 'Audio generation failed.')
-                          setActionTrace((current) => current ? { ...current, status: 'error', error: message } : current)
-                        },
-                      },
-                    )
                   }}
                   onGenerateAllAssets={() => {
-                    setActionTrace({
+                    const trace: SceneActionTrace = {
                       title: 'Generate all assets',
                       endpoint: `/api/projects/${projectId}/assets`,
                       request: { stage: 'assets', project: projectId },
                       status: 'running',
                       happenedAt: new Date().toISOString(),
                       error: null,
-                    })
-                    genAssets.mutate(undefined, {
-                      onSuccess: () => {
-                        setLiveMsg('Asset generation started')
-                        setActionTrace((current) => current ? { ...current, status: 'succeeded', error: null } : current)
-                      },
-                      onError: (mutationError) => {
-                        const message = getApiErrorMessage(mutationError, 'Asset generation failed.')
-                        setActionTrace((current) => current ? { ...current, status: 'error', error: message } : current)
-                      },
+                    }
+                    runWithCommittedPlan(trace, () => {
+                      genAssets.mutate(undefined, {
+                        onSuccess: () => {
+                          setLiveMsg('Asset generation started')
+                          setActionTrace((current) => current ? { ...current, status: 'succeeded', error: null } : current)
+                        },
+                        onError: (mutationError) => {
+                          const message = getApiErrorMessage(mutationError, 'Asset generation failed.')
+                          setActionTrace((current) => current ? { ...current, status: 'error', error: message } : current)
+                        },
+                      })
                     })
                   }}
                   generateAllPending={genAssets.isPending || Boolean(activeAssetJob)}
                   onRenderVideo={() => {
-                    setActionTrace({
+                    const trace: SceneActionTrace = {
                       title: 'Render project video',
                       endpoint: `/api/projects/${projectId}/render`,
                       request: { output_filename: renderOutputFilename },
                       status: 'running',
                       happenedAt: new Date().toISOString(),
                       error: null,
+                    }
+                    runWithCommittedPlan(trace, () => {
+                      startRender.mutate(
+                        { output_filename: renderOutputFilename },
+                        {
+                          onSuccess: () => {
+                            setLiveMsg('Render started')
+                            setActionTrace((current) => current ? { ...current, status: 'succeeded', error: null } : current)
+                            navigate(renderWorkspacePath)
+                          },
+                          onError: (mutationError) => {
+                            const message = getApiErrorMessage(mutationError, 'Render failed to start.')
+                            setActionTrace((current) => current ? { ...current, status: 'error', error: message } : current)
+                          },
+                        },
+                      )
                     })
-                    startRender.mutate(
-                      { output_filename: renderOutputFilename },
-                      {
-                        onSuccess: () => {
-                          setLiveMsg('Render started')
-                          setActionTrace((current) => current ? { ...current, status: 'succeeded', error: null } : current)
-                          navigate(renderWorkspacePath)
-                        },
-                        onError: (mutationError) => {
-                          const message = getApiErrorMessage(mutationError, 'Render failed to start.')
-                          setActionTrace((current) => current ? { ...current, status: 'error', error: message } : current)
-                        },
-                      },
-                    )
                   }}
                   renderPending={startRender.isPending || Boolean(activeRenderJob)}
                   renderDisabled={!allReadyToRender || startRender.isPending || Boolean(activeRenderJob) || Boolean(activeAssetJob)}
                   renderWorkspaceHref={renderWorkspacePath}
                   projectVideoPath={projectVideoPath}
+                  projectVideoExists={projectVideoExists}
                   renderReadinessCopy={renderReadinessCopy}
                   onRunAgentDemo={() => {
                     if (!selectedScene) return
-                    setActionTrace({
+                    const trace: SceneActionTrace = {
                       title: 'Run agent demo for scene',
                       endpoint: `/api/projects/${projectId}/agent-demo`,
                       request: {
@@ -889,23 +987,25 @@ export function SceneTimeline() {
                       status: 'running',
                       happenedAt: new Date().toISOString(),
                       error: null,
+                    }
+                    runWithCommittedPlan(trace, () => {
+                      runAgentDemo.mutate(
+                        { scene_uids: [selectedScene.uid], run_until: 'assets' },
+                        {
+                          onSuccess: () => {
+                            setLiveMsg('Agent demo job started')
+                            setActionTrace((current) => current ? { ...current, status: 'succeeded', error: null } : current)
+                          },
+                          onError: (mutationError) => {
+                            const message = getApiErrorMessage(mutationError, 'Agent demo failed to start.')
+                            setActionTrace((current) => current ? { ...current, status: 'error', error: message } : current)
+                          },
+                        },
+                      )
                     })
-                    runAgentDemo.mutate(
-                      { scene_uids: [selectedScene.uid], run_until: 'assets' },
-                      {
-                        onSuccess: () => {
-                          setLiveMsg('Agent demo job started')
-                          setActionTrace((current) => current ? { ...current, status: 'succeeded', error: null } : current)
-                        },
-                        onError: (mutationError) => {
-                          const message = getApiErrorMessage(mutationError, 'Agent demo failed to start.')
-                          setActionTrace((current) => current ? { ...current, status: 'error', error: message } : current)
-                        },
-                      },
-                    )
                   }}
                   onRunAgentDemoPass={videoSceneUids.length > 0 ? () => {
-                    setActionTrace({
+                    const trace: SceneActionTrace = {
                       title: 'Run agent demo pass',
                       endpoint: `/api/projects/${projectId}/agent-demo`,
                       request: {
@@ -915,91 +1015,99 @@ export function SceneTimeline() {
                       status: 'running',
                       happenedAt: new Date().toISOString(),
                       error: null,
+                    }
+                    runWithCommittedPlan(trace, () => {
+                      runAgentDemo.mutate(
+                        { scene_uids: videoSceneUids, run_until: 'assets' },
+                        {
+                          onSuccess: () => {
+                            setLiveMsg('Agent demo pass started')
+                            setActionTrace((current) => current ? { ...current, status: 'succeeded', error: null } : current)
+                          },
+                          onError: (mutationError) => {
+                            const message = getApiErrorMessage(mutationError, 'Agent demo pass failed to start.')
+                            setActionTrace((current) => current ? { ...current, status: 'error', error: message } : current)
+                          },
+                        },
+                      )
                     })
-                    runAgentDemo.mutate(
-                      { scene_uids: videoSceneUids, run_until: 'assets' },
-                      {
-                        onSuccess: () => {
-                          setLiveMsg('Agent demo pass started')
-                          setActionTrace((current) => current ? { ...current, status: 'succeeded', error: null } : current)
-                        },
-                        onError: (mutationError) => {
-                          const message = getApiErrorMessage(mutationError, 'Agent demo pass failed to start.')
-                          setActionTrace((current) => current ? { ...current, status: 'error', error: message } : current)
-                        },
-                      },
-                    )
                   } : undefined}
                   agentDemoPending={runAgentDemo.isPending || Boolean(activeSelectedSceneAgentJob)}
                   agentDemoJob={latestSelectedSceneAgentJob}
                   agentDemoLog={agentDemoLog?.content ?? null}
                   onRefinePrompt={(feedback) => {
                     if (!selectedScene) return
-                    setActionTrace({
+                    const trace: SceneActionTrace = {
                       title: 'Refine prompt',
                       endpoint: `/api/projects/${projectId}/scenes/${selectedScene.uid}/prompt-refine`,
                       request: { feedback },
                       status: 'running',
                       happenedAt: new Date().toISOString(),
                       error: null,
+                    }
+                    runWithCommittedPlan(trace, () => {
+                      refineP.mutate(
+                        { sceneUid: selectedScene.uid, feedback },
+                        {
+                          onSuccess: () => {
+                            setLiveMsg('Prompt refined')
+                            setActionTrace((current) => current ? { ...current, status: 'succeeded', error: null } : current)
+                          },
+                          onError: (mutationError) => {
+                            const message = getApiErrorMessage(mutationError, 'Prompt refinement failed.')
+                            setActionTrace((current) => current ? { ...current, status: 'error', error: message } : current)
+                          },
+                        },
+                      )
                     })
-                    refineP.mutate(
-                      { sceneUid: selectedScene.uid, feedback },
-                      {
-                        onSuccess: () => {
-                          setLiveMsg('Prompt refined')
-                          setActionTrace((current) => current ? { ...current, status: 'succeeded', error: null } : current)
-                        },
-                        onError: (mutationError) => {
-                          const message = getApiErrorMessage(mutationError, 'Prompt refinement failed.')
-                          setActionTrace((current) => current ? { ...current, status: 'error', error: message } : current)
-                        },
-                      },
-                    )
                   }}
                   onRefineNarration={(feedback) => {
                     if (!selectedScene) return
-                    setActionTrace({
+                    const trace: SceneActionTrace = {
                       title: 'Refine narration',
                       endpoint: `/api/projects/${projectId}/scenes/${selectedScene.uid}/narration-refine`,
                       request: { feedback },
                       status: 'running',
                       happenedAt: new Date().toISOString(),
                       error: null,
+                    }
+                    runWithCommittedPlan(trace, () => {
+                      refineN.mutate(
+                        { sceneUid: selectedScene.uid, feedback },
+                        {
+                          onSuccess: () => {
+                            setLiveMsg('Narration refined')
+                            setActionTrace((current) => current ? { ...current, status: 'succeeded', error: null } : current)
+                          },
+                          onError: (mutationError) => {
+                            const message = getApiErrorMessage(mutationError, 'Narration refinement failed.')
+                            setActionTrace((current) => current ? { ...current, status: 'error', error: message } : current)
+                          },
+                        },
+                      )
                     })
-                    refineN.mutate(
-                      { sceneUid: selectedScene.uid, feedback },
-                      {
-                        onSuccess: () => {
-                          setLiveMsg('Narration refined')
-                          setActionTrace((current) => current ? { ...current, status: 'succeeded', error: null } : current)
-                        },
-                        onError: (mutationError) => {
-                          const message = getApiErrorMessage(mutationError, 'Narration refinement failed.')
-                          setActionTrace((current) => current ? { ...current, status: 'error', error: message } : current)
-                        },
-                      },
-                    )
                   }}
                   onGeneratePreview={() => {
                     if (!selectedScene) return
-                    setActionTrace({
+                    const trace: SceneActionTrace = {
                       title: 'Generate preview',
                       endpoint: `/api/projects/${projectId}/scenes/${selectedScene.uid}/preview`,
                       request: { scene_uid: selectedScene.uid },
                       status: 'running',
                       happenedAt: new Date().toISOString(),
                       error: null,
-                    })
-                    genPreview.mutate(selectedScene.uid, {
-                      onSuccess: () => {
-                        setLiveMsg('Preview generated')
-                        setActionTrace((current) => current ? { ...current, status: 'succeeded', error: null } : current)
-                      },
-                      onError: (mutationError) => {
-                        const message = getApiErrorMessage(mutationError, 'Preview generation failed.')
-                        setActionTrace((current) => current ? { ...current, status: 'error', error: message } : current)
-                      },
+                    }
+                    runWithCommittedPlan(trace, () => {
+                      genPreview.mutate(selectedScene.uid, {
+                        onSuccess: () => {
+                          setLiveMsg('Preview generated')
+                          setActionTrace((current) => current ? { ...current, status: 'succeeded', error: null } : current)
+                        },
+                        onError: (mutationError) => {
+                          const message = getApiErrorMessage(mutationError, 'Preview generation failed.')
+                          setActionTrace((current) => current ? { ...current, status: 'error', error: message } : current)
+                        },
+                      })
                     })
                   }}
                   assetProgress={assetProgress}
