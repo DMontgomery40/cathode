@@ -71,6 +71,14 @@ function resolveUrl(target, baseUrl) {
   }
 }
 
+function resolveWaitUntil(value) {
+  const normalized = String(value || "").trim().toLowerCase();
+  if (["commit", "domcontentloaded", "load", "networkidle"].includes(normalized)) {
+    return normalized;
+  }
+  return "domcontentloaded";
+}
+
 function clampBox(box, viewport) {
   const widthLimit = Number(viewport?.width || 1664);
   const heightLimit = Number(viewport?.height || 928);
@@ -155,7 +163,10 @@ async function runAction(page, action, timeoutMs) {
   }
 
   if (type === "goto") {
-    await page.goto(String(action.url || ""), { waitUntil: "networkidle", timeout: timeoutMs });
+    await page.goto(String(action.url || ""), {
+      waitUntil: resolveWaitUntil(action.wait_until),
+      timeout: timeoutMs,
+    });
     return;
   }
   if (type === "click") {
@@ -264,7 +275,7 @@ async function main() {
   try {
     if (baseUrl) {
       await page.goto(resolveUrl(baseUrl, session.expected_url || session.app_url || ""), {
-        waitUntil: "networkidle",
+        waitUntil: resolveWaitUntil(plan.start_wait_until),
         timeout: timeoutMs,
       });
     }

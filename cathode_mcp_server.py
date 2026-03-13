@@ -186,12 +186,19 @@ def build_server() -> FastMCP:
         must_include: Annotated[str | None, Field(description="Optional required content or scenes.", default=None)] = None,
         must_avoid: Annotated[str | None, Field(description="Optional constraints or content to avoid.", default=None)] = None,
         ending_cta: Annotated[str | None, Field(description="Optional closing CTA.", default=None)] = None,
+        composition_mode: Annotated[Literal["classic", "motion_only", "hybrid"] | None, Field(description="Optional composition/render mode override.", default=None)] = None,
         visual_source_strategy: Annotated[Literal["images_only", "mixed_media", "video_preferred"] | None, Field(description="Optional visuals strategy override.", default=None)] = None,
         available_footage: Annotated[str | None, Field(description="Optional footage notes or clip availability.", default=None)] = None,
+        app_url: Annotated[str | None, Field(description="Optional running app URL for demo-backed capture flows.", default=None)] = None,
+        launch_command: Annotated[str | None, Field(description="Optional app launch command for demo-backed capture flows.", default=None)] = None,
+        expected_url: Annotated[str | None, Field(description="Optional app URL the demo-backed agent should wait for after launch.", default=None)] = None,
+        preferred_agent: Annotated[Literal["codex", "claude"] | None, Field(description="Optional preferred local agent CLI for demo-backed capture flows.", default=None)] = None,
+        repo_url: Annotated[str | None, Field(description="Optional repo URL to visit during demo-backed capture flows.", default=None)] = None,
+        flow_hints: Annotated[list[str] | None, Field(description="Optional short guidance bullets for what the demo-backed agent should show.", default=None)] = None,
         llm_provider: Annotated[str | None, Field(description="Optional storyboard provider override.", default=None)] = None,
         image_provider: Annotated[Literal["replicate", "local", "manual"] | None, Field(description="Optional image provider override.", default=None)] = None,
         image_generation_model: Annotated[str | None, Field(description="Optional image generation model override or local Hugging Face repo id/path.", default=None)] = None,
-        video_provider: Annotated[Literal["manual", "local"] | None, Field(description="Optional video provider override.", default=None)] = None,
+        video_provider: Annotated[Literal["manual", "local", "agent"] | None, Field(description="Optional video provider override.", default=None)] = None,
         video_generation_model: Annotated[str | None, Field(description="Optional local video model label or path override.", default=None)] = None,
         tts_provider: Annotated[str | None, Field(description="Optional TTS provider override.", default=None)] = None,
         tts_voice: Annotated[str | None, Field(description="Optional TTS voice override.", default=None)] = None,
@@ -230,6 +237,7 @@ def build_server() -> FastMCP:
                 "must_include": must_include,
                 "must_avoid": must_avoid,
                 "ending_cta": ending_cta,
+                "composition_mode": composition_mode,
                 "visual_source_strategy": visual_source_strategy,
                 "available_footage": available_footage,
                 "style_reference_paths": style_reference_paths or [],
@@ -255,6 +263,8 @@ def build_server() -> FastMCP:
                     project_dir=str(PROJECTS_DIR / brief["project_name"]),
                 )
             brief = merge_elicitation_into_brief(brief, elicit_result.data)
+
+        resolved_workspace_path = str(metadata.get("workspace_context", {}).get("workspace_path") or workspace_path or "").strip() or None
 
         image_profile = resolve_image_profile(
             {
@@ -283,6 +293,19 @@ def build_server() -> FastMCP:
             provider=provider,
             image_profile=image_profile,
             video_profile=video_profile,
+            agent_demo_profile={
+                key: value
+                for key, value in {
+                    "workspace_path": resolved_workspace_path,
+                    "app_url": app_url,
+                    "launch_command": launch_command,
+                    "expected_url": expected_url,
+                    "preferred_agent": preferred_agent,
+                    "repo_url": repo_url,
+                    "flow_hints": flow_hints,
+                }.items()
+                if value not in (None, "", [])
+            } or None,
             tts_profile=tts_profile,
             overwrite=overwrite,
         )
