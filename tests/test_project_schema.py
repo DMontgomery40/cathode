@@ -226,6 +226,35 @@ def test_backfill_plan_clears_unhealed_same_project_asset_paths(tmp_path):
     assert plan["meta"]["video_path"] is None
 
 
+def test_backfill_plan_clears_missing_absolute_paths_inside_project(tmp_path):
+    project_dir = tmp_path / "demo_project"
+    project_dir.mkdir()
+    missing_image = project_dir / "images" / "scene_000.png"
+    missing_audio = project_dir / "audio" / "scene_000.wav"
+    missing_video = project_dir / "demo_project.mp4"
+
+    plan = backfill_plan(
+        {
+            "meta": {
+                "project_name": "demo_project",
+                "video_path": str(missing_video),
+            },
+            "scenes": [
+                {
+                    "image_path": str(missing_image),
+                    "audio_path": str(missing_audio),
+                }
+            ],
+        },
+        base_dir=project_dir,
+    )
+
+    scene = plan["scenes"][0]
+    assert scene["image_path"] is None
+    assert scene["audio_path"] is None
+    assert plan["meta"]["video_path"] is None
+
+
 def test_backfill_plan_adds_image_profile_defaults_and_compatibility():
     plan = backfill_plan(
         {

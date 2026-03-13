@@ -52,6 +52,7 @@ interface SceneInspectorProps {
   renderDisabled?: boolean
   renderWorkspaceHref?: string | null
   projectVideoPath?: string | null
+  projectVideoExists?: boolean
   renderReadinessCopy?: string | null
   onRunAgentDemo?: () => void
   onRunAgentDemoPass?: () => void
@@ -321,6 +322,7 @@ export function SceneInspector({
   renderDisabled,
   renderWorkspaceHref,
   projectVideoPath,
+  projectVideoExists,
   renderReadinessCopy,
   onRunAgentDemo,
   onRunAgentDemoPass,
@@ -376,7 +378,11 @@ export function SceneInspector({
   }
   const activeUploadError = uploadError ?? localUploadError
   const activeImageEditError = imageEditError ?? null
-  const latestProjectVideoUrl = projectMediaUrl(project, projectVideoPath)
+  const latestProjectVideoUrl = projectVideoExists === false
+    ? null
+    : projectVideoPath && projectVideoPath !== '' && projectVideoPath != null
+    ? projectMediaUrl(project, projectVideoPath)
+    : null
   const latestProjectVideoFilename = projectVideoPath?.split('/').pop() ?? 'final_video.mp4'
 
   const submitPromptFeedback = () => {
@@ -442,15 +448,26 @@ export function SceneInspector({
     ? 'How should the motion direction change?'
     : isVideoScene ? 'How should the clip notes change?' : 'How should the prompt change?'
   const visualMeta = isMotionScene
-    ? (motionState.preview_path || scene.preview_path ? 'Preview ready' : motionState.template_id ? 'Template ready' : 'Template needed')
+    ? (
+        scene.motion?.preview_exists || scene.preview_exists
+          ? 'Preview ready'
+          : motionState.template_id
+            ? 'Template ready'
+            : 'Template needed'
+      )
     : isVideoScene
-    ? (scene.video_path ? 'Clip ready' : 'Clip needed')
-    : (scene.image_path ? 'Attached' : 'Empty')
+    ? ((typeof scene.video_exists === 'boolean' ? scene.video_exists : Boolean(scene.video_path)) ? 'Clip ready' : 'Clip needed')
+    : ((typeof scene.image_exists === 'boolean' ? scene.image_exists : Boolean(scene.image_path)) ? 'Attached' : 'Empty')
   const useClipUntilEnd = scene.video_trim_end == null
   const clipStart = Number(scene.video_trim_start ?? 0)
   const clipSpeed = Number(scene.video_playback_speed ?? 1)
   const clipEnd = scene.video_trim_end == null ? '' : String(scene.video_trim_end)
   const holdLastFrame = Boolean(scene.video_hold_last_frame ?? true)
+  const hasSceneImage = typeof scene.image_exists === 'boolean' ? scene.image_exists : Boolean(scene.image_path)
+  const hasSceneVideo = typeof scene.video_exists === 'boolean' ? scene.video_exists : Boolean(scene.video_path)
+  const hasSceneAudio = typeof scene.audio_exists === 'boolean' ? scene.audio_exists : Boolean(scene.audio_path)
+  const hasScenePreview = typeof scene.preview_exists === 'boolean' ? scene.preview_exists : Boolean(scene.preview_path)
+  const hasMotionPreview = Boolean(scene.motion?.preview_exists || motionState.preview_path || scene.preview_path)
 
   return (
     <GlassPanel
@@ -530,7 +547,7 @@ export function SceneInspector({
                         ...motionState,
                         template_id: motionState.template_id || 'kinetic_title',
                       }
-                    : scene.motion ?? null,
+                    : null,
                 })
               }}
               className="scene-inspector__type-select rounded-[var(--radius-sm)] border border-[var(--border-subtle)] bg-[var(--surface-panel-glass)] text-[var(--text-secondary)] outline-none focus-visible:shadow-[var(--focus-ring)]"
@@ -611,7 +628,7 @@ export function SceneInspector({
             <div className="flex flex-col gap-[var(--space-3)]">
               <div className="scene-inspector__action-row scene-inspector__action-row--compact">
                 <ActionButton onClick={onGeneratePreview} variant="primary">
-                  {scene.preview_path || motionState.preview_path ? 'Regenerate Motion Preview' : 'Generate Motion Preview'}
+                  {hasMotionPreview ? 'Regenerate Motion Preview' : 'Generate Motion Preview'}
                 </ActionButton>
               </div>
 
@@ -694,7 +711,7 @@ export function SceneInspector({
                   variant="primary"
                   disabled={uploadPending || videoGeneratePending || videoGenerationProvider !== 'local'}
                 >
-                  {scene.video_path ? 'Regenerate Video' : 'Generate Video'}
+                  {hasSceneVideo ? 'Regenerate Video' : 'Generate Video'}
                 </ActionButton>
                 {onRunAgentDemo && (
                   <ActionButton onClick={onRunAgentDemo} disabled={agentDemoPending}>
@@ -817,8 +834,12 @@ export function SceneInspector({
                 >
                   Upload Video
                 </FileTriggerButton>
-                <ActionButton onClick={onGenerateImage} variant="primary" disabled={uploadPending}>
-                  {scene.image_path ? 'Regenerate Image' : 'Generate Image'}
+                <ActionButton
+                  onClick={onGenerateImage}
+                  variant="primary"
+                  disabled={uploadPending || imageGenerationProvider === 'manual'}
+                >
+                  {hasSceneImage ? 'Regenerate Image' : 'Generate Image'}
                 </ActionButton>
                 <ActionButton
                   onClick={() => setImageEditOpen((value) => !value)}
@@ -827,6 +848,11 @@ export function SceneInspector({
                   Edit Image
                 </ActionButton>
               </div>
+              {imageGenerationProvider === 'manual' && (
+                <p className="m-0 text-[var(--text-tertiary)]" style={{ fontSize: 'var(--text-xs)', marginTop: 'var(--space-2)' }}>
+                  Manual image mode is upload-first. Upload a still here or switch the project image provider in Settings before generating.
+                </p>
+              )}
               {imageEditModel && (
                 <p className="m-0 text-[var(--text-tertiary)]" style={{ fontSize: 'var(--text-xs)', marginTop: 'var(--space-2)' }}>
                   Editor: {imageEditModel}
@@ -1097,14 +1123,14 @@ export function SceneInspector({
         <InspectorSection
           id="scene-audio"
           title="Audio"
-          meta={scene.audio_path ? 'Attached' : 'Missing'}
+          meta={hasSceneAudio ? 'Attached' : 'Missing'}
           open={sectionOpen.audio}
           onToggle={() => toggleSection('audio')}
         >
           <div className="flex flex-col gap-[var(--space-2)]">
             <div className="scene-inspector__action-row">
               <ActionButton onClick={onGenerateAudio} variant="primary">
-                {scene.audio_path ? 'Regenerate Audio' : 'Generate Audio'}
+                {hasSceneAudio ? 'Regenerate Audio' : 'Generate Audio'}
               </ActionButton>
             </div>
             {audioProgress && (
@@ -1115,7 +1141,7 @@ export function SceneInspector({
                 indeterminate={audioProgress.indeterminate}
               />
             )}
-            {scene.audio_path && (
+            {hasSceneAudio && (
               <audio
                 controls
                 src={projectMediaUrl(project, scene.audio_path) ?? undefined}
@@ -1129,7 +1155,7 @@ export function SceneInspector({
         <InspectorSection
           id="scene-preview"
           title="Preview"
-          meta={scene.preview_path ? 'Ready' : 'Missing'}
+          meta={hasScenePreview ? 'Ready' : 'Missing'}
           open={sectionOpen.preview}
           onToggle={() => toggleSection('preview')}
         >
@@ -1147,7 +1173,7 @@ export function SceneInspector({
                 indeterminate={previewProgress.indeterminate}
               />
             )}
-            {scene.preview_path && (
+            {hasScenePreview && (
               <video
                 controls
                 src={projectMediaUrl(project, scene.preview_path) ?? undefined}

@@ -84,11 +84,15 @@ export function MediaStage({ scene, project, actions, onUpload, uploadPending, u
     return `${m}:${s.toString().padStart(2, '0')}`
   }
 
-  const hasImage = Boolean(scene?.image_path)
-  const hasVideo = Boolean(scene?.video_path)
   const isMotionScene = scene?.scene_type === 'motion'
   const visualUrl = sceneVisualUrl(project, scene)
   const previewUrl = scenePreviewUrl(project, scene)
+  const hasVideoVisual = scene
+    ? (typeof scene.video_exists === 'boolean' ? scene.video_exists : Boolean(scene.video_path))
+    : false
+  const hasImageVisual = scene
+    ? (typeof scene.image_exists === 'boolean' ? scene.image_exists : Boolean(scene.image_path))
+    : false
   const stageLabel = scene?.scene_type === 'video' || scene?.scene_type === 'motion' ? 'Motion stage' : 'Visual stage'
   const uploadHintId = !scene || !visualUrl ? 'media-stage-hint' : undefined
   const activeUploadError = uploadError ?? localUploadError
@@ -279,7 +283,7 @@ export function MediaStage({ scene, project, actions, onUpload, uploadPending, u
           </div>
         )}
 
-        {scene && scene.image_path && !scene.video_path && !isMotionScene && (
+        {scene && hasImageVisual && !hasVideoVisual && !isMotionScene && visualUrl && (
           <div className="flex min-h-0 flex-1 items-center justify-center p-[var(--space-4)]">
             <img
               src={visualUrl ?? undefined}
@@ -289,7 +293,7 @@ export function MediaStage({ scene, project, actions, onUpload, uploadPending, u
           </div>
         )}
 
-        {scene && (scene.video_path || previewUrl) && (
+        {scene && (hasVideoVisual || previewUrl) && (
           <div className="flex min-h-0 flex-1 flex-col">
             <div className="flex min-h-0 flex-1 items-center justify-center p-[var(--space-4)] pb-[var(--space-3)]">
               <video
@@ -359,7 +363,7 @@ export function MediaStage({ scene, project, actions, onUpload, uploadPending, u
             className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-[var(--surface-void)]/88 via-[var(--surface-void)]/45 to-transparent"
             style={{
               padding: `var(--space-8) var(--space-4) var(--space-4)`,
-              bottom: scene.video_path || previewUrl ? '60px' : '0',
+              bottom: hasVideoVisual || previewUrl ? '60px' : '0',
             }}
           >
             {scene.title && (

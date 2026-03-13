@@ -92,16 +92,6 @@ const chromeStyle: React.CSSProperties = {
   maskImage: 'linear-gradient(to bottom, rgba(0,0,0,0.7), transparent 88%)',
 }
 
-const captionContainerStyle: React.CSSProperties = {
-  position: 'absolute',
-  left: 72,
-  right: 72,
-  bottom: 56,
-  display: 'flex',
-  flexDirection: 'column',
-  gap: 10,
-}
-
 function FrameShell({ children }: { children: React.ReactNode }) {
   return (
     <AbsoluteFill style={shellStyle}>
@@ -110,63 +100,6 @@ function FrameShell({ children }: { children: React.ReactNode }) {
         {children}
       </AbsoluteFill>
     </AbsoluteFill>
-  )
-}
-
-function SceneCaptions({ title, lines }: { title: string; lines: string[] }) {
-  const frame = useCurrentFrame()
-  const { fps } = useVideoConfig()
-  const fade = spring({
-    frame,
-    fps,
-    config: {
-      damping: 18,
-      stiffness: 120,
-      mass: 0.9,
-    },
-  })
-
-  return (
-    <div style={{ ...captionContainerStyle, opacity: fade }}>
-      {title ? (
-        <div
-          style={{
-            display: 'inline-flex',
-            alignSelf: 'flex-start',
-            padding: '8px 14px',
-            borderRadius: 999,
-            background: 'rgba(8, 10, 18, 0.76)',
-            color: '#f8e8d0',
-            fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
-            fontSize: 24,
-            letterSpacing: '0.08em',
-            textTransform: 'uppercase',
-          }}
-        >
-          {title}
-        </div>
-      ) : null}
-      {lines.slice(0, 3).map((line, index) => (
-        <div
-          key={`${line}-${index}`}
-          style={{
-            display: 'inline-flex',
-            alignSelf: 'flex-start',
-            maxWidth: '78%',
-            padding: '12px 18px',
-            borderRadius: 18,
-            background: 'rgba(4, 7, 14, 0.78)',
-            color: '#f5f1ea',
-            fontFamily: 'Georgia, Times, serif',
-            fontSize: 38,
-            lineHeight: 1.08,
-            transform: `translateY(${interpolate(fade, [0, 1], [18 + index * 6, 0])}px)`,
-          }}
-        >
-          {line}
-        </div>
-      ))}
-    </div>
   )
 }
 
@@ -501,7 +434,6 @@ function SceneLayer({ scene }: { scene: RemotionScene }) {
     <FrameShell>
       <SceneVisual scene={scene} />
       {scene.audioUrl ? <Audio src={scene.audioUrl} /> : null}
-      {scene.onScreenText.length > 0 ? <SceneCaptions title={scene.title} lines={scene.onScreenText} /> : null}
     </FrameShell>
   )
 }

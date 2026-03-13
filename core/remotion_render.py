@@ -7,11 +7,18 @@ import os
 import subprocess
 import tempfile
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 from urllib.parse import quote
 
+from .project_schema import resolve_text_render_mode
 from .runtime import REPO_ROOT
-from .video_assembly import DEFAULT_FPS, get_media_duration, get_video_scene_timing, normalize_render_profile
+from .video_assembly import (
+    DEFAULT_FPS,
+    get_media_duration,
+    get_video_scene_timing,
+    normalize_render_profile,
+    resolve_scene_video_path,
+)
 
 _DEFAULT_API_BASE_URL = "http://127.0.0.1:9321"
 _DEFAULT_MOTION_TEMPLATE = "kinetic_title"
@@ -112,14 +119,13 @@ def scene_has_renderable_visual(
     """Return whether the scene has the visual requirements for the chosen backend."""
     scene_type = str(scene.get("scene_type") or "image").strip().lower()
     if scene_type == "video":
-        value = scene.get("video_path")
+        value = resolve_scene_video_path(scene)
         return bool(value and Path(str(value)).exists())
     if scene_type == "motion":
         if render_backend == "remotion":
             return motion_scene_is_ready(scene)
-        motion = scene_motion_payload(scene)
-        render_path = motion.get("render_path")
-        return bool(render_path and Path(str(render_path)).exists())
+        value = resolve_scene_video_path(scene)
+        return bool(value and Path(str(value)).exists())
     value = scene.get("image_path")
     return bool(value and Path(str(value)).exists())
 
@@ -154,6 +160,10 @@ def build_remotion_manifest(
     profile = normalize_render_profile(render_profile)
     fps = int(profile.get("fps") or DEFAULT_FPS)
     project_name = str(plan.get("meta", {}).get("project_name") or project_dir.name)
+    brief = plan.get("meta", {}).get("brief") if isinstance(plan.get("meta", {}).get("brief"), dict) else {}
+    text_render_mode = resolve_text_render_mode(
+        profile.get("text_render_mode") or brief.get("text_render_mode")
+    )
     scenes_raw = list(plan.get("scenes", []))
     scenes: list[dict[str, Any]] = []
 
@@ -165,13 +175,12 @@ def build_remotion_manifest(
         duration_seconds, timing = _scene_duration_seconds(scene, fps)
         duration_in_frames = max(1, round(duration_seconds * fps))
         motion = scene_motion_payload(scene)
-        source_duration = timing.get("source_duration")
         trim_end = timing.get("trim_end")
-        source_frames = round(float(source_duration) * fps) if source_duration is not None else None
         trim_end_frames = round(float(trim_end) * fps) if trim_end is not None else None
-        trim_after_frames = 0
-        if source_frames is not None and trim_end_frames is not None:
-            trim_after_frames = max(source_frames - trim_end_frames, 0)
+        trim_before_frames = round(float(timing.get("trim_start") or 0.0) * fps)
+        trim_after_frame = None
+        if trim_end_frames is not None:
+            trim_after_frame = max(trim_end_frames, trim_before_frames + 1)
 
         play_frames = duration_in_frames
         hold_frames = 0
@@ -195,8 +204,8 @@ def build_remotion_manifest(
                 "imageUrl": project_media_url(project_name, project_dir, scene.get("image_path")),
                 "videoUrl": project_media_url(project_name, project_dir, scene.get("video_path")),
                 "previewUrl": project_media_url(project_name, project_dir, scene.get("preview_path")),
-                "trimBeforeFrames": round(float(timing.get("trim_start") or 0.0) * fps),
-                "trimAfterFrames": trim_after_frames,
+                "trimBeforeFrames": trim_before_frames,
+                "trimAfterFrames": trim_after_frame,
                 "playbackRate": float(timing.get("playback_speed") or 1.0),
                 "holdFrames": hold_frames,
                 "playFrames": play_frames,
@@ -216,13 +225,60 @@ def build_remotion_manifest(
         "width": int(profile.get("width") or 1664),
         "height": int(profile.get("height") or 928),
         "fps": fps,
+        "textRenderMode": text_render_mode,
         "totalDurationInFrames": sum(int(scene["durationInFrames"]) for scene in scenes),
         "outputPath": str(output_path),
         "scenes": scenes,
     }
 
 
-def render_manifest_with_remotion(manifest: dict[str, Any], *, output_path: Path) -> Path:
+def _progress_payload_from_remotion_event(event: dict[str, Any]) -> dict[str, Any] | None:
+    event_type = str(event.get("type") or "").strip().lower()
+    if event_type == "status":
+        return {
+            "progress": 0.02,
+            "progress_kind": "render",
+            "progress_label": str(event.get("label") or "Preparing render"),
+            "progress_detail": str(event.get("detail") or ""),
+            "progress_status": str(event.get("stage") or "preparing"),
+        }
+
+    if event_type == "progress":
+        stage = str(event.get("stage") or "").strip().lower() or "render"
+        progress = float(event.get("progress") or 0.0)
+        if stage == "encoding":
+            label = "Encoding video"
+        elif stage == "muxing":
+            label = "Muxing audio and video"
+        else:
+            label = "Rendering frames"
+        detail = f"rendered {int(event.get('renderedFrames') or 0)} frames, encoded {int(event.get('encodedFrames') or 0)}"
+        return {
+            "progress": max(0.02, min(progress, 0.99)),
+            "progress_kind": "render",
+            "progress_label": label,
+            "progress_detail": detail,
+            "progress_status": stage,
+        }
+
+    if event_type == "done":
+        return {
+            "progress": 1.0,
+            "progress_kind": "render",
+            "progress_label": str(event.get("label") or "Render complete"),
+            "progress_detail": str(event.get("detail") or ""),
+            "progress_status": "done",
+        }
+
+    return None
+
+
+def render_manifest_with_remotion(
+    manifest: dict[str, Any],
+    *,
+    output_path: Path,
+    progress_callback: Callable[[dict[str, Any]], None] | None = None,
+) -> Path:
     """Render a manifest to MP4 via the frontend Remotion bundle."""
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -237,18 +293,35 @@ def render_manifest_with_remotion(manifest: dict[str, Any], *, output_path: Path
         manifest_path = Path(handle.name)
 
     try:
-        completed = subprocess.run(
+        process = subprocess.Popen(
             ["node", str(script_path), str(manifest_path), str(output_path)],
             cwd=str(REPO_ROOT / "frontend"),
             text=True,
-            capture_output=True,
-            check=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
         )
+        output_lines: list[str] = []
+        assert process.stdout is not None
+        for raw_line in process.stdout:
+            line = raw_line.rstrip()
+            if not line:
+                continue
+            output_lines.append(line)
+            try:
+                event = json.loads(line)
+            except json.JSONDecodeError:
+                event = None
+            if event is not None and progress_callback is not None:
+                payload = _progress_payload_from_remotion_event(event)
+                if payload:
+                    progress_callback(payload)
+            print(line, flush=True)
+        return_code = process.wait()
     finally:
         manifest_path.unlink(missing_ok=True)
 
-    if completed.returncode != 0:
-        stderr = completed.stderr.strip() or completed.stdout.strip() or "Unknown Remotion render failure."
+    if return_code != 0:
+        stderr = "\n".join(output_lines).strip() or "Unknown Remotion render failure."
         raise RuntimeError(stderr)
 
     if not output_path.exists() or output_path.stat().st_size == 0:

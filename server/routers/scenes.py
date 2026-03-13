@@ -7,10 +7,11 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, Body, HTTPException, UploadFile
+from starlette.concurrency import run_in_threadpool
 
 from core.director import refine_narration, refine_prompt
 from core.image_gen import edit_image, generate_scene_image
-from core.project_store import load_plan, save_plan
+from core.project_store import annotate_plan_asset_existence, load_plan, save_plan
 from core.remotion_render import build_remotion_manifest, render_manifest_with_remotion
 from core.runtime import PROJECTS_DIR, choose_llm_provider, resolve_image_profile, resolve_tts_profile, resolve_video_profile
 from core.video_gen import generate_scene_video
@@ -45,6 +46,10 @@ def _load_plan_or_404(project_dir: Path) -> dict[str, Any]:
     return plan
 
 
+def _present_plan(project_dir: Path, plan: dict[str, Any]) -> dict[str, Any]:
+    return annotate_plan_asset_existence(project_dir, plan)
+
+
 def _find_scene(plan: dict[str, Any], scene_uid: str) -> tuple[int, dict[str, Any]]:
     for i, s in enumerate(plan.get("scenes", [])):
         if s.get("uid") == scene_uid:
@@ -58,6 +63,31 @@ def _error_message(detail: Any) -> str:
         if message:
             return message
     return str(detail or "Request failed.").strip()
+
+
+def _render_preview_asset(
+    *,
+    scene: dict[str, Any],
+    scene_uid: str,
+    project_dir: Path,
+    plan: dict[str, Any],
+    render_profile: dict[str, Any],
+) -> tuple[Path | None, dict[str, Any] | None]:
+    if str(scene.get("scene_type") or "image").strip().lower() == "motion":
+        output_path = project_dir / "previews" / f"preview_{scene_uid}.mp4"
+        manifest = build_remotion_manifest(
+            project_dir=project_dir,
+            plan=plan,
+            output_path=output_path,
+            render_profile=render_profile,
+            preview_scene_uid=scene_uid,
+        )
+        preview_path = render_manifest_with_remotion(manifest, output_path=output_path)
+        motion = scene.get("motion") if isinstance(scene.get("motion"), dict) else {}
+        motion["preview_path"] = str(preview_path)
+        return preview_path, motion
+
+    return preview_scene(scene, project_dir, render_profile=render_profile), None
 
 
 def _record_image_action(
@@ -176,7 +206,7 @@ async def upload_scene_image(project: str, scene_uid: str, file: UploadFile) -> 
             "scene_type": "image",
         },
     )
-    return save_plan(project_dir, plan)
+    return _present_plan(project_dir, save_plan(project_dir, plan))
 
 
 @router.post("/projects/{project}/scenes/{scene_uid}/video-upload")
@@ -197,7 +227,7 @@ async def upload_scene_video(project: str, scene_uid: str, file: UploadFile) -> 
     scene["preview_path"] = None
     scene["scene_type"] = "video"
     plan["scenes"][idx] = scene
-    return save_plan(project_dir, plan)
+    return _present_plan(project_dir, save_plan(project_dir, plan))
 
 
 # ---- Generation endpoints -------------------------------------------------
@@ -255,7 +285,7 @@ async def generate_image_for_scene(
             "scene_type": "image",
         },
     )
-    return save_plan(project_dir, plan)
+    return _present_plan(project_dir, save_plan(project_dir, plan))
 
 
 @router.post("/projects/{project}/scenes/{scene_uid}/video-generate")
@@ -284,7 +314,7 @@ async def generate_video_for_scene(
     scene["preview_path"] = None
     scene["scene_type"] = "video"
     plan["scenes"][idx] = scene
-    return save_plan(project_dir, plan)
+    return _present_plan(project_dir, save_plan(project_dir, plan))
 
 
 @router.post("/projects/{project}/scenes/{scene_uid}/image-edit")
@@ -397,7 +427,7 @@ async def edit_image_for_scene(
             "scene_type": "image",
         },
     )
-    return save_plan(project_dir, plan)
+    return _present_plan(project_dir, save_plan(project_dir, plan))
 
 
 @router.post("/projects/{project}/scenes/{scene_uid}/audio-generate")
@@ -428,7 +458,7 @@ async def generate_audio_for_scene(
 
     scene["audio_path"] = str(path)
     plan["scenes"][idx] = scene
-    return save_plan(project_dir, plan)
+    return _present_plan(project_dir, save_plan(project_dir, plan))
 
 
 # ---- Refinement endpoints -------------------------------------------------
@@ -457,7 +487,7 @@ async def refine_scene_prompt(
 
     scene["visual_prompt"] = refined
     plan["scenes"][idx] = scene
-    return save_plan(project_dir, plan)
+    return _present_plan(project_dir, save_plan(project_dir, plan))
 
 
 @router.post("/projects/{project}/scenes/{scene_uid}/narration-refine")
@@ -482,7 +512,7 @@ async def refine_scene_narration(
 
     scene["narration"] = refined
     plan["scenes"][idx] = scene
-    return save_plan(project_dir, plan)
+    return _present_plan(project_dir, save_plan(project_dir, plan))
 
 
 # ---- Preview endpoint ------------------------------------------------------
@@ -496,25 +526,20 @@ async def preview_scene_endpoint(project: str, scene_uid: str) -> dict[str, Any]
     render_profile = plan.get("meta", {}).get("render_profile") if isinstance(plan.get("meta", {}).get("render_profile"), dict) else {}
 
     try:
-        if str(scene.get("scene_type") or "image").strip().lower() == "motion":
-            output_path = project_dir / "previews" / f"preview_{scene_uid}.mp4"
-            manifest = build_remotion_manifest(
-                project_dir=project_dir,
-                plan=plan,
-                output_path=output_path,
-                render_profile=render_profile,
-                preview_scene_uid=scene_uid,
-            )
-            preview_path = render_manifest_with_remotion(manifest, output_path=output_path)
-            motion = scene.get("motion") if isinstance(scene.get("motion"), dict) else {}
-            motion["preview_path"] = str(preview_path)
-            scene["motion"] = motion
-        else:
-            preview_path = preview_scene(scene, project_dir, render_profile=render_profile)
+        preview_path, motion = await run_in_threadpool(
+            _render_preview_asset,
+            scene=scene,
+            scene_uid=scene_uid,
+            project_dir=project_dir,
+            plan=plan,
+            render_profile=render_profile,
+        )
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
+    if motion is not None:
+        scene["motion"] = motion
     if preview_path:
         scene["preview_path"] = str(preview_path)
         plan["scenes"][idx] = scene
-    return save_plan(project_dir, plan)
+    return _present_plan(project_dir, save_plan(project_dir, plan))

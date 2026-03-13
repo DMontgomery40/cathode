@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 from typing import Any
 from unittest.mock import patch
 
@@ -43,6 +44,30 @@ def test_get_plan(mock_load, client, tmp_path):
     body = resp.json()
     assert len(body["scenes"]) == 2
     assert body["meta"]["project_name"] == "demo"
+
+
+def test_get_plan_includes_asset_existence_hints(client, tmp_path):
+    project_dir = tmp_path / "demo"
+    project_dir.mkdir()
+    audio_dir = project_dir / "audio"
+    audio_dir.mkdir(parents=True)
+    audio_path = audio_dir / "scene_000.wav"
+    audio_path.write_bytes(b"wav")
+
+    plan = copy.deepcopy(_FAKE_PLAN)
+    plan["scenes"][0]["audio_path"] = str(audio_path)
+    plan["scenes"][1]["audio_path"] = str(audio_dir / "missing.wav")
+
+    with (
+        patch("server.routers.plans.PROJECTS_DIR", tmp_path),
+        patch("server.routers.plans.load_plan", return_value=plan),
+    ):
+        resp = client.get("/api/projects/demo/plan")
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["scenes"][0]["audio_exists"] is True
+    assert body["scenes"][1]["audio_exists"] is False
 
 
 @patch("server.routers.plans.load_plan", return_value=None)

@@ -65,6 +65,7 @@ def prepare_project_execution_profiles(
         resolved_render_profile,
         composition_mode=str(normalized_brief.get("composition_mode") or "classic"),
     )
+    resolved_render_profile["text_render_mode"] = str(normalized_brief.get("text_render_mode") or "visual_authored")
 
     return normalized_brief, resolve_video_profile(next_video_profile or None), resolved_render_profile
 
@@ -669,6 +670,7 @@ def render_project_service(
     *,
     output_filename: str | None = None,
     fps: int | None = None,
+    progress_callback: Callable[[dict[str, Any]], None] | None = None,
 ) -> dict[str, Any]:
     """Render a final MP4 for a project if all required assets exist."""
     plan = load_plan(project_dir)
@@ -703,6 +705,16 @@ def render_project_service(
         }
 
     resolved_name = output_filename or f"{Path(project_dir).name}.mp4"
+    if progress_callback is not None:
+        progress_callback(
+            {
+                "progress": 0.01,
+                "progress_kind": "render",
+                "progress_label": "Preparing render",
+                "progress_detail": f"backend={render_backend}",
+                "progress_status": "preparing",
+            }
+        )
     if render_backend == "remotion":
         output_path = Path(project_dir) / resolved_name
         manifest = build_remotion_manifest(
@@ -711,7 +723,11 @@ def render_project_service(
             output_path=output_path,
             render_profile=render_profile,
         )
-        video_path = render_manifest_with_remotion(manifest, output_path=output_path)
+        video_path = render_manifest_with_remotion(
+            manifest,
+            output_path=output_path,
+            progress_callback=progress_callback,
+        )
     else:
         video_path = assemble_video(
             scenes,
@@ -723,6 +739,16 @@ def render_project_service(
     plan.setdefault("meta", {})["video_path"] = str(video_path)
     plan.setdefault("meta", {})["rendered_utc"] = utc_now_iso()
     save_plan(project_dir, plan)
+    if progress_callback is not None:
+        progress_callback(
+            {
+                "progress": 1.0,
+                "progress_kind": "render",
+                "progress_label": "Render complete",
+                "progress_detail": str(video_path),
+                "progress_status": "done",
+            }
+        )
     return {
         "status": "succeeded",
         "retryable": False,

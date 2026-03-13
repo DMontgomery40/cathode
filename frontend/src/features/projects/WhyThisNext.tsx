@@ -19,9 +19,15 @@ export function WhyThisNext({ plan }: WhyThisNextProps) {
     ? String((plan.meta.render_profile as Record<string, unknown>).render_backend || 'ffmpeg')
     : 'ffmpeg'
   const missingImages = scenes.filter((s) => !sceneHasRenderableVisual(projectName, s, renderBackend)).length
-  const missingAudio = scenes.filter((s) => !hasProjectMediaPath(projectName, s.audio_path)).length
+  const missingAudio = scenes.filter((s) => !(
+    typeof s.audio_exists === 'boolean'
+      ? s.audio_exists
+      : hasProjectMediaPath(projectName, s.audio_path)
+  )).length
   const missingPreviews = scenes.filter((s) => !sceneHasPreview(projectName, s)).length
-  const hasVideo = hasProjectMediaPath(projectName, typeof plan.meta?.video_path === 'string' ? plan.meta.video_path : null)
+  const hasVideo = typeof plan.meta?.video_exists === 'boolean'
+    ? plan.meta.video_exists
+    : hasProjectMediaPath(projectName, typeof plan.meta?.video_path === 'string' ? plan.meta.video_path : null)
 
   const items: { label: string; variant: 'success' | 'warning' | 'active' | 'default' }[] = []
 

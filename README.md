@@ -4,7 +4,13 @@
 
 # Cathode
 
-Cathode is a local-first Streamlit app and MCP server for turning rough notes, source text, or a finished script into a narrated explainer video.
+Cathode is a local-first explainer-video pipeline with three main surfaces:
+
+- a React + FastAPI control room for the current workspace-first UI
+- a legacy Streamlit app for the older manual step-by-step path
+- an MCP server for agent/client-driven runs
+
+It turns rough notes, source text, or a finished script into a local project folder plus a rendered MP4, and it now supports classic, hybrid, and motion-first composition modes.
 
 ## Watch The Demo
 
@@ -14,54 +20,69 @@ Cathode is a local-first Streamlit app and MCP server for turning rough notes, s
   </a>
 </p>
 
-Cathode now has three practical lanes:
+Cathode now has four practical lanes:
 
-1. `App workflow`
-   Paste the brief, generate the storyboard, generate the assets, render the video.
-2. `MCP workflow`
+1. `React/FastAPI control room`
+   Fill in Brief Studio, hit the primary button, watch the background job/logs, then land on the final MP4.
+2. `Legacy Streamlit app`
+   Use the older manual step-by-step path when you want a more explicit scene-by-scene workflow.
+3. `MCP workflow`
    Call `make_video` from an agent or client and let Cathode build the local project in the background.
-3. `Live demo workflow`
+4. `Live demo workflow`
    Launch or attach to a real app, capture fresh footage, review it, then feed the approved clips into Cathode for final render.
 
 If you only remember one thing, remember this:
 
-- most users only need the app or MCP path
+- most users only need the React/FastAPI app or MCP path
 - the packaged live-demo skill is for cases where real UI footage is the story
 - the scene editor is there for surgical fixes, not because the happy path should feel heavy
 
 ## What It Does
 
-- brief-driven storyboard generation
-- image scenes and uploaded or locally generated video scenes
-- scene-by-scene narration, prompt, and asset editing
-- local project folders with inspectable files
-- local MP4 render
-- MCP tools for agent/client-driven video generation
+- brief-driven storyboard generation with `source_mode` and `composition_mode`
+- image scenes, video scenes, and Remotion-backed motion scenes
+- a one-button GUI background job path plus storyboard-only/manual editing when you want it
+- scene-by-scene narration, prompt, media, preview, and operator-log editing
+- persisted demo-target metadata and reviewed footage manifests for live-demo runs
+- local MP4 render through `ffmpeg` or Remotion, depending on the resolved render backend
+- MCP tools and web API job routes for agent/client-driven video generation
 
 ## Pick A Lane
 
-### 1. Manual App
+### 1. React/FastAPI Control Room
 
-Use this when you want the fast happy path plus optional human edits.
-
-```bash
-./start.sh
-```
-
-For the React/FastAPI control room instead of Streamlit:
+Use this for the current workspace-based UI.
 
 ```bash
 ./start.sh --react
 ```
 
-Then:
+The main workspaces are:
 
-1. build the brief
-2. generate storyboard
-3. generate assets
-4. render
+- `Brief`
+- `Scenes`
+- `Render`
+- `Queue`
+- `Settings`
 
-### 2. Agent / MCP
+In `Brief Studio`, there are now two clearly separate actions:
+
+1. primary path: start the full background video run
+2. secondary path: generate or rebuild only the storyboard
+
+If demo-target context or reviewed footage is present, the GUI prefers the hybrid path automatically unless you explicitly choose something else.
+
+### 2. Legacy Streamlit App
+
+Use this when you want the older manual step-by-step flow.
+
+```bash
+./start.sh
+```
+
+This is still supported, but the React/FastAPI control room is the more current operator surface.
+
+### 3. Agent / MCP
 
 Use this when an agent or client should drive Cathode programmatically.
 
@@ -69,9 +90,12 @@ Use this when an agent or client should drive Cathode programmatically.
 /opt/homebrew/bin/python3.10 cathode_mcp_server.py --transport stdio
 ```
 
-The core tool is `make_video`. It can inspect a bounded workspace, accept explicit source files, and now accepts reviewed `footage_paths` / `footage_manifest` inputs for mixed-media demos.
+The core tool is `make_video`. It can inspect a bounded workspace, accept explicit source files, persist demo-target metadata, and accept reviewed `footage_paths` / `footage_manifest` inputs for mixed-media demos.
 
-### 3. Live Product Demo Skill
+The React GUI and the MCP path now converge on the same persisted background-job model instead of maintaining separate orchestration logic.
+The web stack also exposes the same job model through `POST /api/jobs/make-video`.
+
+### 4. Live Product Demo Skill
 
 Use this when the video should prove a real running product.
 
@@ -105,27 +129,55 @@ The packaged live-demo lane now also has a real capture driver and retry-plan to
 - `capture_live_demo.py`: run a Playwright-backed walkthrough from a capture plan and keep raw browser video, trace, screenshots, and a step manifest.
 - `apply_retry_actions.py`: mutate the capture plan from bounded retry actions before rerunning capture.
 
+## Remotion And Composition Modes
+
+Cathode no longer stops at still-image and clip-only storyboards.
+
+- `classic`
+  image + video scenes, with `ffmpeg` as the default final render backend
+- `hybrid`
+  mix image, video, and motion scenes in one project; Remotion is the default render backend when the local toolchain is available
+- `motion_only`
+  build the project around motion scenes plus narration
+
+Motion scenes are template-first in the current product and render through the local Remotion toolchain bundled in `frontend/`. The React app only exposes motion and hybrid options when the Remotion toolchain is actually runnable on this machine.
+
+Important timing rule: narration audio is still the source of truth. Cathode computes scene durations, video trim/speed/hold behavior, and the Remotion manifest from the same timing contract, so hybrid renders stay in sync instead of drifting.
+
 ## Demo Assets
 
-- Product demo: `docs/assets/storyboard-demo.mp4`
+- Product demo: `docs/assets/__storyboard-demo.mp4`
 - LocalLLaMA short demo: `docs/assets/localllama-demo.mp4`
 - Mixed-media workflow clip: `docs/assets/ui-workflow-clip.mp4`
-- Expanded scene editor screenshot: `docs/assets/scene-preview-expanded.png`
+- Brief Studio screenshot: `docs/assets/brief-studio-focus.png`
+- Motion scene workspace screenshot: `docs/assets/motion-scene-focus.png`
+- Render workspace screenshot: `docs/assets/render-finished-focus.png`
 - Sample prompt brief: `docs/demo-brief.md`
 
-![Cathode app](docs/assets/app-home.png)
+### Current UI
+
+<p align="center">
+  <img src="docs/assets/motion-scene-focus.png" alt="Cathode Scenes workspace showing a motion scene with Remotion preview controls" width="100%">
+</p>
+
+<p align="center">
+  <img src="docs/assets/brief-studio-focus.png" alt="Cathode Brief Studio with source mode and composition mode controls" width="48%">
+  <img src="docs/assets/render-finished-focus.png" alt="Cathode Render workspace with a finished video artifact" width="48%">
+</p>
 
 ## Provider Model
 
 Cathode is env-driven on purpose.
 
-- `OPENAI_API_KEY` and/or `ANTHROPIC_API_KEY`: storyboard LLMs
-- `REPLICATE_API_TOKEN`: Qwen image generation, image edit, and Chatterbox voice
+- `OPENAI_API_KEY`: OpenAI storyboard and optional OpenAI TTS
+- `ANTHROPIC_API_KEY`: Anthropic storyboard
+- `REPLICATE_API_TOKEN`: Qwen image generation, Replicate-backed image edit, and Chatterbox voice
 - `CATHODE_LOCAL_IMAGE_MODEL`: optional local Hugging Face image generation for image scenes
 - `ELEVENLABS_API_KEY`: ElevenLabs narration
 - `DASHSCOPE_API_KEY` or `ALIBABA_API_KEY`: optional DashScope image edit
 - `CATHODE_LOCAL_VIDEO_COMMAND` and/or `CATHODE_LOCAL_VIDEO_ENDPOINT`: optional local video generation for video scenes
 - `CATHODE_LOCAL_VIDEO_MODEL`: optional local model label or path passed through to that backend
+- Node + the installed frontend workspace: local Remotion motion/hybrid rendering
 - Kokoro remains the always-available local voice option
 
 Only configured providers appear in the UI. If you leave a key out, the UI stays quieter.
@@ -140,8 +192,10 @@ Cathode is local-first, not cloud-hosted.
 - uploaded stills and clips stay local
 - Kokoro is local TTS
 - video scenes can use a local generation backend when configured
+- motion and hybrid renders happen locally through Remotion when available
+- persisted job state and logs live under `projects/<project>/.cathode/jobs/`
 
-For visuals, the built-in AI image path can now run either through Replicate or through a configured local Hugging Face Qwen model. If neither is configured, you can still upload stills yourself. Video scenes also have a fully local generation path when you configure a local backend and switch the sidebar `Video Generation` dropdown to `Local Video Backend`.
+For visuals, the built-in AI image path can run either through Replicate or through a configured local Hugging Face Qwen model. If neither is configured, you can still upload stills yourself. Video scenes can come from reviewed footage, the live-demo agent path, or a configured local video backend. Motion scenes render through the local Remotion layer when the frontend toolchain is installed.
 
 ## Local Image Backend
 
@@ -214,13 +268,20 @@ CATHODE_LOCAL_VIDEO_MODEL=wan2.1
 ## Quick Start
 
 ```bash
+./start.sh --react
+```
+
+Legacy Streamlit path:
+
+```bash
 ./start.sh
 ```
 
-React + FastAPI dev stack:
+Manual React + FastAPI run:
 
 ```bash
-./start.sh --react
+/opt/homebrew/bin/python3.10 -m uvicorn server.app:app --host 127.0.0.1 --port 9321 --reload
+npm run dev --prefix frontend -- --host 127.0.0.1 --port 9322
 ```
 
 Manual app run:
@@ -233,6 +294,7 @@ Default port is `8517`. Override it with `STREAMLIT_PORT` when using `./start.sh
 React mode uses `CATHODE_API_PORT` for FastAPI (default `9321`) and `CATHODE_FRONTEND_PORT` for Vite (default `9322`).
 
 Final render now uses direct `ffmpeg` orchestration and auto-prefers hardware H.264 encoders when the local ffmpeg build supports them. Override with `CATHODE_VIDEO_ENCODER` or force CPU fallback with `CATHODE_DISABLE_HW_ENCODER=1`.
+When Remotion is available and the project resolves to `motion_only` or `hybrid`, Cathode can switch the final render backend to Remotion automatically.
 
 ## MCP Server
 
@@ -334,11 +396,14 @@ CATHODE_LOCAL_VIDEO_TIMEOUT_SECONDS=900
 Every Cathode project stores:
 
 - a normalized brief
+- composition mode
 - storyboard scenes
-- image, clip, audio, and preview paths
+- image, clip, motion, audio, and preview paths
 - render metadata
+- demo-target metadata under `meta.agent_demo_profile`
 - optional style references
 - optional reviewed footage manifest
+- persisted background job metadata and logs under `.cathode/jobs/`
 
 `projects/<project>/plan.json` is the source of truth.
 
@@ -347,6 +412,7 @@ Every Cathode project stores:
 The core brief still revolves around:
 
 - source mode
+- composition mode
 - goal
 - audience
 - target length
@@ -354,6 +420,7 @@ The core brief still revolves around:
 - visual style
 - source material
 - optional footage notes
+- optional demo-target context (`workspace_path`, `app_url`, `launch_command`, `expected_url`, `repo_url`, `flow_hints`)
 
 For live demos, add reviewed `footage_paths` or `footage_manifest` instead of only prose.
 
@@ -362,7 +429,9 @@ For live demos, add reviewed `footage_paths` or `footage_manifest` instead of on
 - image scenes hold for narration duration
 - video scenes trim to narration duration
 - short clips can freeze on the last frame to stay in sync
+- motion scenes render from normalized template props through Remotion
 - reviewed footage clips can be copied into `clips/` and auto-assigned to `video` scenes
+- final render uses `ffmpeg` or Remotion based on the resolved render backend
 
 ## Batch Rebuild
 
@@ -385,7 +454,11 @@ app.py
 batch_regenerate.py
 cathode_mcp_server.py
 core/
+core/remotion_render.py
+frontend/
+server/
 prompts/
+skills/
 tests/
 docs/assets/
 projects/

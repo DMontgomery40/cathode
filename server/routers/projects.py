@@ -10,7 +10,7 @@ from fastapi import APIRouter, HTTPException
 
 from core.job_runner import list_project_jobs
 from core.pipeline_service import create_project_from_brief_service
-from core.project_store import collect_project_artifacts, list_projects, load_plan
+from core.project_store import annotate_plan_asset_existence, collect_project_artifacts, list_projects, load_plan
 from core.runtime import PROJECTS_DIR
 from server.schemas.projects import CreateProjectRequest, ProjectSummary
 
@@ -94,7 +94,7 @@ async def create_project(body: CreateProjectRequest) -> dict[str, Any]:
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
-    return plan
+    return annotate_plan_asset_existence(_project_dir, plan)
 
 
 @router.get("/projects/{project}")
@@ -106,7 +106,7 @@ async def get_project_detail(project: str) -> dict[str, Any]:
     if plan is None:
         raise HTTPException(status_code=404, detail=f"No plan.json for project: {project}")
     return {
-        "plan": plan,
+        "plan": annotate_plan_asset_existence(project_dir, plan),
         "artifacts": collect_project_artifacts(project_dir),
         "jobs": list_project_jobs(project_dir),
     }

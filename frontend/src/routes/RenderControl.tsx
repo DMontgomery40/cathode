@@ -12,12 +12,21 @@ import {
   useGenerateAssets,
   useProjectJobs,
   useCancelJob,
+  useJobLog,
 } from '../lib/api/scene-hooks.ts'
 import type { Job } from '../lib/api/jobs.ts'
 import { WorkspaceCanvas, WorkspaceGrid, WorkspacePanel } from '../design-system/recipes'
 import { hasProjectMediaPath } from '../lib/media-url.ts'
 import { sceneHasRenderableVisual } from '../lib/scene-media.ts'
 import { useInvalidateProjectOnJobCompletion } from '../lib/api/project-job-sync.ts'
+
+const DEFAULT_OUTPUT_FILENAME = 'final_video.mp4'
+const DEFAULT_FPS = 24
+
+function resolveRenderFps(renderProfile: Record<string, unknown> | null): number {
+  const parsed = Number(renderProfile?.fps ?? DEFAULT_FPS)
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_FPS
+}
 
 export function RenderControl() {
   const { projectId = '' } = useParams<{ projectId: string }>()
@@ -27,8 +36,10 @@ export function RenderControl() {
   const genAssets = useGenerateAssets(projectId)
   const cancelJobMut = useCancelJob()
 
-  const [outputFilename, setOutputFilename] = useState('final_video.mp4')
-  const [fps, setFps] = useState(24)
+  const [outputFilename, setOutputFilename] = useState(DEFAULT_OUTPUT_FILENAME)
+  const [fps, setFps] = useState(DEFAULT_FPS)
+  const [outputFilenameDirty, setOutputFilenameDirty] = useState(false)
+  const [fpsDirty, setFpsDirty] = useState(false)
 
   const scenes = plan?.scenes ?? []
   const renderProfile = plan?.meta?.render_profile ?? null
@@ -38,28 +49,70 @@ export function RenderControl() {
 
   // Readiness checks
   const scenesWithVisual = scenes.filter((s) => sceneHasRenderableVisual(projectId, s, renderBackend))
-  const scenesWithAudio = scenes.filter((s) => hasProjectMediaPath(projectId, s.audio_path))
+  const scenesWithAudio = scenes.filter((s) => (
+    typeof s.audio_exists === 'boolean'
+      ? s.audio_exists
+      : hasProjectMediaPath(projectId, s.audio_path)
+  ))
   const allReady = scenes.length > 0 && scenesWithVisual.length === scenes.length && scenesWithAudio.length === scenes.length
 
+  const renderJobs = [...(jobs ?? [])]
+    .filter((j) => j.requested_stage === 'render' || j.requested_stage === 'assets' || j.current_stage === 'render' || j.current_stage === 'assets')
+    .sort((left, right) => {
+      const leftTime = left.updated_utc ? new Date(left.updated_utc).valueOf() : 0
+      const rightTime = right.updated_utc ? new Date(right.updated_utc).valueOf() : 0
+      return rightTime - leftTime
+    })
   // Find active render/asset jobs
-  const activeRenderJob: Job | null = (jobs ?? []).find(
+  const activeRenderJob: Job | null = renderJobs.find(
     (j) => (j.requested_stage === 'render' || j.requested_stage === 'assets') && (j.status === 'queued' || j.status === 'running'),
   ) ?? null
+  const latestRenderJob: Job | null = renderJobs[0] ?? null
 
   const hasActiveJob = activeRenderJob !== null
   const existingOutputFilename = typeof plan?.meta?.video_path === 'string' && plan.meta.video_path
-    ? plan.meta.video_path.split('/').pop() ?? 'final_video.mp4'
-    : 'final_video.mp4'
+    ? plan.meta.video_path.split('/').pop() ?? DEFAULT_OUTPUT_FILENAME
+    : DEFAULT_OUTPUT_FILENAME
+  const renderFps = resolveRenderFps(
+    typeof renderProfile === 'object' && renderProfile
+      ? renderProfile as Record<string, unknown>
+      : null,
+  )
 
   useInvalidateProjectOnJobCompletion(projectId, jobs, ['assets', 'render'])
+  const { data: renderLog } = useJobLog(projectId, (activeRenderJob ?? latestRenderJob)?.job_id ?? null, {
+    enabled: Boolean(activeRenderJob ?? latestRenderJob),
+    tailLines: 160,
+  })
 
   useEffect(() => {
-    setOutputFilename((current) => (
-      current === 'final_video.mp4' || current === 'output.mp4'
-        ? existingOutputFilename
-        : current
-    ))
-  }, [existingOutputFilename])
+    setOutputFilenameDirty(false)
+    setFpsDirty(false)
+    setOutputFilename(DEFAULT_OUTPUT_FILENAME)
+    setFps(DEFAULT_FPS)
+  }, [projectId])
+
+  useEffect(() => {
+    if (!outputFilenameDirty) {
+      setOutputFilename(existingOutputFilename)
+    }
+  }, [existingOutputFilename, outputFilenameDirty])
+
+  useEffect(() => {
+    if (!fpsDirty) {
+      setFps(renderFps)
+    }
+  }, [fpsDirty, renderFps])
+
+  const handleOutputFilenameChange = (value: string) => {
+    setOutputFilenameDirty(true)
+    setOutputFilename(value)
+  }
+
+  const handleFpsChange = (value: number) => {
+    setFpsDirty(true)
+    setFps(value)
+  }
 
   const status = hasActiveJob
     ? 'rendering' as const
@@ -93,12 +146,14 @@ export function RenderControl() {
               >
                 <ArtifactShelf
                   videoPath={plan?.meta?.video_path}
+                  videoExists={typeof plan?.meta?.video_exists === 'boolean' ? plan.meta.video_exists : undefined}
                   project={projectId}
                 />
               </WorkspacePanel>
 
               <RenderProgress
-                job={activeRenderJob}
+                job={activeRenderJob ?? latestRenderJob}
+                logContent={renderLog?.content ?? null}
                 onCancel={() => {
                   if (activeRenderJob) {
                     cancelJobMut.mutate({ jobId: activeRenderJob.job_id, project: projectId })
@@ -160,9 +215,9 @@ export function RenderControl() {
 
               <RenderSettings
                 outputFilename={outputFilename}
-                onOutputFilenameChange={setOutputFilename}
+                onOutputFilenameChange={handleOutputFilenameChange}
                 fps={fps}
-                onFpsChange={setFps}
+                onFpsChange={handleFpsChange}
                 renderProfile={renderProfile as Record<string, unknown> | null}
               />
 

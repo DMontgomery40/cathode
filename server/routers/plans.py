@@ -8,7 +8,7 @@ from fastapi import APIRouter, Body, HTTPException
 
 from core.pipeline_service import rebuild_storyboard_service
 from core.project_schema import infer_composition_mode, normalize_agent_demo_profile, normalize_brief, resolve_render_backend
-from core.project_store import load_plan, save_plan
+from core.project_store import annotate_plan_asset_existence, load_plan, save_plan
 from core.runtime import PROJECTS_DIR
 from server.schemas.plans import RebuildStoryboardRequest
 
@@ -28,13 +28,13 @@ async def get_plan(project: str) -> dict[str, Any]:
     plan = load_plan(project_dir)
     if plan is None:
         raise HTTPException(status_code=404, detail=f"No plan.json for project: {project}")
-    return plan
+    return annotate_plan_asset_existence(project_dir, plan)
 
 
 @router.put("/projects/{project}/plan")
 async def put_plan(project: str, body: dict[str, Any]) -> dict[str, Any]:
     project_dir = _project_dir(project)
-    return save_plan(project_dir, body)
+    return annotate_plan_asset_existence(project_dir, save_plan(project_dir, body))
 
 
 @router.post("/projects/{project}/storyboard")
@@ -67,6 +67,9 @@ async def rebuild_storyboard(
         save_plan(project_dir, plan)
     provider = body.provider if body else None
     try:
-        return rebuild_storyboard_service(project_dir, provider=provider)
+        return annotate_plan_asset_existence(
+            project_dir,
+            rebuild_storyboard_service(project_dir, provider=provider),
+        )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))

@@ -328,6 +328,7 @@ def test_image_edit_heals_same_project_absolute_path(mock_edit, client, tmp_path
     (project_dir / "plan.json").write_text(json.dumps(raw_plan))
 
     edited = images_dir / "image_abc1_edited.png"
+    edited.write_bytes(b"\x89PNG\r\n\x1a\n" + b"\x00" * 32)
     mock_edit.return_value = edited
 
     with patch("server.routers.scenes.PROJECTS_DIR", tmp_path):
@@ -571,6 +572,45 @@ def test_preview_scene(mock_preview, client, tmp_path):
 
     assert resp.status_code == 200
     mock_preview.assert_called_once()
+
+
+@patch(
+    "server.routers.scenes.render_manifest_with_remotion",
+    return_value=Path("/tmp/previews/preview_motion_scene.mp4"),
+)
+@patch(
+    "server.routers.scenes.build_remotion_manifest",
+    return_value={"outputPath": "/tmp/previews/preview_motion_scene.mp4"},
+)
+def test_motion_preview_runs_in_threadpool(mock_manifest, mock_render, client, tmp_path):
+    (tmp_path / "demo").mkdir()
+    plan = _fresh_plan()
+    plan["meta"]["render_profile"] = {"render_backend": "remotion"}
+    plan["scenes"][0]["scene_type"] = "motion"
+    plan["scenes"][0]["motion"] = {
+        "template_id": "kinetic_title",
+        "props": {"headline": "Prompts on prompts"},
+    }
+
+    captured: dict[str, object] = {}
+
+    async def fake_run_in_threadpool(func, **kwargs):
+        captured["func_name"] = getattr(func, "__name__", "")
+        return func(**kwargs)
+
+    with (
+        patch("server.routers.scenes.PROJECTS_DIR", tmp_path),
+        patch("server.routers.scenes.load_plan", return_value=plan),
+        patch("server.routers.scenes.run_in_threadpool", side_effect=fake_run_in_threadpool),
+        patch("server.routers.scenes.save_plan", side_effect=lambda d, p: p),
+    ):
+        resp = client.post("/api/projects/demo/scenes/abc1/preview")
+
+    assert resp.status_code == 200
+    assert captured["func_name"] == "_render_preview_asset"
+    saved_scene = resp.json()["scenes"][0]
+    assert saved_scene["preview_path"] == "/tmp/previews/preview_motion_scene.mp4"
+    assert saved_scene["motion"]["preview_path"] == "/tmp/previews/preview_motion_scene.mp4"
 
 
 def test_preview_project_not_found(client, tmp_path):

@@ -8,7 +8,7 @@ from typing import Any
 from fastapi import APIRouter, File, HTTPException, Query, UploadFile
 
 from core.director import analyze_style_references
-from core.project_store import load_plan, save_plan
+from core.project_store import annotate_plan_asset_existence, load_plan, save_plan
 from core.runtime import PROJECTS_DIR, choose_llm_provider
 from server.services.uploads import STYLE_REF_UPLOAD_SPEC, persist_upload
 from server.schemas.style_refs import StyleRefsResponse
@@ -75,7 +75,7 @@ async def upload_style_refs(
 
     brief["style_reference_summary"] = summary
     brief["style_reference_paths"] = saved_paths
-    return save_plan(project_dir, plan)
+    return annotate_plan_asset_existence(project_dir, save_plan(project_dir, plan))
 
 
 @router.get("/projects/{project}/style-refs", response_model=StyleRefsResponse)

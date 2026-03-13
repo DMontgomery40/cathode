@@ -14,6 +14,7 @@ SOURCE_MODES = ("ideas_notes", "source_text", "final_script")
 SCENE_TYPES = ("image", "video", "motion")
 COMPOSITION_MODES = ("classic", "motion_only", "hybrid")
 VISUAL_SOURCE_STRATEGIES = ("images_only", "mixed_media", "video_preferred")
+TEXT_RENDER_MODES = ("visual_authored", "deterministic_overlay")
 IMAGE_PROVIDERS = ("replicate", "local", "manual")
 VIDEO_PROVIDERS = ("manual", "local", "agent")
 RENDER_BACKENDS = ("ffmpeg", "remotion")
@@ -65,8 +66,10 @@ def _normalize_project_asset_path(
     path = Path(value).expanduser()
     if path.is_absolute():
         resolved = path.resolve()
-        if str(resolved).startswith(str(base)) and resolved.exists() and resolved.is_file():
-            return str(resolved)
+        if str(resolved).startswith(str(base)):
+            if resolved.exists() and resolved.is_file():
+                return str(resolved)
+            return None
         absolute = resolved.as_posix()
         index = absolute.rfind(f"/{marker}")
         if index >= 0:
@@ -94,6 +97,7 @@ def default_brief() -> dict[str, Any]:
         "ending_cta": "",
         "composition_mode": "classic",
         "visual_source_strategy": "images_only",
+        "text_render_mode": "visual_authored",
         "available_footage": "",
         "footage_manifest": [],
         "style_reference_summary": "",
@@ -112,6 +116,7 @@ def default_render_profile() -> dict[str, Any]:
         "fps": 24,
         "scene_types": ["image", "video", "motion"],
         "render_backend": "ffmpeg",
+        "text_render_mode": "visual_authored",
     }
 
 
@@ -227,6 +232,12 @@ def sanitize_project_name(value: Any, fallback: str = "my_video") -> str:
     raw = raw.replace(" ", "_")
     cleaned = re.sub(r"[^a-zA-Z0-9_-]", "_", raw)
     return cleaned or fallback
+
+
+def resolve_text_render_mode(value: Any) -> str:
+    """Normalize the project-wide text rendering strategy."""
+    normalized = str(value or "").strip().lower()
+    return normalized if normalized in TEXT_RENDER_MODES else "visual_authored"
 
 
 def _normalize_float(value: Any, fallback: float) -> float:
@@ -402,6 +413,7 @@ def normalize_brief(
     result["visual_source_strategy"] = (
         visual_source_strategy if visual_source_strategy in VISUAL_SOURCE_STRATEGIES else "images_only"
     )
+    result["text_render_mode"] = resolve_text_render_mode(result.get("text_render_mode"))
 
     # Allow raw_brief as a direct input path when source material is intentionally empty.
     if not result["source_material"] and result["raw_brief"]:
@@ -550,6 +562,10 @@ def backfill_plan(
         raw_render_profile,
         composition_mode=str(brief.get("composition_mode") or "classic"),
     )
+    render_profile["text_render_mode"] = resolve_text_render_mode(
+        raw_render_profile.get("text_render_mode") or brief.get("text_render_mode")
+    )
+    brief["text_render_mode"] = render_profile["text_render_mode"]
 
     raw_image_profile = meta.get("image_profile") if isinstance(meta.get("image_profile"), dict) else {}
     image_profile = _merge_with_defaults(default_image_profile(), raw_image_profile)

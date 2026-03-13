@@ -6,6 +6,7 @@ import { cleanupProjectFixture, cloneProjectFixture } from './helpers/project-fi
 const PROJECT = 'bet365_feature_act_01'
 const BROKEN_PROJECT = `e2e_render_broken_${Date.now()}`
 const MOTION_RENDER_PROJECT = `e2e_render_motion_${Date.now()}`
+const ROUTE_RESET_PROJECT = `e2e_render_route_reset_${Date.now()}`
 
 test.describe('Render Control', () => {
   test.beforeEach(async ({ page }) => {
@@ -92,16 +93,91 @@ test.describe('Render Control', () => {
   })
 
   test('readiness dots have correct colors', async ({ page }) => {
-    // Scene count dot should be green (has scenes)
-    const dots = page.locator('.rounded-full').filter({ has: page.locator('[class*="bg-"]') })
-    // At least the first dot should exist
-    await expect(page.locator('text=/\\d+ scenes/')).toBeVisible()
+    const sceneLabel = page.getByText(/\d+ scenes?/)
+    const sceneDot = sceneLabel.locator('xpath=preceding-sibling::span[1]')
+    const visualLabel = page.getByText(/\d+\/\d+ with visuals/)
+    const visualDot = visualLabel.locator('xpath=preceding-sibling::span[1]')
+    const backendLabel = page.getByText(/Backend: (ffmpeg|remotion)/)
+    const backendDot = backendLabel.locator('xpath=preceding-sibling::span[1]')
+    const audioLabel = page.getByText(/\d+\/\d+ with audio/)
+    const audioDot = audioLabel.locator('xpath=preceding-sibling::span[1]')
+
+    await expect(sceneDot).toHaveClass(/bg-\[var\(--signal-success\)\]/)
+
+    const visualText = await visualLabel.innerText()
+    const [, visualReady, visualTotal] = visualText.match(/(\d+)\/(\d+)/) ?? []
+    await expect(visualDot).toHaveClass(
+      Number(visualReady) === Number(visualTotal) && Number(visualTotal) > 0
+        ? /bg-\[var\(--signal-success\)\]/
+        : /bg-\[var\(--text-tertiary\)\]/,
+    )
+
+    const backendText = await backendLabel.innerText()
+    await expect(backendDot).toHaveClass(
+      backendText.includes('remotion')
+        ? /bg-\[var\(--accent-primary\)\]/
+        : /bg-\[var\(--text-tertiary\)\]/,
+    )
+
+    const audioText = await audioLabel.innerText()
+    const [, audioReady, audioTotal] = audioText.match(/(\d+)\/(\d+)/) ?? []
+    await expect(audioDot).toHaveClass(
+      Number(audioReady) === Number(audioTotal) && Number(audioTotal) > 0
+        ? /bg-\[var\(--signal-success\)\]/
+        : /bg-\[var\(--text-tertiary\)\]/,
+    )
   })
 
   // ── Render Progress ────────────────────────────────────────────
   test('Render Progress area renders', async ({ page }) => {
     await expect(page.getByRole('heading', { name: 'Render Progress' })).toBeVisible()
     await expect(page.getByText('No active render', { exact: true })).toBeVisible()
+  })
+
+  test('render progress shows live job detail and log tail in the GUI', async ({ page }) => {
+    await page.route(`**/api/projects/${PROJECT}/jobs`, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([
+          {
+            job_id: 'render-job-1',
+            project_name: PROJECT,
+            project_dir: `/tmp/${PROJECT}`,
+            requested_stage: 'render',
+            current_stage: 'render',
+            status: 'running',
+            progress: 0.42,
+            progress_label: 'Encoding video',
+            progress_detail: 'rendered 120 frames, encoded 98',
+            request: { kind: 'rerun_stage', stage: 'render' },
+            result: {},
+            error: null,
+          },
+        ]),
+      })
+    })
+
+    await page.route(`**/api/projects/${PROJECT}/jobs/render-job-1/log?tail_lines=160`, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          job_id: 'render-job-1',
+          project_name: PROJECT,
+          log_path: `/tmp/${PROJECT}/render-job-1.log`,
+          tail_lines: 160,
+          line_count: 3,
+          content: '{"type":"status","label":"Starting Remotion render","detail":"codec=h264 hwaccel=required"}\n{"type":"progress","stage":"encoding","progress":0.42}',
+        }),
+      })
+    })
+
+    await page.goto(`/projects/${PROJECT}/render`)
+    await expect(page.getByText('Encoding video', { exact: true })).toBeVisible()
+    await expect(page.getByText('rendered 120 frames, encoded 98', { exact: true })).toBeVisible()
+    await expect(page.getByText('Live log tail', { exact: true })).toBeVisible()
+    await expect(page.getByText('hwaccel=required')).toBeVisible()
   })
 
   // ── Generate All Assets button state ───────────────────────────
@@ -115,14 +191,32 @@ test.describe('Render Control', () => {
   test('Render Video button state reflects readiness', async ({ page }) => {
     const btn = page.locator('button:has-text("Render Video")')
     await expect(btn).toBeVisible()
-    // This project may not have all audio, so button may be disabled
+    const visualText = await page.getByText(/\d+\/\d+ with visuals/).innerText()
+    const audioText = await page.getByText(/\d+\/\d+ with audio/).innerText()
+    const [, visualReady, visualTotal] = visualText.match(/(\d+)\/(\d+)/) ?? []
+    const [, audioReady, audioTotal] = audioText.match(/(\d+)\/(\d+)/) ?? []
+    const shouldBeEnabled = (
+      Number(visualTotal) > 0
+      && Number(visualReady) === Number(visualTotal)
+      && Number(audioReady) === Number(audioTotal)
+    )
+
+    if (shouldBeEnabled) {
+      await expect(btn).toBeEnabled()
+    } else {
+      await expect(btn).toBeDisabled()
+    }
   })
 
   // ── Artifact Shelf ─────────────────────────────────────────────
   test('ArtifactShelf section renders', async ({ page }) => {
-    // May show existing video or empty state
-    await expect(page.locator('text=Render').first()).toBeVisible()
-    // The shelf exists in the page layout
+    const emptyState = page.getByText(/No rendered video yet|missing or invalid video/)
+    const shelfVideo = page.locator('video').first()
+    if (await emptyState.count()) {
+      await expect(emptyState.first()).toBeVisible()
+    } else {
+      await expect(shelfVideo).toBeVisible()
+    }
   })
 
   // ── Keyboard interaction ───────────────────────────────────────
@@ -151,13 +245,52 @@ test.describe('Render Control', () => {
     }
   })
 
+  test.describe.serial('same-session project transitions', () => {
+    test.beforeAll(() => {
+      cloneProjectFixture(PROJECT, ROUTE_RESET_PROJECT)
+      const projectDir = path.resolve(process.cwd(), '..', 'projects', ROUTE_RESET_PROJECT)
+      const planPath = path.join(projectDir, 'plan.json')
+      const renderDir = path.join(projectDir, 'renders')
+      const plan = JSON.parse(fs.readFileSync(planPath, 'utf8')) as Record<string, unknown>
+      plan.meta.render_profile = {
+        ...(plan.meta.render_profile || {}),
+        fps: 30,
+      }
+      plan.meta.video_path = `projects/${ROUTE_RESET_PROJECT}/renders/route-reset.mp4`
+      fs.mkdirSync(renderDir, { recursive: true })
+      fs.writeFileSync(path.join(renderDir, 'route-reset.mp4'), 'mp4')
+      fs.writeFileSync(planPath, JSON.stringify(plan, null, 2))
+    })
+
+    test.afterAll(() => {
+      cleanupProjectFixture(ROUTE_RESET_PROJECT)
+    })
+
+    test('route changes reset render settings to the destination project defaults', async ({ page }) => {
+      await page.goto(`/projects/${PROJECT}/render`)
+      await page.getByRole('heading', { name: 'Render', exact: true }).waitFor()
+
+      await page.locator('#output-filename').fill('carryover.mp4')
+      await page.locator('#fps-select').selectOption('60')
+
+      await page.evaluate((targetPath) => {
+        window.history.pushState({}, '', targetPath)
+        window.dispatchEvent(new PopStateEvent('popstate', { state: window.history.state }))
+      }, `/projects/${ROUTE_RESET_PROJECT}/render`)
+
+      await expect(page.getByRole('banner').getByRole('link', { name: ROUTE_RESET_PROJECT })).toBeVisible()
+      await expect(page.locator('#output-filename')).toHaveValue('route-reset.mp4')
+      await expect(page.locator('#fps-select')).toHaveValue('30')
+    })
+  })
+
   test.describe.serial('broken asset paths', () => {
     test.beforeAll(() => {
       cloneProjectFixture('crucible_demo', BROKEN_PROJECT)
       const planPath = path.resolve(process.cwd(), '..', 'projects', BROKEN_PROJECT, 'plan.json')
-      const plan = JSON.parse(fs.readFileSync(planPath, 'utf8')) as Record<string, any>
+      const plan = JSON.parse(fs.readFileSync(planPath, 'utf8')) as Record<string, unknown>
       plan.meta.video_path = '/Users/davidmontgomery/old_checkout/projects/crucible_demo/crucible_demo.mp4'
-      for (const [index, scene] of (plan.scenes as Array<Record<string, any>>).entries()) {
+      for (const [index, scene] of (plan.scenes as Array<Record<string, unknown>>).entries()) {
         if (scene.image_path) {
           scene.image_path = `/Users/davidmontgomery/old_checkout/projects/crucible_demo/images/scene_${String(index).padStart(3, '0')}_slide.png`
         }
@@ -190,7 +323,7 @@ test.describe('Render Control', () => {
       cloneProjectFixture(PROJECT, MOTION_RENDER_PROJECT)
       const projectDir = path.resolve(process.cwd(), '..', 'projects', MOTION_RENDER_PROJECT)
       const planPath = path.join(projectDir, 'plan.json')
-      const plan = JSON.parse(fs.readFileSync(planPath, 'utf8')) as Record<string, any>
+      const plan = JSON.parse(fs.readFileSync(planPath, 'utf8')) as Record<string, unknown>
       plan.meta.render_profile = {
         ...(plan.meta.render_profile || {}),
         render_backend: 'remotion',
