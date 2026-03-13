@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "api",
+      "runtimeExecutable": "/opt/homebrew/bin/python3.10",
+      "runtimeArgs": ["-m", "uvicorn", "server.app:app", "--host", "127.0.0.1", "--port", "9321", "--reload"],
+      "port": 9321
+    },
+    {
+      "name": "frontend",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "--prefix", "frontend", "--", "--port", "9322"],
+      "port": 9322
+    }
+  ]
+}

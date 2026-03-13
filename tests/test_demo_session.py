@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from core.demo_session import build_live_demo_session
 
 
@@ -39,3 +41,16 @@ def test_build_live_demo_session_does_not_infer_launch_when_app_url_provided(tmp
     assert session["app_url"] == "http://127.0.0.1:4317"
     assert session["expected_url"] == "http://127.0.0.1:4317"
     assert session["launch_command"] == ""
+
+
+def test_build_live_demo_session_requires_expected_url_when_launching_locally(tmp_path):
+    repo_dir = tmp_path / "fixture_repo"
+    repo_dir.mkdir()
+    (repo_dir / "run_all.sh").write_text("#!/usr/bin/env bash\n")
+
+    with pytest.raises(ValueError, match="expected_url"):
+        build_live_demo_session(
+            target_repo_path=repo_dir,
+            output_dir=tmp_path / "output",
+            launch_command="./run_all.sh",
+        )

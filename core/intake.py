@@ -204,6 +204,9 @@ def build_brief_from_intent(
         base_dir=workspace_path,
     )
     derived_footage_summary = build_footage_summary(normalized_footage_manifest)
+    resolved_visual_source_strategy = overrides.get("visual_source_strategy") or (
+        "video_preferred" if normalized_footage_manifest else "images_only"
+    )
 
     explicit_source_mode = str(overrides.get("source_mode") or "").strip()
     if explicit_source_mode:
@@ -228,13 +231,15 @@ def build_brief_from_intent(
             "must_include": overrides.get("must_include") or "",
             "must_avoid": overrides.get("must_avoid") or "",
             "ending_cta": overrides.get("ending_cta") or "",
-            "visual_source_strategy": overrides.get("visual_source_strategy") or "images_only",
+            "composition_mode": overrides.get("composition_mode") or "",
+            "visual_source_strategy": resolved_visual_source_strategy,
             "available_footage": overrides.get("available_footage") or derived_footage_summary,
             "footage_manifest": normalized_footage_manifest,
             "style_reference_paths": overrides.get("style_reference_paths") or [],
             "style_reference_summary": overrides.get("style_reference_summary") or "",
             "raw_brief": overrides.get("raw_brief") or f"User intent: {intent.strip()}",
-        }
+        },
+        base_dir=workspace_path,
     )
     metadata = {
         "workspace_context": workspace,

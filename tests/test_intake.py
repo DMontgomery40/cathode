@@ -61,3 +61,18 @@ def test_build_brief_from_intent_promotes_footage_inputs_into_manifest(tmp_path)
     assert brief["footage_manifest"][0]["path"] == str(clip_path.resolve())
     assert "fresh capture" in brief["available_footage"]
     assert metadata["footage_manifest"][0]["id"] == brief["footage_manifest"][0]["id"]
+    assert brief["visual_source_strategy"] == "video_preferred"
+
+
+def test_build_brief_from_intent_resolves_relative_style_reference_paths_from_workspace(tmp_path):
+    style_ref = tmp_path / "refs" / "hero.png"
+    style_ref.parent.mkdir(parents=True)
+    style_ref.write_bytes(b"png")
+
+    brief, _ = build_brief_from_intent(
+        intent="Make a demo video",
+        workspace_path=tmp_path,
+        brief_overrides={"style_reference_paths": ["refs/hero.png"]},
+    )
+
+    assert brief["style_reference_paths"] == [str(style_ref.resolve())]

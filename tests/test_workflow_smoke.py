@@ -96,3 +96,27 @@ def test_smoke_legacy_plan_rebuild(monkeypatch):
     assert rebuilt["scenes"][0]["image_path"] is None
     assert rebuilt["scenes"][0]["audio_path"] is None
     assert rebuilt["scenes"][0]["scene_type"] == "image"
+
+
+def test_motion_only_brief_converts_storyboard_to_motion_scenes(monkeypatch):
+    def fake_generate(_source, provider="openai"):
+        return [_sample_scene()]
+
+    monkeypatch.setattr("core.workflow.generate_storyboard", fake_generate)
+
+    plan = create_plan_from_brief(
+        project_name="motion_only_demo",
+        brief={
+            "project_name": "motion_only_demo",
+            "source_mode": "ideas_notes",
+            "source_material": "Prompt ladder demo",
+            "composition_mode": "motion_only",
+        },
+        provider="openai",
+    )
+
+    scene = plan["scenes"][0]
+    assert scene["scene_type"] == "motion"
+    assert scene["image_path"] is None
+    assert scene["video_path"] is None
+    assert scene["motion"]["template_id"]

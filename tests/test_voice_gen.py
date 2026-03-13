@@ -116,3 +116,56 @@ def test_generate_scene_audio_falls_back_when_scene_override_provider_is_unavail
     assert captured["kwargs"]["tts_provider"] == "kokoro"
     assert captured["kwargs"]["voice"] == "af_bella"
     assert captured["kwargs"]["speed"] == 1.1
+
+
+def test_generate_scene_audio_normalizes_voice_when_base_provider_falls_back_to_kokoro(monkeypatch, tmp_path):
+    captured = {}
+
+    def fake_generate_audio(text, output_path, **kwargs):
+        captured["text"] = text
+        captured["output_path"] = Path(output_path)
+        captured["kwargs"] = kwargs
+        Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+        Path(output_path).write_bytes(b"wav")
+        return Path(output_path)
+
+    monkeypatch.setattr(voice_gen, "generate_audio", fake_generate_audio)
+    monkeypatch.setattr(voice_gen, "available_tts_providers", lambda keys=None: {"kokoro": "Kokoro (Local)"})
+
+    path = voice_gen.generate_scene_audio(
+        {"id": 3, "narration": "Use the local fallback voice."},
+        tmp_path,
+        tts_provider="elevenlabs",
+        voice="Bella",
+        speed=1.0,
+    )
+
+    assert path.exists()
+    assert captured["kwargs"]["tts_provider"] == "kokoro"
+    assert captured["kwargs"]["voice"] == "af_bella"
+
+
+def test_generate_audio_falls_back_to_kokoro_when_elevenlabs_fails(monkeypatch, tmp_path):
+    output_path = tmp_path / "audio.wav"
+
+    def fail_elevenlabs(**kwargs):
+        raise RuntimeError("401 Unauthorized")
+
+    def fake_kokoro(text, output_path_arg, voice, speed):
+        Path(output_path_arg).parent.mkdir(parents=True, exist_ok=True)
+        Path(output_path_arg).write_bytes(b"wav")
+        return Path(output_path_arg)
+
+    monkeypatch.setattr(voice_gen, "_generate_with_elevenlabs", fail_elevenlabs)
+    monkeypatch.setattr(voice_gen, "_generate_with_kokoro", fake_kokoro)
+
+    path = voice_gen.generate_audio(
+        "Hello world",
+        output_path,
+        voice="Bella",
+        speed=1.0,
+        tts_provider="elevenlabs",
+    )
+
+    assert path.exists()
+    assert path.read_bytes() == b"wav"

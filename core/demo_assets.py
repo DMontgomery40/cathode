@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import copy
 import re
+import shutil
 from pathlib import Path
 from typing import Any
 
 REVIEW_STATUSES = {"accept", "warn", "retry", "unknown"}
+VIDEO_FOOTAGE_KINDS = {"video", "video_clip", "screen_recording", "b_roll"}
 
 
 def _slugify(value: Any, fallback: str) -> str:
@@ -161,7 +163,7 @@ def copy_footage_manifest_into_project(
         suffix = path.suffix.lower() or ".mp4"
         dest = clips_dir / f"{entry['id']}{suffix}"
         if path.resolve() != dest.resolve():
-            dest.write_bytes(path.read_bytes())
+            shutil.copy2(path, dest)
         current = copy.deepcopy(entry)
         current["source_path"] = str(path.resolve())
         current["path"] = str(dest.resolve())
@@ -194,7 +196,15 @@ def apply_footage_manifest_to_scenes(
     manifest: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
     """Assign copied footage clips to video scenes using explicit ids or best-effort matching."""
-    available = [entry for entry in manifest if str(entry.get("review_status") or "accept") != "retry"]
+    available = [
+        entry
+        for entry in manifest
+        if str(entry.get("review_status") or "accept") != "retry"
+        and (
+            str(entry.get("kind") or "").strip().lower() in VIDEO_FOOTAGE_KINDS
+            or Path(str(entry.get("path") or "")).suffix.lower() in {".mp4", ".mov", ".m4v", ".webm", ".avi", ".mkv"}
+        )
+    ]
     by_id = {str(entry["id"]): entry for entry in available}
     unused_ids = {str(entry["id"]) for entry in available}
 
