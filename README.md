@@ -48,6 +48,12 @@ Use this when you want the fast happy path plus optional human edits.
 ./start.sh
 ```
 
+For the React/FastAPI control room instead of Streamlit:
+
+```bash
+./start.sh --react
+```
+
 Then:
 
 1. build the brief
@@ -211,6 +217,12 @@ CATHODE_LOCAL_VIDEO_MODEL=wan2.1
 ./start.sh
 ```
 
+React + FastAPI dev stack:
+
+```bash
+./start.sh --react
+```
+
 Manual app run:
 
 ```bash
@@ -218,6 +230,7 @@ Manual app run:
 ```
 
 Default port is `8517`. Override it with `STREAMLIT_PORT` when using `./start.sh`.
+React mode uses `CATHODE_API_PORT` for FastAPI (default `9321`) and `CATHODE_FRONTEND_PORT` for Vite (default `9322`).
 
 Final render now uses direct `ffmpeg` orchestration and auto-prefers hardware H.264 encoders when the local ffmpeg build supports them. Override with `CATHODE_VIDEO_ENCODER` or force CPU fallback with `CATHODE_DISABLE_HW_ENCODER=1`.
 

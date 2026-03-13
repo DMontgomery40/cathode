@@ -1,0 +1,49 @@
+:root {
+  /* Surfaces */
+  --surface-void: #0a0a0c;
+  --surface-shell: #111114;
+  --surface-panel-glass: rgba(22, 22, 28, 0.72);
+  --surface-panel-glass-hover: rgba(28, 28, 36, 0.78);
+  --surface-stage: #18181c;
+  --surface-elevated: rgba(30, 30, 38, 0.85);
+  --surface-overlay: rgba(6, 6, 8, 0.88);
+
+  /* Text */
+  --text-primary: #f0ece4;
+  --text-secondary: #a8a29e;
+  --text-tertiary: #6b6560;
+  --text-inverse: #0a0a0c;
+
+  /* Accents */
+  --accent-primary: #c8a96e;
+  --accent-primary-hover: #d4b87a;
+  --accent-primary-muted: rgba(200, 169, 110, 0.18);
+  --accent-secondary: #5b8a82;
+  --accent-secondary-hover: #6b9a92;
+  --accent-secondary-muted: rgba(91, 138, 130, 0.18);
+
+  /* Signals */
+  --signal-active: #5b8a82;
+  --signal-success: #6b9a72;
+  --signal-warning: #c87a4e;
+  --signal-danger: #c85a5a;
+  --signal-info: #7a8ac8;
+
+  /* Borders */
+  --border-subtle: rgba(240, 236, 228, 0.08);
+  --border-default: rgba(240, 236, 228, 0.12);
+  --border-strong: rgba(240, 236, 228, 0.20);
+  --border-accent: rgba(200, 169, 110, 0.30);
+  --border-glow: rgba(91, 138, 130, 0.25);
+
+  /* Glass */
+  --glass-blur: 24px;
+  --glass-blur-heavy: 40px;
+  --glass-border: 1px solid rgba(240, 236, 228, 0.06);
+  --glass-highlight: inset 0 1px 0 0 rgba(240, 236, 228, 0.04);
+  --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), 0 2px 8px rgba(0, 0, 0, 0.2);
+
+  /* Focus */
+  --focus-ring: 0 0 0 2px var(--accent-secondary), 0 0 0 4px rgba(91, 138, 130, 0.25);
+  --focus-ring-inset: inset 0 0 0 2px var(--accent-secondary);
+}

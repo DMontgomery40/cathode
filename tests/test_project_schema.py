@@ -1,4 +1,6 @@
-from core.project_schema import backfill_plan, normalize_brief
+from pathlib import Path
+
+from core.project_schema import backfill_plan, infer_composition_mode, normalize_brief
 
 
 def test_normalize_brief_defaults_and_fallbacks():
@@ -69,6 +71,7 @@ def test_render_profile_defaulting_preserves_partial_override():
     assert render_profile["aspect_ratio"] == "16:9"
     assert render_profile["width"] == 1664
     assert render_profile["height"] == 928
+    assert render_profile["render_backend"] == "ffmpeg"
 
 
 def test_backfill_plan_preserves_video_scene_metadata():
@@ -101,6 +104,126 @@ def test_backfill_plan_preserves_video_scene_metadata():
     assert scene["video_trim_end"] == 14.0
     assert scene["video_playback_speed"] == 1.25
     assert scene["video_hold_last_frame"] is False
+
+
+def test_backfill_plan_preserves_motion_scene_metadata():
+    plan = backfill_plan(
+        {
+            "meta": {
+                "project_name": "motion_demo",
+                "brief": {
+                    "project_name": "motion_demo",
+                    "source_material": "Prompt stack demo",
+                    "composition_mode": "motion_only",
+                },
+            },
+            "scenes": [
+                {
+                    "title": "Prompt ladder",
+                    "narration": "Show prompts calling prompts.",
+                    "scene_type": "motion",
+                    "motion": {
+                        "template_id": "bullet_stack",
+                        "props": {
+                            "headline": "Prompts on prompts",
+                            "bullets": ["One prompt", "Many agents", "Final render"],
+                        },
+                        "preview_path": "projects/motion_demo/previews/motion_scene.mp4",
+                        "rationale": "Text-first beat",
+                    },
+                }
+            ],
+        }
+    )
+
+    scene = plan["scenes"][0]
+    assert scene["scene_type"] == "motion"
+    assert scene["motion"]["template_id"] == "bullet_stack"
+    assert scene["motion"]["props"]["headline"] == "Prompts on prompts"
+    assert scene["motion"]["props"]["bullets"] == ["One prompt", "Many agents", "Final render"]
+    assert scene["motion"]["preview_path"] == "projects/motion_demo/previews/motion_scene.mp4"
+    assert plan["meta"]["render_profile"]["render_backend"] == "remotion"
+
+
+def test_infer_composition_mode_defaults_to_hybrid_for_demo_context():
+    mode = infer_composition_mode(
+        {
+            "project_name": "demo_run",
+            "source_material": "Prompt notes",
+        },
+        agent_demo_profile={"workspace_path": "/tmp/workspace"},
+    )
+
+    assert mode == "hybrid"
+
+
+def test_backfill_plan_heals_same_project_absolute_asset_paths(tmp_path):
+    project_dir = tmp_path / "demo_project"
+    images_dir = project_dir / "images"
+    audio_dir = project_dir / "audio"
+    previews_dir = project_dir / "previews"
+    images_dir.mkdir(parents=True)
+    audio_dir.mkdir(parents=True)
+    previews_dir.mkdir(parents=True)
+    image_path = images_dir / "scene_000.png"
+    audio_path = audio_dir / "scene_000.wav"
+    preview_path = previews_dir / "preview_scene_000.mp4"
+    video_path = project_dir / "demo_project.mp4"
+    for path in (image_path, audio_path, preview_path, video_path):
+        path.write_bytes(b"demo")
+
+    old_root = Path("/tmp/other_checkout/projects/demo_project")
+    plan = backfill_plan(
+        {
+            "meta": {
+                "project_name": "demo_project",
+                "video_path": str(old_root / "demo_project.mp4"),
+            },
+            "scenes": [
+                {
+                    "image_path": str(old_root / "images" / "scene_000.png"),
+                    "audio_path": str(old_root / "audio" / "scene_000.wav"),
+                    "preview_path": str(old_root / "previews" / "preview_scene_000.mp4"),
+                }
+            ],
+        },
+        base_dir=project_dir,
+    )
+
+    scene = plan["scenes"][0]
+    assert scene["image_path"] == str(image_path.resolve())
+    assert scene["audio_path"] == str(audio_path.resolve())
+    assert scene["preview_path"] == str(preview_path.resolve())
+    assert plan["meta"]["video_path"] == str(video_path.resolve())
+
+
+def test_backfill_plan_clears_unhealed_same_project_asset_paths(tmp_path):
+    project_dir = tmp_path / "demo_project"
+    project_dir.mkdir()
+    old_root = Path("/tmp/other_checkout/projects/demo_project")
+
+    plan = backfill_plan(
+        {
+            "meta": {
+                "project_name": "demo_project",
+                "video_path": str(old_root / "demo_project.mp4"),
+            },
+            "scenes": [
+                {
+                    "image_path": str(old_root / "images" / "scene_000.png"),
+                    "audio_path": str(old_root / "audio" / "scene_000.wav"),
+                    "preview_path": str(old_root / "previews" / "preview_scene_000.mp4"),
+                }
+            ],
+        },
+        base_dir=project_dir,
+    )
+
+    scene = plan["scenes"][0]
+    assert scene["image_path"] is None
+    assert scene["audio_path"] is None
+    assert scene["preview_path"] is None
+    assert plan["meta"]["video_path"] is None
 
 
 def test_backfill_plan_adds_image_profile_defaults_and_compatibility():
@@ -202,7 +325,10 @@ def test_normalize_brief_preserves_visual_source_strategy_and_footage_notes():
     assert brief["footage_manifest"][0]["id"] == "hero_capture"
     assert brief["footage_manifest"][0]["review_status"] == "warn"
     assert brief["style_reference_summary"] == "Muted cinematic grade, premium editorial finish."
-    assert brief["style_reference_paths"] == ["/tmp/ref1.png", "/tmp/ref2.jpg"]
+    assert brief["style_reference_paths"] == [
+        str(Path("/tmp/ref1.png").resolve()),
+        str(Path("/tmp/ref2.jpg").resolve()),
+    ]
 
 
 def test_normalize_brief_resolves_relative_footage_paths_from_base_dir(tmp_path):

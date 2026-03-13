@@ -5,6 +5,7 @@ from __future__ import annotations
 import importlib.util
 import os
 import platform
+import re
 import shutil
 from pathlib import Path
 
@@ -13,6 +14,8 @@ from .project_schema import default_image_profile, default_tts_profile, default_
 REPO_ROOT = Path(__file__).resolve().parent.parent
 PROJECTS_DIR = REPO_ROOT / "projects"
 PROJECTS_DIR.mkdir(exist_ok=True)
+_KOKORO_VOICE_PATTERN = re.compile(r"^[ab][fm]_[a-z0-9]+$")
+_OPENAI_TTS_VOICES = {"alloy", "ash", "ballad", "coral", "echo", "fable", "nova", "onyx", "sage", "shimmer"}
 
 
 def check_api_keys() -> dict[str, bool]:
@@ -118,12 +121,31 @@ def default_local_video_generation_model() -> str:
     return str(os.getenv("CATHODE_LOCAL_VIDEO_MODEL") or "").strip()
 
 
+def remotion_available() -> bool:
+    """Return whether the local frontend workspace has a runnable Remotion toolchain."""
+    frontend_dir = REPO_ROOT / "frontend"
+    return bool(
+        shutil.which("node")
+        and (frontend_dir / "node_modules" / "remotion" / "package.json").exists()
+        and (frontend_dir / "node_modules" / "@remotion" / "renderer" / "package.json").exists()
+        and (frontend_dir / "scripts").exists()
+    )
+
+
 def available_video_generation_providers() -> list[str]:
     """Return supported video-generation providers in UI preference order."""
     providers = ["manual"]
     if local_video_generation_available():
         providers.insert(0, "local")
     return providers
+
+
+def available_render_backends() -> list[str]:
+    """Return supported render backends for the current local toolchain."""
+    backends = ["ffmpeg"]
+    if remotion_available():
+        backends.append("remotion")
+    return backends
 
 
 def choose_llm_provider(preferred: str | None = None) -> str:
@@ -175,6 +197,13 @@ def resolve_tts_profile(profile: dict | None = None) -> dict:
     if provider not in available:
         provider = "kokoro"
     resolved["provider"] = provider
+    voice = str(resolved.get("voice") or "").strip()
+    if provider == "kokoro":
+        resolved["voice"] = voice if _KOKORO_VOICE_PATTERN.match(voice) else str(default_tts_profile()["voice"])
+    elif provider == "elevenlabs":
+        resolved["voice"] = "Bella" if not voice or _KOKORO_VOICE_PATTERN.match(voice) else voice
+    elif provider == "openai":
+        resolved["voice"] = voice if voice in _OPENAI_TTS_VOICES else "nova"
     return resolved
 
 
@@ -187,7 +216,7 @@ def resolve_video_profile(profile: dict | None = None) -> dict:
     provider = str(resolved.get("provider") or "manual").strip().lower()
     if provider == "local" and not local_video_generation_available():
         provider = "manual"
-    if provider not in {"manual", "local"}:
+    if provider not in {"manual", "local", "agent"}:
         provider = "manual"
     resolved["provider"] = provider
     resolved["generation_model"] = str(

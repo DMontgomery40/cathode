@@ -30,7 +30,7 @@ def normalize_render_profile(render_profile: dict[str, Any] | None = None) -> di
         "width": TARGET_WIDTH,
         "height": TARGET_HEIGHT,
         "fps": DEFAULT_FPS,
-        "scene_types": ["image", "video"],
+        "scene_types": ["image", "video", "motion"],
         "video_encoder": "auto",
         "prefer_gpu": True,
     }
@@ -46,10 +46,10 @@ def normalize_render_profile(render_profile: dict[str, Any] | None = None) -> di
 
     scene_types = profile.get("scene_types")
     if not isinstance(scene_types, list) or not scene_types:
-        scene_types = ["image", "video"]
+        scene_types = ["image", "video", "motion"]
     profile["scene_types"] = [str(item).strip().lower() for item in scene_types if str(item).strip()]
     if not profile["scene_types"]:
-        profile["scene_types"] = ["image", "video"]
+        profile["scene_types"] = ["image", "video", "motion"]
 
     if profile["aspect_ratio"] != TARGET_ASPECT_RATIO:
         raise ValueError(f"Unsupported aspect_ratio={profile['aspect_ratio']!r}. v1 only supports 16:9.")

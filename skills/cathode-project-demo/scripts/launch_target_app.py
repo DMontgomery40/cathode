@@ -41,23 +41,50 @@ def _wait_for_url(url: str, timeout_seconds: float) -> None:
     raise TimeoutError(f"Timed out waiting for {url}")
 
 
+def _process_group_running(pid: int) -> bool:
+    if os.name == "posix":
+        completed = subprocess.run(
+            ["ps", "-o", "stat=", "-p", str(pid)],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        status = (completed.stdout or "").strip()
+        if completed.returncode != 0 or not status:
+            return False
+        return not status.startswith("Z")
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
+
+
 def _stop_process_group(pid: int) -> None:
     try:
         if os.name == "posix":
-            os.killpg(pid, signal.SIGTERM)
+            try:
+                os.killpg(pid, signal.SIGTERM)
+            except PermissionError:
+                os.kill(pid, signal.SIGTERM)
         else:
             os.kill(pid, signal.SIGTERM)
-    except ProcessLookupError:
+    except (ProcessLookupError, PermissionError):
         return
 
 
 def _kill_process_group(pid: int) -> None:
     try:
         if os.name == "posix":
-            os.killpg(pid, signal.SIGKILL)
+            try:
+                os.killpg(pid, signal.SIGKILL)
+            except PermissionError:
+                os.kill(pid, signal.SIGKILL)
         else:
             os.kill(pid, signal.SIGKILL)
-    except ProcessLookupError:
+    except (ProcessLookupError, PermissionError):
         return
 
 
@@ -73,6 +100,21 @@ def _cleanup_failed_launch(process: subprocess.Popen[bytes]) -> None:
             pass
 
 
+def _stop_pid_group(pid: int) -> None:
+    _stop_process_group(pid)
+    deadline = time.time() + 5
+    while time.time() < deadline:
+        if not _process_group_running(pid):
+            return
+        time.sleep(0.1)
+    _kill_process_group(pid)
+    deadline = time.time() + 2
+    while time.time() < deadline:
+        if not _process_group_running(pid):
+            return
+        time.sleep(0.1)
+
+
 def main() -> int:
     args = parse_args()
     session_path = Path(args.session_json).expanduser().resolve()
@@ -86,12 +128,14 @@ def main() -> int:
         state = json.loads(state_path.read_text(encoding="utf-8"))
         pid = int(state.get("pid") or 0)
         if pid > 0:
-            _stop_process_group(pid)
+            _stop_pid_group(pid)
         print(json.dumps({"status": "stopped", "pid": pid, "launch_state_path": str(state_path)}, indent=2))
         return 0
 
     launch_command = str(session.get("launch_command") or "").strip()
     expected_url = str(session.get("expected_url") or session.get("app_url") or "").strip()
+    if launch_command and not expected_url:
+        raise ValueError("expected_url is required when launching the target app locally.")
     log_path = Path(session["artifacts"]["reports_dir"]) / "launch.log"
     log_path.parent.mkdir(parents=True, exist_ok=True)
 

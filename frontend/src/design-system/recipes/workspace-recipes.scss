@@ -1,0 +1,129 @@
+.workspace-canvas {
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding: var(--space-6);
+}
+
+.workspace-canvas[data-size='compact'] {
+  max-width: 68rem;
+}
+
+.workspace-canvas[data-size='wide'] {
+  max-width: 92rem;
+}
+
+.workspace-canvas[data-size='full'] {
+  max-width: none;
+}
+
+.workspace-canvas__inner {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+
+.workspace-grid {
+  display: grid;
+  gap: var(--space-6);
+  align-items: start;
+  min-height: 0;
+}
+
+.workspace-grid[data-layout='split'] {
+  grid-template-columns: minmax(0, 1fr) minmax(18rem, var(--workspace-aside-width, 22rem));
+}
+
+.workspace-grid[data-layout='stack'] {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.workspace-main,
+.workspace-aside,
+.workspace-panel-stack {
+  min-width: 0;
+  min-height: 0;
+}
+
+.workspace-panel-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.workspace-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  gap: var(--space-4);
+}
+
+.workspace-dual-panel-grid {
+  display: grid;
+  gap: var(--space-4);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+}
+
+.workspace-hero-grid {
+  display: grid;
+  gap: var(--space-6);
+  grid-template-columns: minmax(0, 1.6fr) minmax(20rem, 0.9fr);
+  align-items: start;
+}
+
+.workspace-empty {
+  display: flex;
+  min-height: 18rem;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-4);
+  padding: var(--space-8);
+  text-align: center;
+}
+
+.workspace-eyebrow {
+  margin: 0;
+  color: var(--text-tertiary);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.workspace-panel-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+.workspace-panel-title {
+  margin: 0;
+  color: var(--text-primary);
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  font-weight: var(--weight-semibold);
+}
+
+.workspace-panel-copy {
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+}
+
+@media (max-width: 1180px) {
+  .workspace-grid[data-layout='split'],
+  .workspace-hero-grid,
+  .workspace-dual-panel-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 840px) {
+  .workspace-canvas {
+    padding: var(--space-4);
+  }
+}

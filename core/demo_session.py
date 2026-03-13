@@ -76,6 +76,10 @@ def build_live_demo_session(
     if not launch and not str(app_url or "").strip():
         launch = str(infer_launch_command(root) or "").strip()
     resolved_expected_url = str(expected_url or app_url or infer_expected_url(root) or "").strip()
+    if launch and not resolved_expected_url:
+        raise ValueError(
+            "An expected_url is required when Cathode launches the target app locally."
+        )
 
     artifacts = {
         "root": str(bundle_root),

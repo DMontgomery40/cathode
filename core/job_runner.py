@@ -16,10 +16,13 @@ from uuid import uuid4
 from .pipeline_service import (
     create_project_from_brief_service,
     generate_project_assets_service,
+    prepare_project_execution_profiles,
     rebuild_storyboard_service,
     render_project_service,
 )
+from .agent_demo import build_agent_demo_prompt, choose_agent_cli, run_agent_demo_cli
 from .project_store import collect_project_artifacts, ensure_project_dir, load_plan, save_plan
+from .project_schema import normalize_agent_demo_profile
 from .runtime import PROJECTS_DIR
 
 JOB_DIR_NAME = ".cathode/jobs"
@@ -100,18 +103,32 @@ def find_job(job_id: str, project_name: str | None = None) -> tuple[Path, dict[s
 def make_job_response(job: dict[str, Any]) -> dict[str, Any]:
     """Return a compact, tool-friendly job response."""
     result = job.get("result") if isinstance(job.get("result"), dict) else {}
+    request = job.get("request") if isinstance(job.get("request"), dict) else {}
+    error = job.get("error") if isinstance(job.get("error"), dict) else job.get("error")
     return {
         "status": str(job.get("status") or JOB_STATUS_FAILED),
         "job_id": str(job.get("job_id") or ""),
         "project_name": str(job.get("project_name") or ""),
         "project_dir": str(job.get("project_dir") or ""),
+        "kind": str(request.get("kind") or ""),
         "current_stage": str(job.get("current_stage") or "queued"),
         "retryable": bool(result.get("retryable", job.get("status") in {JOB_STATUS_FAILED, JOB_STATUS_PARTIAL})),
         "suggestion": str(result.get("suggestion") or job.get("suggestion") or ""),
         "requested_stage": str(job.get("requested_stage") or ""),
+        "created_utc": str(job.get("created_utc") or ""),
+        "updated_utc": str(job.get("updated_utc") or ""),
         "pid": job.get("pid"),
+        "log_path": str(job.get("log_path") or ""),
+        "request": request,
         "result": result,
-        "error": job.get("error"),
+        "error": error,
+        "progress": job.get("progress"),
+        "progress_kind": job.get("progress_kind"),
+        "progress_label": str(job.get("progress_label") or ""),
+        "progress_detail": str(job.get("progress_detail") or ""),
+        "progress_scene_id": job.get("progress_scene_id"),
+        "progress_scene_uid": job.get("progress_scene_uid"),
+        "progress_status": str(job.get("progress_status") or ""),
     }
 
 
@@ -126,9 +143,11 @@ def create_job(
     requested_stage: str,
     request: dict[str, Any],
     overwrite: bool = False,
+    project_dir: Path | None = None,
 ) -> tuple[Path, dict[str, Any]]:
     """Create a persisted job record and reserve its project directory."""
-    project_dir = ensure_project_dir(project_name, overwrite=overwrite)
+    project_dir = Path(project_dir) if project_dir is not None else ensure_project_dir(project_name, overwrite=overwrite)
+    project_dir.mkdir(parents=True, exist_ok=True)
     job_id = str(uuid4())
     job = {
         "job_id": job_id,
@@ -145,6 +164,13 @@ def create_job(
         "error": None,
         "suggestion": "",
         "log_path": str(_log_file_path(project_dir, job_id)),
+        "progress": 0.0,
+        "progress_kind": "",
+        "progress_label": "",
+        "progress_detail": "",
+        "progress_scene_id": None,
+        "progress_scene_uid": None,
+        "progress_status": "",
     }
     job_file = job_file_path(project_dir, job_id)
     write_job_file(job_file, job)
@@ -232,6 +258,22 @@ def _mark_running(job_file: Path, current_stage: str) -> dict[str, Any]:
     return update_job(job_file, status=JOB_STATUS_RUNNING, current_stage=current_stage)
 
 
+def _update_job_progress(job_file: Path, payload: dict[str, Any]) -> dict[str, Any]:
+    allowed = {
+        "progress",
+        "progress_kind",
+        "progress_label",
+        "progress_detail",
+        "progress_scene_id",
+        "progress_scene_uid",
+        "progress_status",
+    }
+    changes = {key: value for key, value in payload.items() if key in allowed}
+    if not changes:
+        return read_job_file(job_file)
+    return update_job(job_file, **changes)
+
+
 def _set_signal_handlers(job_file: Path) -> None:
     global _ACTIVE_JOB_FILE
     _ACTIVE_JOB_FILE = job_file
@@ -261,6 +303,9 @@ def _finish_job(job_file: Path, *, status: str, result: dict[str, Any], error: d
         result=result,
         error=error,
         suggestion=str(result.get("suggestion") or ""),
+        progress=1.0 if status in {JOB_STATUS_SUCCEEDED, JOB_STATUS_PARTIAL} else read_job_file(job_file).get("progress", 0.0),
+        progress_kind="assets" if result.get("current_stage") == "assets" else result.get("current_stage", ""),
+        progress_status="done" if status in {JOB_STATUS_SUCCEEDED, JOB_STATUS_PARTIAL} else "",
     )
 
 
@@ -271,6 +316,7 @@ def _run_make_video_job(job_file: Path, job: dict[str, Any]) -> dict[str, Any]:
     provider = request.get("provider")
     image_profile = request.get("image_profile")
     video_profile = request.get("video_profile")
+    agent_demo_profile = request.get("agent_demo_profile")
     tts_profile = request.get("tts_profile")
     render_profile = request.get("render_profile")
     run_until = str(request.get("run_until") or "render")
@@ -284,6 +330,7 @@ def _run_make_video_job(job_file: Path, job: dict[str, Any]) -> dict[str, Any]:
         provider=provider,
         image_profile=image_profile,
         video_profile=video_profile,
+        agent_demo_profile=agent_demo_profile,
         tts_profile=tts_profile,
         render_profile=render_profile,
     )
@@ -303,6 +350,7 @@ def _run_make_video_job(job_file: Path, job: dict[str, Any]) -> dict[str, Any]:
             regenerate_images=bool(request.get("regenerate_images")),
             regenerate_videos=bool(request.get("regenerate_videos")),
             regenerate_audio=bool(request.get("regenerate_audio")),
+            progress_callback=lambda payload: _update_job_progress(job_file, payload),
         )
         result["current_stage"] = "assets"
         result["assets"] = assets_result
@@ -370,6 +418,7 @@ def _run_rerun_stage_job(job_file: Path, job: dict[str, Any]) -> dict[str, Any]:
             regenerate_images=force,
             regenerate_videos=force,
             regenerate_audio=force,
+            progress_callback=lambda payload: _update_job_progress(job_file, payload),
         )
         result["assets"] = assets_result
         if (
@@ -414,6 +463,97 @@ def _run_rerun_stage_job(job_file: Path, job: dict[str, Any]) -> dict[str, Any]:
     return _finish_job(job_file, status=status, result=result)
 
 
+def _run_agent_demo_job(job_file: Path, job: dict[str, Any]) -> dict[str, Any]:
+    request = dict(job.get("request") or {})
+    project_dir = Path(job["project_dir"])
+    project_name = str(job.get("project_name") or project_dir.name)
+    preferred_agent = str(request.get("preferred_agent") or "").strip().lower() or None
+    scene_uids = [
+        str(value).strip()
+        for value in (request.get("scene_uids") or [])
+        if str(value).strip()
+    ]
+    workspace_path = str(request.get("workspace_path") or "").strip() or None
+    app_url = str(request.get("app_url") or "").strip() or None
+    launch_command = str(request.get("launch_command") or "").strip() or None
+    expected_url = str(request.get("expected_url") or "").strip() or None
+    run_until = str(request.get("run_until") or "assets").strip().lower() or "assets"
+
+    selected_agent = choose_agent_cli(preferred_agent)
+    if not selected_agent:
+        return _finish_job(
+            job_file,
+            status=JOB_STATUS_FAILED,
+            result={"retryable": False, "suggestion": "Install Codex CLI or Claude Code to use Agent Demo."},
+            error={"message": "No supported agent CLI is installed. Expected `codex` or `claude` in PATH."},
+        )
+
+    agent_name, agent_path = selected_agent
+    artifacts_dir = project_dir / ".cathode" / "agent_demo" / str(job.get("job_id") or "latest")
+    artifacts_dir.mkdir(parents=True, exist_ok=True)
+    prompt_path = artifacts_dir / "prompt.txt"
+
+    update_job(
+        job_file,
+        status=JOB_STATUS_RUNNING,
+        current_stage="agent_demo",
+        progress_kind="agent_demo",
+        progress_label="Preparing agent demo prompt",
+        progress_detail=f"{project_name}: {len(scene_uids) if scene_uids else 'all'} video scene target(s)",
+        progress_status="building_prompt",
+    )
+    prompt = build_agent_demo_prompt(
+        project_dir=project_dir,
+        scene_uids=scene_uids or None,
+        workspace_path=workspace_path,
+        app_url=app_url,
+        launch_command=launch_command,
+        expected_url=expected_url,
+        run_until=run_until,
+    )
+
+    update_job(
+        job_file,
+        status=JOB_STATUS_RUNNING,
+        current_stage="agent_demo",
+        progress_kind="agent_demo",
+        progress_label=f"Running {agent_name} agent demo",
+        progress_detail=f"Workspace: {workspace_path or project_dir}",
+        progress_status="running_agent",
+        result={
+            "agent": agent_name,
+            "agent_path": agent_path,
+            "prompt_path": str(prompt_path),
+            "artifacts_dir": str(artifacts_dir),
+            "scene_uids": scene_uids,
+        },
+    )
+
+    run_agent_demo_cli(
+        agent_name=agent_name,
+        prompt=prompt,
+        prompt_path=prompt_path,
+        project_dir=project_dir,
+        workspace_path=workspace_path,
+    )
+
+    refreshed_plan = load_plan(project_dir)
+    scene_count = len(refreshed_plan.get("scenes", [])) if isinstance(refreshed_plan, dict) else 0
+    result = {
+        "retryable": False,
+        "suggestion": "",
+        "current_stage": "agent_demo",
+        "agent": agent_name,
+        "prompt_path": str(prompt_path),
+        "artifacts_dir": str(artifacts_dir),
+        "scene_uids": scene_uids,
+        "scene_count": scene_count,
+        "run_until": run_until,
+        "artifacts": collect_project_artifacts(project_dir),
+    }
+    return _finish_job(job_file, status=JOB_STATUS_SUCCEEDED, result=result)
+
+
 def run_job_file(job_file: Path) -> dict[str, Any]:
     """Execute a persisted job in the current process."""
     _set_signal_handlers(job_file)
@@ -425,6 +565,8 @@ def run_job_file(job_file: Path) -> dict[str, Any]:
             return _run_make_video_job(job_file, job)
         if kind == "rerun_stage":
             return _run_rerun_stage_job(job_file, job)
+        if kind == "agent_demo":
+            return _run_agent_demo_job(job_file, job)
         return _finish_job(
             job_file,
             status=JOB_STATUS_FAILED,
@@ -448,6 +590,7 @@ def create_make_video_job(
     provider: str | None = None,
     image_profile: dict[str, Any] | None = None,
     video_profile: dict[str, Any] | None = None,
+    agent_demo_profile: dict[str, Any] | None = None,
     tts_profile: dict[str, Any] | None = None,
     render_profile: dict[str, Any] | None = None,
     overwrite: bool = False,
@@ -455,18 +598,26 @@ def create_make_video_job(
     fps: int | None = None,
 ) -> dict[str, Any]:
     """Create and start a background make-video job."""
+    normalized_brief, normalized_video_profile, normalized_render_profile = prepare_project_execution_profiles(
+        brief=brief,
+        video_profile=video_profile,
+        render_profile=render_profile,
+        agent_demo_profile=agent_demo_profile,
+    )
+    normalized_agent_demo_profile = normalize_agent_demo_profile(agent_demo_profile)
     job_file, _ = create_job(
         project_name=project_name,
         requested_stage=run_until,
         overwrite=overwrite,
         request={
             "kind": "make_video",
-            "brief": brief,
+            "brief": normalized_brief,
             "provider": provider,
             "image_profile": image_profile,
-            "video_profile": video_profile,
+            "video_profile": normalized_video_profile,
+            "agent_demo_profile": normalized_agent_demo_profile or None,
             "tts_profile": tts_profile,
-            "render_profile": render_profile,
+            "render_profile": normalized_render_profile,
             "run_until": run_until,
             "output_filename": output_filename,
             "fps": fps,
@@ -523,6 +674,7 @@ def create_rerun_stage_job(
         project_name=project_name,
         requested_stage=stage,
         overwrite=False,
+        project_dir=project_dir,
         request={
             "kind": "rerun_stage",
             "stage": stage,
@@ -530,6 +682,72 @@ def create_rerun_stage_job(
             "provider": provider,
             "output_filename": output_filename,
             "fps": fps,
+        },
+    )
+    job = start_job_process(job_file)
+    return make_job_response(job)
+
+
+def create_agent_demo_job(
+    *,
+    project_name: str,
+    scene_uids: list[str] | None = None,
+    preferred_agent: str | None = None,
+    workspace_path: str | None = None,
+    app_url: str | None = None,
+    launch_command: str | None = None,
+    expected_url: str | None = None,
+    run_until: str = "assets",
+) -> dict[str, Any]:
+    """Create and start an agent-driven demo workflow job for an existing project."""
+    project_dir = PROJECTS_DIR / project_name
+    if not project_dir.exists() or not (project_dir / "plan.json").exists():
+        return {
+            "status": "error",
+            "job_id": "",
+            "project_name": project_name,
+            "project_dir": str(project_dir),
+            "current_stage": "unknown",
+            "retryable": False,
+            "suggestion": "Create the project first or choose an existing one.",
+            "requested_stage": "agent_demo",
+            "pid": None,
+            "result": {},
+            "error": {"message": f"Project not found: {project_name}"},
+        }
+
+    plan = load_plan(project_dir)
+    if not plan:
+        return {
+            "status": "error",
+            "job_id": "",
+            "project_name": project_name,
+            "project_dir": str(project_dir),
+            "current_stage": "unknown",
+            "retryable": False,
+            "suggestion": "Repair the project's plan.json before retrying.",
+            "requested_stage": "agent_demo",
+            "pid": None,
+            "result": {},
+            "error": {"message": f"Could not load plan.json for project: {project_name}"},
+        }
+    save_plan(project_dir, plan)
+
+    normalized_scene_uids = [str(uid).strip() for uid in (scene_uids or []) if str(uid).strip()]
+    job_file, _ = create_job(
+        project_name=project_name,
+        requested_stage="agent_demo",
+        overwrite=False,
+        project_dir=project_dir,
+        request={
+            "kind": "agent_demo",
+            "scene_uids": normalized_scene_uids,
+            "preferred_agent": preferred_agent,
+            "workspace_path": workspace_path,
+            "app_url": app_url,
+            "launch_command": launch_command,
+            "expected_url": expected_url,
+            "run_until": run_until,
         },
     )
     job = start_job_process(job_file)
