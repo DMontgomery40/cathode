@@ -65,6 +65,33 @@ Use the packaged `capture_live_demo.py` script for deterministic browser capture
 - Preserve the local/manual visual path when cloud image generation is unavailable.
 - Do not turn the UI into a giant provider control panel.
 
+## Frontend Parity Rules
+
+- Do not call the React/FastAPI app "done" or "parity" unless the real user-facing controls are wired, placed sensibly, and verified in the browser.
+- A feature does not count if the button exists in code but is hidden in an unrelated panel, route, collapsed section, or header slot that users would not reasonably use for that task.
+- Scene-level work must stay in the Scenes workspace. Image generation, image editing, audio generation, preview generation, and direct scene media replacement should be accessible from the scene inspector and/or media stage, not only from some distant project page.
+- Project-level media libraries are allowed, but they do not replace the need for scene-level upload/replace controls that actually work.
+- If a route claims Streamlit parity, verify the actual Streamlit affordance exists in the React app with a comparable outcome, not just a vaguely related control somewhere else.
+- Do not treat "backend endpoint exists" or "Playwright route interception passed" as sufficient proof that the feature is genuinely usable.
+
+## Frontend Verification Rules
+
+- For important UI claims, verify in a real browser against the live app, not only with static code inspection.
+- When fixing upload/generation actions, verify the full loop:
+  - trigger control
+  - network request
+  - persisted `plan.json` update
+  - visible UI update in the relevant workspace
+- When fixing layout or placement, verify at realistic desktop widths and at least one narrower width where panels compress or scroll.
+- If a control is moved, update or add browser coverage so the test asserts the new expected location and behavior.
+
+## Operator UX Rules
+
+- Long-running or failure-prone operations need visible operator feedback in the app: pending state, useful error text, and enough context to understand what Cathode tried to do.
+- Prefer showing the effective request parameters for provider-backed actions when they materially affect output quality.
+- Persisted job logs should be surfaced through the product where practical; do not hide them as backend-only artifacts.
+- Unexpected API failures should return structured JSON with a concise operator hint rather than a blank 500 page or generic browser error.
+
 ## Image Actions
 
 These are intentionally different:

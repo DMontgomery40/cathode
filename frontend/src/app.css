@@ -1,0 +1,30 @@
+@import "tailwindcss";
+@import "./design-system/tokens/_colors.scss";
+@import "./design-system/tokens/_spacing.scss";
+@import "./design-system/tokens/_typography.scss";
+@import "./design-system/tokens/_radii.scss";
+@import "./design-system/tokens/_elevation.scss";
+@import "./design-system/tokens/_workspace.scss";
+@import "./design-system/recipes/workspace-recipes.scss";
+@import "./features/scenes/scene-workspace.scss";
+
+@theme {
+  --font-display: 'Bricolage Grotesque', system-ui, sans-serif;
+  --font-body: 'Manrope', system-ui, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+
+  --color-surface-void: var(--surface-void);
+  --color-surface-shell: var(--surface-shell);
+  --color-surface-stage: var(--surface-stage);
+  --color-text-primary: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-tertiary: var(--text-tertiary);
+  --color-accent-primary: var(--accent-primary);
+  --color-accent-secondary: var(--accent-secondary);
+  --color-signal-active: var(--signal-active);
+  --color-signal-success: var(--signal-success);
+  --color-signal-warning: var(--signal-warning);
+  --color-signal-danger: var(--signal-danger);
+  --color-border-subtle: var(--border-subtle);
+  --color-border-default: var(--border-default);
+}

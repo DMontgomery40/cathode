@@ -30,7 +30,7 @@ def normalize_render_profile(render_profile: dict[str, Any] | None = None) -> di
         "width": TARGET_WIDTH,
         "height": TARGET_HEIGHT,
         "fps": DEFAULT_FPS,
-        "scene_types": ["image", "video"],
+        "scene_types": ["image", "video", "motion"],
         "video_encoder": "auto",
         "prefer_gpu": True,
     }
@@ -46,10 +46,10 @@ def normalize_render_profile(render_profile: dict[str, Any] | None = None) -> di
 
     scene_types = profile.get("scene_types")
     if not isinstance(scene_types, list) or not scene_types:
-        scene_types = ["image", "video"]
+        scene_types = ["image", "video", "motion"]
     profile["scene_types"] = [str(item).strip().lower() for item in scene_types if str(item).strip()]
     if not profile["scene_types"]:
-        profile["scene_types"] = ["image", "video"]
+        profile["scene_types"] = ["image", "video", "motion"]
 
     if profile["aspect_ratio"] != TARGET_ASPECT_RATIO:
         raise ValueError(f"Unsupported aspect_ratio={profile['aspect_ratio']!r}. v1 only supports 16:9.")
@@ -133,6 +133,25 @@ def get_media_duration(path: str | Path) -> float | None:
     return _probe_duration(media_path)
 
 
+def resolve_scene_video_path(scene: dict[str, Any]) -> str | None:
+    """Return the playable clip path for video-like scenes."""
+    scene_type = str(scene.get("scene_type") or "image").strip().lower()
+    if scene_type == "motion":
+        motion = scene.get("motion") if isinstance(scene.get("motion"), dict) else {}
+        for candidate in (
+            motion.get("render_path"),
+            motion.get("preview_path"),
+            scene.get("preview_path"),
+        ):
+            value = str(candidate or "").strip()
+            if value and Path(value).exists():
+                return value
+        return None
+
+    value = str(scene.get("video_path") or "").strip()
+    return value or None
+
+
 def get_video_scene_timing(
     scene: dict[str, Any],
     *,
@@ -140,7 +159,7 @@ def get_video_scene_timing(
     audio_duration: float | None = None,
 ) -> dict[str, Any]:
     """Normalize video-scene timing metadata and compute effective durations."""
-    video_path = scene.get("video_path")
+    video_path = resolve_scene_video_path(scene)
     if source_duration is None and video_path and Path(video_path).exists():
         source_duration = get_media_duration(video_path)
 
@@ -274,7 +293,7 @@ def _scene_target_duration(scene: dict[str, Any], default_duration: float) -> tu
         return float(audio_duration or default_duration), True
 
     scene_type = str(scene.get("scene_type") or "image").strip().lower()
-    if scene_type == "video":
+    if scene_type in {"video", "motion"}:
         timing = get_video_scene_timing(scene)
         return float(timing["effective_duration"] or default_duration), False
     return default_duration, False
@@ -360,9 +379,9 @@ def _render_video_scene(
     encoder: str,
 ) -> None:
     scene_id = int(scene.get("id", 0))
-    video_path = scene.get("video_path")
+    video_path = resolve_scene_video_path(scene)
     if not video_path or not Path(video_path).exists():
-        raise ValueError(f"Scene {scene_id}: no video clip found at {video_path!r}")
+        raise ValueError(f"Scene {scene_id}: no playable clip found at {video_path!r}")
 
     source_duration = get_media_duration(video_path)
     timing = get_video_scene_timing(scene, source_duration=source_duration, audio_duration=target_duration)
@@ -456,10 +475,10 @@ def _render_scene_file(
     encoder: str,
 ) -> None:
     scene_type = str(scene.get("scene_type") or "image").strip().lower()
-    if scene_type not in {"image", "video"}:
+    if scene_type not in {"image", "video", "motion"}:
         raise ValueError(
             f"Scene {scene.get('id', 0)} uses unsupported scene_type={scene_type!r}. "
-            "Supported scene types are 'image' and 'video'."
+            "Supported scene types are 'image', 'video', and 'motion'."
         )
 
     output_path.parent.mkdir(parents=True, exist_ok=True)

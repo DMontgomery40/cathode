@@ -89,6 +89,18 @@ def _safe_float(value, fallback: float) -> float:
         return fallback
 
 
+def _normalize_voice_for_provider(provider: str, voice: str) -> str:
+    provider_name = str(provider or "").strip().lower()
+    voice_name = str(voice or "").strip()
+    if provider_name == "kokoro":
+        return voice_name if voice_name in KOKORO_VOICES else DEFAULT_VOICE
+    if provider_name == "elevenlabs":
+        return voice_name or DEFAULT_ELEVENLABS_VOICE
+    if provider_name == "openai":
+        return voice_name or "nova"
+    return voice_name
+
+
 def _normalize_tts_text(text: str) -> str:
     """Normalize a few known brand/style cases for better TTS pronunciation."""
     value = str(text or "")
@@ -164,18 +176,28 @@ def generate_audio(
             print(f"Kokoro TTS failed ({e}), falling back to OpenAI...")
             return _generate_with_openai(text, output_path)
     elif tts_provider == "elevenlabs":
-        return _generate_with_elevenlabs(
-            text=text,
-            output_path=output_path,
-            voice=voice,
-            model_id=elevenlabs_model_id,
-            stability=elevenlabs_stability,
-            similarity_boost=elevenlabs_similarity_boost,
-            style=elevenlabs_style,
-            speed=speed,
-            use_speaker_boost=elevenlabs_use_speaker_boost,
-            apply_text_normalization=elevenlabs_apply_text_normalization,
-        )
+        try:
+            return _generate_with_elevenlabs(
+                text=text,
+                output_path=output_path,
+                voice=voice,
+                model_id=elevenlabs_model_id,
+                stability=elevenlabs_stability,
+                similarity_boost=elevenlabs_similarity_boost,
+                style=elevenlabs_style,
+                speed=speed,
+                use_speaker_boost=elevenlabs_use_speaker_boost,
+                apply_text_normalization=elevenlabs_apply_text_normalization,
+            )
+        except Exception as e:
+            print(f"ElevenLabs TTS failed ({e}), falling back to Kokoro...")
+            return generate_audio(
+                text=text,
+                output_path=output_path,
+                voice=DEFAULT_VOICE,
+                speed=speed or DEFAULT_SPEED,
+                tts_provider="kokoro",
+            )
     elif tts_provider == "chatterbox":
         return _generate_with_chatterbox(text, output_path, exaggeration)
     elif tts_provider == "openai":
@@ -443,7 +465,8 @@ def generate_scene_audio(
     resolved_provider: TTSProvider = (
         requested_provider if requested_provider and apply_scene_overrides else base_provider
     )  # type: ignore[assignment]
-    resolved_voice = str(scene.get("tts_voice") or voice) if apply_scene_overrides else voice
+    requested_voice = str(scene.get("tts_voice") or voice) if apply_scene_overrides else voice
+    resolved_voice = _normalize_voice_for_provider(resolved_provider, requested_voice)
     resolved_speed = _safe_float(scene.get("tts_speed"), speed) if apply_scene_overrides else speed
     resolved_elevenlabs_model_id = (
         str(scene.get("elevenlabs_model_id") or elevenlabs_model_id)
