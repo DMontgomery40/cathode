@@ -3,6 +3,7 @@ import { GlassPanel } from '../../components/primitives/GlassPanel.tsx'
 import { Select } from '../../components/primitives/Select.tsx'
 import { Slider } from '../../components/primitives/Slider.tsx'
 import { TextInput } from '../../components/primitives/TextInput.tsx'
+import { entryDisplayPrice, findCostEntry, type CostCatalog } from '../../lib/costs.ts'
 
 type VoiceOption = { value: string; label: string; description: string }
 
@@ -10,6 +11,7 @@ interface TtsProfilePanelProps {
   profile: Record<string, unknown> | null
   providers: Record<string, string>
   voiceOptions: Record<string, VoiceOption[]>
+  costCatalog?: CostCatalog | null
   saving?: boolean
   disabled?: boolean
   onProfileChange: (patch: Record<string, unknown>) => void
@@ -27,20 +29,46 @@ function asBool(value: unknown, fallback = false): boolean {
   return typeof value === 'boolean' ? value : fallback
 }
 
+function providerModelHint(provider: string, currentModelId: unknown): string {
+  const value = typeof currentModelId === 'string' ? currentModelId.trim() : ''
+  if (provider === 'openai') {
+    return value.startsWith('tts-') ? value : 'tts-1'
+  }
+  if (provider === 'elevenlabs') {
+    return value && !value.startsWith('tts-') ? value : 'eleven_multilingual_v2'
+  }
+  if (provider === 'chatterbox') {
+    return 'resemble-ai/chatterbox'
+  }
+  return ''
+}
+
+function providerCostHint(provider: string): string {
+  if (provider === 'kokoro') return 'free/local'
+  if (provider === 'elevenlabs') return 'paid, model-specific'
+  if (provider === 'openai') return 'paid, model-specific'
+  if (provider === 'chatterbox') return 'paid, model-specific'
+  return ''
+}
+
 export function TtsProfilePanel({
   profile,
   providers,
   voiceOptions,
+  costCatalog,
   saving,
   disabled,
   onProfileChange,
 }: TtsProfilePanelProps) {
+  const currentProfile = profile ?? {}
   const providerOptions = useMemo(
-    () => Object.entries(providers).map(([value, label]) => ({ value, label })),
+    () => Object.entries(providers).map(([value, label]) => {
+      const hint = providerCostHint(value)
+      return { value, label: hint ? `${label} · ${hint}` : label }
+    }),
     [providers],
   )
 
-  const currentProfile = profile ?? {}
   const provider = asString(currentProfile.provider, providerOptions[0]?.value ?? 'kokoro')
   const voice = asString(currentProfile.voice)
   const speed = asNumber(currentProfile.speed, 1.1)
@@ -55,6 +83,13 @@ export function TtsProfilePanel({
     value: item.value,
     label: item.description ? `${item.label} - ${item.description}` : item.label,
   }))
+  const providerModel = providerModelHint(provider, currentProfile.model_id)
+  const providerCostEntry = provider === 'kokoro' ? null : findCostEntry(costCatalog ?? null, {
+    kind: 'tts',
+    provider: provider === 'chatterbox' ? 'replicate' : provider,
+    model: providerModel,
+  })
+  const providerExactCost = entryDisplayPrice(providerCostEntry)
 
   return (
     <GlassPanel variant="default" padding="lg" rounded="lg">
@@ -81,6 +116,9 @@ export function TtsProfilePanel({
           onChange={(event) => onProfileChange({ provider: event.target.value })}
           options={providerOptions}
           disabled={disabled}
+          hint={provider === 'kokoro'
+            ? 'Kokoro stays local and free on this machine.'
+            : 'Provider pricing depends on the selected model. Exact numbers are shown on the active model path below.'}
         />
 
         {provider === 'kokoro' && (
@@ -174,20 +212,32 @@ export function TtsProfilePanel({
               />
               Use speaker boost
             </label>
+            {providerExactCost && (
+              <p className="m-0 text-[var(--text-tertiary)]" style={{ fontSize: 'var(--text-xs)' }}>
+                Current model rate: {providerExactCost}.
+              </p>
+            )}
           </>
         )}
 
         {provider === 'chatterbox' && (
-          <Slider
-            label="Exaggeration"
-            min={0.25}
-            max={2.0}
-            step={0.05}
-            value={exaggeration}
-            onChange={(event) => onProfileChange({ exaggeration: Number(event.currentTarget.value) })}
-            displayValue={exaggeration.toFixed(2)}
-            disabled={disabled}
-          />
+          <>
+            <Slider
+              label="Exaggeration"
+              min={0.25}
+              max={2.0}
+              step={0.05}
+              value={exaggeration}
+              onChange={(event) => onProfileChange({ exaggeration: Number(event.currentTarget.value) })}
+              displayValue={exaggeration.toFixed(2)}
+              disabled={disabled}
+            />
+            {providerExactCost && (
+              <p className="m-0 text-[var(--text-tertiary)]" style={{ fontSize: 'var(--text-xs)' }}>
+                Current model rate: {providerExactCost}.
+              </p>
+            )}
+          </>
         )}
 
         {provider === 'openai' && (
@@ -201,10 +251,10 @@ export function TtsProfilePanel({
             />
             <TextInput
               label="Model"
-              value={asString(currentProfile.model_id, 'gpt-4o-mini-tts')}
+              value={asString(currentProfile.model_id, 'tts-1')}
               onChange={(event) => onProfileChange({ model_id: event.target.value })}
               disabled={disabled}
-              hint="Optional override if you want a specific OpenAI TTS model."
+              hint={providerExactCost ? `Optional override if you want a specific OpenAI TTS model. Current model rate: ${providerExactCost}.` : 'Optional override if you want a specific OpenAI TTS model.'}
             />
           </>
         )}

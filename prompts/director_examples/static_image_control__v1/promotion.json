@@ -1,0 +1,9 @@
+{
+  "id": "static_image_control__v1",
+  "title": "Static Image Control",
+  "intents": [
+    "static_image_control"
+  ],
+  "source_run": "experiments/director_golden/runs/20260314-094926_pure_creative_concept_claude-sonnet-4-6",
+  "promoted_utc": "2026-03-14T09:58:22.615439+00:00"
+}

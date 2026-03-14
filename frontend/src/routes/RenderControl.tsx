@@ -6,7 +6,8 @@ import { ProjectWorkspaceNav } from '../components/composed/ProjectWorkspaceNav.
 import { RenderSettings } from '../features/render/RenderSettings.tsx'
 import { RenderProgress } from '../features/render/RenderProgress.tsx'
 import { ArtifactShelf } from '../features/render/ArtifactShelf.tsx'
-import { usePlan } from '../lib/api/hooks.ts'
+import { CostPanel } from '../features/projects/CostPanel.tsx'
+import { useBootstrap, usePlan, useRemotionManifest } from '../lib/api/hooks.ts'
 import {
   useStartRender,
   useGenerateAssets,
@@ -17,9 +18,9 @@ import {
 } from '../lib/api/scene-hooks.ts'
 import type { Job } from '../lib/api/jobs.ts'
 import { WorkspaceCanvas, WorkspaceGrid, WorkspacePanel } from '../design-system/recipes'
-import { hasProjectMediaPath } from '../lib/media-url.ts'
-import { sceneHasRenderableVisual } from '../lib/scene-media.ts'
+import { sceneHasRenderableAudio, sceneHasRenderableVisual } from '../lib/scene-media.ts'
 import { useInvalidateProjectOnJobCompletion } from '../lib/api/project-job-sync.ts'
+import { PlayerSurface } from '../remotion/PlayerSurface.tsx'
 
 const DEFAULT_OUTPUT_FILENAME = 'final_video.mp4'
 const DEFAULT_FPS = 24
@@ -39,7 +40,11 @@ function resolveTextRenderMode(
 
 export function RenderControl() {
   const { projectId = '' } = useParams<{ projectId: string }>()
+  const { data: bootstrap } = useBootstrap()
   const { data: plan } = usePlan(projectId)
+  const remotionManifest = useRemotionManifest(projectId, {
+    enabled: Boolean(bootstrap?.providers?.remotion_capabilities?.player_available && projectId),
+  })
   const { data: jobs } = useProjectJobs(projectId, { refetchInterval: 2000 })
   const startRender = useStartRender(projectId)
   const genAssets = useGenerateAssets(projectId)
@@ -70,11 +75,7 @@ export function RenderControl() {
 
   // Readiness checks
   const scenesWithVisual = scenes.filter((s) => sceneHasRenderableVisual(projectId, s, renderBackend))
-  const scenesWithAudio = scenes.filter((s) => (
-    typeof s.audio_exists === 'boolean'
-      ? s.audio_exists
-      : hasProjectMediaPath(projectId, s.audio_path)
-  ))
+  const scenesWithAudio = scenes.filter((s) => sceneHasRenderableAudio(projectId, s))
   const allReady = scenes.length > 0 && scenesWithVisual.length === scenes.length && scenesWithAudio.length === scenes.length
 
   const renderJobs = [...(jobs ?? [])]
@@ -200,6 +201,11 @@ export function RenderControl() {
                 eyebrow="Output"
                 copy="The final render should stay front and center, with settings and gating details acting like a sidecar instead of overwhelming the canvas."
               >
+                {remotionManifest.data && (
+                  <div style={{ marginBottom: 'var(--space-4)' }}>
+                    <PlayerSurface manifest={remotionManifest.data} height={420} />
+                  </div>
+                )}
                 <ArtifactShelf
                   videoPath={plan?.meta?.video_path}
                   videoExists={typeof plan?.meta?.video_exists === 'boolean' ? plan.meta.video_exists : undefined}
@@ -268,6 +274,8 @@ export function RenderControl() {
                   </button>
                 </div>
               </WorkspacePanel>
+
+              <CostPanel plan={plan} />
 
               <RenderSettings
                 outputFilename={outputFilename}

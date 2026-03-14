@@ -342,6 +342,22 @@ def _run_make_video_job(job_file: Path, job: dict[str, Any]) -> dict[str, Any]:
         "plan_path": str(project_dir / "plan.json"),
         "artifacts": collect_project_artifacts(project_dir),
     }
+    cost_estimate = plan.get("meta", {}).get("cost_estimate") if isinstance(plan.get("meta", {}), dict) else {}
+    if (
+        run_until in {"assets", "render"}
+        and isinstance(cost_estimate, dict)
+        and str(cost_estimate.get("status") or "") == "over_budget"
+    ):
+        result["retryable"] = True
+        result["suggestion"] = (
+            "Estimated paid spend exceeds the current budget. "
+            "Review the cost breakdown, then rerun assets/render manually if you want to proceed."
+        )
+        result["cost_estimate"] = cost_estimate
+        result["confirmation_required"] = True
+        result["artifacts"] = collect_project_artifacts(project_dir)
+        result["plan_path"] = str(project_dir / "plan.json")
+        return _finish_job(job_file, status=JOB_STATUS_PARTIAL, result=result)
 
     if run_until in {"assets", "render"}:
         _mark_running(job_file, "assets")

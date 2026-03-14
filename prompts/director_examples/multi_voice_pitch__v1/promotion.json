@@ -1,0 +1,9 @@
+{
+  "id": "multi_voice_pitch__v1",
+  "title": "Multi Voice Pitch",
+  "intents": [
+    "multi_voice_pitch"
+  ],
+  "source_run": "experiments/director_golden/runs/20260314-094638_multi_voice_pitch_claude-sonnet-4-6",
+  "promoted_utc": "2026-03-14T09:58:21.627193+00:00"
+}

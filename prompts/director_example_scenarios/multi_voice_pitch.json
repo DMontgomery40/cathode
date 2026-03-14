@@ -1,0 +1,14 @@
+{
+  "project_name": "multi_voice_pitch",
+  "source_mode": "ideas_notes",
+  "video_goal": "Convince a skeptical partner that low-friction business videos are easy to sell across many local industries.",
+  "audience": "A smart but unconvinced spouse who needs to see the business case click emotionally.",
+  "source_material": "Make this feel like a premium narrated pitch with Bella as the spine, but use multiple recurring commercial voices for the example businesses. Show several verticals, what their ads sound like, what they pay today, and why voice cloning plus a tuned pipeline makes fulfillment easy now.",
+  "target_length_minutes": 3.0,
+  "tone": "friendly, persuasive, funny, emotionally smart",
+  "visual_style": "premium commercial pitch deck with cinematic polish",
+  "composition_mode": "hybrid",
+  "visual_source_strategy": "images_only",
+  "video_scene_style": "auto",
+  "text_render_mode": "deterministic_overlay"
+}

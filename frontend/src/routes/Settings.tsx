@@ -202,6 +202,7 @@ export function Settings() {
                 profile={imageProfile}
                 imageProviders={bootstrap?.providers?.image_providers ?? []}
                 editModels={bootstrap?.providers?.image_edit_models ?? []}
+                costCatalog={bootstrap?.providers?.cost_catalog ?? null}
                 saving={saving || savePlan.isPending}
                 disabled={!selectedProject || !plan}
                 onProfileChange={handleImageProfileChange}
@@ -217,6 +218,7 @@ export function Settings() {
                 profile={ttsProfile}
                 providers={bootstrap?.providers?.tts_providers ?? {}}
                 voiceOptions={bootstrap?.providers?.tts_voice_options ?? {}}
+                costCatalog={bootstrap?.providers?.cost_catalog ?? null}
                 saving={saving || savePlan.isPending}
                 disabled={!selectedProject || !plan}
                 onProfileChange={handleTtsProfileChange}

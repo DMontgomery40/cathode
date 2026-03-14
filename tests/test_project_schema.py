@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from core.project_schema import backfill_plan, infer_composition_mode, normalize_brief
+from core.project_schema import backfill_plan, infer_composition_mode, normalize_brief, scene_requires_remotion
 
 
 def test_normalize_brief_defaults_and_fallbacks():
@@ -16,7 +16,9 @@ def test_normalize_brief_defaults_and_fallbacks():
     assert brief["project_name"] == "My_Demo_"
     assert brief["source_mode"] == "source_text"
     assert brief["visual_source_strategy"] == "images_only"
+    assert brief["video_scene_style"] == "auto"
     assert brief["text_render_mode"] == "visual_authored"
+    assert brief["composition_mode"] == "auto"
     assert brief["target_length_minutes"] == 3.0
     assert brief["source_material"] == "Use this as source."
 
@@ -54,6 +56,11 @@ def test_backfill_legacy_plan_adds_generic_defaults():
     assert scene["video_trim_end"] is None
     assert scene["video_playback_speed"] == 1.0
     assert scene["video_hold_last_frame"] is True
+    assert scene["video_audio_source"] == "narration"
+    assert "video_scene_kind" not in scene or scene["video_scene_kind"] is None
+    assert meta["video_profile"]["quality_mode"] == "standard"
+    assert meta["video_profile"]["generate_audio"] is True
+    assert meta["video_profile"]["model_selection_mode"] == "automatic"
 
 
 def test_render_profile_defaulting_preserves_partial_override():
@@ -93,6 +100,9 @@ def test_backfill_plan_preserves_video_scene_metadata():
                     "video_trim_end": "14.0",
                     "video_playback_speed": "1.25",
                     "video_hold_last_frame": False,
+                    "video_scene_kind": "speaking",
+                    "video_reference_image_path": "/tmp/reference.png",
+                    "video_reference_audio_path": "/tmp/reference.wav",
                 }
             ],
         }
@@ -106,6 +116,31 @@ def test_backfill_plan_preserves_video_scene_metadata():
     assert scene["video_trim_end"] == 14.0
     assert scene["video_playback_speed"] == 1.25
     assert scene["video_hold_last_frame"] is False
+    assert scene["video_audio_source"] == "narration"
+    assert scene["video_scene_kind"] == "speaking"
+    assert scene["video_reference_image_path"] == "/tmp/reference.png"
+    assert scene["video_reference_audio_path"] == "/tmp/reference.wav"
+
+
+def test_backfill_plan_keeps_video_scene_kind_open_for_auto_mode():
+    plan = backfill_plan(
+        {
+            "meta": {"project_name": "video_auto_demo"},
+            "scenes": [
+                {
+                    "title": "Auto clip",
+                    "narration": "Keep the clip style open so automatic routing can decide.",
+                    "visual_prompt": "A local business owner introduces the offer.",
+                    "scene_type": "video",
+                }
+            ],
+        }
+    )
+
+    scene = plan["scenes"][0]
+
+    assert scene["scene_type"] == "video"
+    assert scene["video_scene_kind"] is None
 
 
 def test_backfill_plan_preserves_motion_scene_metadata():
@@ -140,11 +175,39 @@ def test_backfill_plan_preserves_motion_scene_metadata():
 
     scene = plan["scenes"][0]
     assert scene["scene_type"] == "motion"
+    assert scene["composition"]["family"] == "bullet_stack"
+    assert scene["composition"]["mode"] == "native"
     assert scene["motion"]["template_id"] == "bullet_stack"
     assert scene["motion"]["props"]["headline"] == "Prompts on prompts"
     assert scene["motion"]["props"]["bullets"] == ["One prompt", "Many agents", "Final render"]
     assert scene["motion"]["preview_path"] == "projects/motion_demo/previews/motion_scene.mp4"
     assert plan["meta"]["render_profile"]["render_backend"] == "remotion"
+    assert plan["meta"]["render_profile"]["render_strategy"] == "auto"
+
+
+def test_backfill_plan_preserves_thin_motion_directives():
+    plan = backfill_plan(
+        {
+            "meta": {"project_name": "thin_motion_demo"},
+            "scenes": [
+                {
+                    "title": "Ranked comparison",
+                    "narration": "Show the top categories as a staged ranking.",
+                    "visual_prompt": "Motion-first comparison beat.",
+                    "scene_type": "motion",
+                    "staging_notes": "camera rises from the lowest tier to the highest tier",
+                    "transition_hint": "fade",
+                    "data_points": ["#3 Services", "#2 Licensing", "#1 Production"],
+                }
+            ],
+        }
+    )
+
+    scene = plan["scenes"][0]
+    assert scene["staging_notes"] == "camera rises from the lowest tier to the highest tier"
+    assert scene["transition_hint"] == "fade"
+    assert scene["data_points"] == ["#3 Services", "#2 Licensing", "#1 Production"]
+    assert scene["composition"]["family"] == "kinetic_title"
 
 
 def test_infer_composition_mode_defaults_to_hybrid_for_demo_context():
@@ -152,6 +215,19 @@ def test_infer_composition_mode_defaults_to_hybrid_for_demo_context():
         {
             "project_name": "demo_run",
             "source_material": "Prompt notes",
+        },
+        agent_demo_profile={"workspace_path": "/tmp/workspace"},
+    )
+
+    assert mode == "hybrid"
+
+
+def test_infer_composition_mode_treats_auto_as_inference():
+    mode = infer_composition_mode(
+        {
+            "project_name": "auto_demo",
+            "source_material": "Prompt notes",
+            "composition_mode": "auto",
         },
         agent_demo_profile={"workspace_path": "/tmp/workspace"},
     )
@@ -310,6 +386,9 @@ def test_backfill_plan_adds_video_profile_defaults_and_compatibility():
 
     assert video_profile["provider"] == "local"
     assert video_profile["generation_model"] == "/models/wan"
+    assert video_profile["model_selection_mode"] == "automatic"
+    assert video_profile["quality_mode"] == "standard"
+    assert video_profile["generate_audio"] is True
     assert plan["meta"]["video_model"] == "/models/wan"
 
 
@@ -330,6 +409,82 @@ def test_normalize_scene_strips_inline_speaker_label_into_metadata():
     scene = plan["scenes"][0]
     assert scene["speaker_name"] == "Narrator"
     assert scene["narration"].startswith("Six billion.")
+
+
+def test_backfill_plan_preserves_scene_tts_override_metadata():
+    plan = backfill_plan(
+        {
+            "meta": {"project_name": "voice_demo"},
+            "scenes": [
+                {
+                    "title": "Cold Open",
+                    "narration": "Hello there.",
+                    "visual_prompt": "Simple frame.",
+                    "tts_override_enabled": True,
+                    "tts_provider": "elevenlabs",
+                    "tts_voice": "Bella",
+                    "tts_speed": "0.95",
+                    "elevenlabs_model_id": "eleven_multilingual_v2",
+                    "elevenlabs_text_normalization": "auto",
+                    "elevenlabs_stability": "0.42",
+                    "elevenlabs_similarity_boost": "0.88",
+                    "elevenlabs_style": "0.61",
+                    "elevenlabs_use_speaker_boost": False,
+                }
+            ],
+        }
+    )
+
+    scene = plan["scenes"][0]
+    assert scene["tts_override_enabled"] is True
+    assert scene["tts_provider"] == "elevenlabs"
+    assert scene["tts_voice"] == "Bella"
+    assert scene["tts_speed"] == 0.95
+    assert scene["elevenlabs_model_id"] == "eleven_multilingual_v2"
+    assert scene["elevenlabs_text_normalization"] == "auto"
+    assert scene["elevenlabs_stability"] == 0.42
+    assert scene["elevenlabs_similarity_boost"] == 0.88
+    assert scene["elevenlabs_style"] == 0.61
+    assert scene["elevenlabs_use_speaker_boost"] is False
+
+
+def test_scene_requires_remotion_for_overlay_and_native_composition():
+    assert scene_requires_remotion(
+        {"scene_type": "image", "composition": {"family": "media_pan", "mode": "overlay"}}
+    ) is True
+    assert scene_requires_remotion(
+        {"scene_type": "motion", "composition": {"family": "kinetic_title", "mode": "native"}}
+    ) is True
+    assert scene_requires_remotion(
+        {"scene_type": "image", "composition": {"family": "static_media", "mode": "none"}}
+    ) is False
+
+
+def test_backfill_plan_auto_switches_render_backend_when_scene_requires_remotion():
+    plan = backfill_plan(
+        {
+            "meta": {
+                "project_name": "overlay_demo",
+                "brief": {"source_material": "Explain the dashboard."},
+                "render_profile": {"render_strategy": "auto"},
+            },
+            "scenes": [
+                {
+                    "title": "Overlay beat",
+                    "narration": "Highlight the KPI stack.",
+                    "visual_prompt": "Dashboard still.",
+                    "scene_type": "image",
+                    "composition": {
+                        "family": "software_demo_focus",
+                        "mode": "overlay",
+                        "props": {"headline": "Revenue up"},
+                    },
+                }
+            ],
+        }
+    )
+
+    assert plan["meta"]["render_profile"]["render_backend"] == "remotion"
 
 
 def test_normalize_brief_preserves_visual_source_strategy_and_footage_notes():

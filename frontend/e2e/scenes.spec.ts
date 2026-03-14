@@ -37,6 +37,9 @@ test.describe('Scene Timeline', () => {
       await expect(page.getByLabel('Scene title')).toBeVisible()
       await expect(page.getByLabel('Narration text')).toBeVisible()
       await expect(page.getByLabel('Visual prompt')).toBeVisible()
+      await expect(page.getByLabel('Composition family')).toBeVisible()
+      await expect(page.getByLabel('Composition mode')).toBeVisible()
+      await expect(page.getByLabel('Transition after')).toBeVisible()
       await expect(page.getByRole('button', { name: 'Generate All Assets' })).toBeVisible()
       await expect(page.getByRole('button', { name: 'Render Video' })).toBeVisible()
       await expect(page.getByLabel('Image editor')).toBeVisible()
@@ -319,7 +322,7 @@ test.describe('Scene Timeline', () => {
       await expect(page.getByLabel('Motion template')).toHaveValue('bullet_stack')
       await expect(page.getByRole('button', { name: 'Generate Motion Preview' })).toBeVisible()
       await expect(page.getByLabel('Motion headline')).toHaveValue('Prompts on prompts')
-      await expect(page.getByRole('region', { name: 'Media stage' })).toContainText('Motion template')
+      await expect(page.getByTestId('remotion-player-surface')).toBeVisible()
     })
   })
 
@@ -362,8 +365,11 @@ test.describe('Scene Timeline', () => {
       plan.meta = {
         ...plan.meta,
         video_profile: {
-          provider: 'manual',
+          provider: 'replicate',
           generation_model: '',
+          model_selection_mode: 'automatic',
+          quality_mode: 'standard',
+          generate_audio: true,
         },
         image_action_history: [
           {
@@ -388,6 +394,7 @@ test.describe('Scene Timeline', () => {
         image_path: null,
         video_path: null,
         preview_path: null,
+        video_scene_kind: null,
         visual_prompt: 'Capture the strongest repo walkthrough moment as a deliberate screen recording clip.',
         video_trim_start: 1.5,
         video_trim_end: null,
@@ -420,6 +427,29 @@ test.describe('Scene Timeline', () => {
       await page.reload()
 
       await expect(page.getByLabel('Scene title')).toHaveValue(updatedTitle)
+    })
+
+    test('composition edits persist through the real save endpoint', async ({ page }) => {
+      const saveResponse = page.waitForResponse((response) =>
+        response.request().method() === 'PUT'
+        && response.url().includes(`/api/projects/${DISPOSABLE_PROJECT}/plan`),
+      )
+
+      await page.getByLabel('Composition family').selectOption('kinetic_statements')
+      await page.getByLabel('Composition mode').selectOption('native')
+      await page.getByLabel('Transition after').selectOption('fade')
+      await saveResponse
+
+      await expect.poll(() => {
+        const plan = readProjectPlan(DISPOSABLE_PROJECT) as Record<string, any>
+        const composition = plan.scenes?.[0]?.composition ?? {}
+        return `${composition.family ?? ''}|${composition.mode ?? ''}|${composition.transition_after?.kind ?? ''}`
+      }).toBe('kinetic_statements|native|fade')
+
+      await page.reload()
+      await expect(page.getByLabel('Composition family')).toHaveValue('kinetic_statements')
+      await expect(page.getByLabel('Composition mode')).toHaveValue('native')
+      await expect(page.getByLabel('Transition after')).toHaveValue('fade')
     })
 
     test('prompt refine sends feedback to the correct endpoint', async ({ page }) => {
@@ -495,6 +525,28 @@ test.describe('Scene Timeline', () => {
 
       await page.getByRole('button', { name: 'Generate Audio' }).click()
       await expect(page.getByRole('region', { name: 'Scene inspector' }).locator('audio')).toBeVisible()
+    })
+
+    test('scene-level voice overrides persist to the plan', async ({ page }) => {
+      const saveResponse = page.waitForResponse((response) =>
+        response.request().method() === 'PUT'
+        && response.url().includes(`/api/projects/${DISPOSABLE_PROJECT}/plan`),
+      )
+
+      await page.getByLabel('Override project narrator for this scene').check()
+      await page.getByLabel('Scene Voice').selectOption('af_sarah')
+      await page.getByLabel('Scene Voice Speed').fill('1.25')
+      await saveResponse
+
+      await expect.poll(() => {
+        const plan = readProjectPlan(DISPOSABLE_PROJECT) as Record<string, any>
+        const scene = plan.scenes?.[0] ?? {}
+        return `${scene.tts_override_enabled ?? false}|${scene.tts_voice ?? ''}|${scene.tts_speed ?? ''}`
+      }).toBe('true|af_sarah|1.25')
+
+      await page.reload()
+      await expect(page.getByLabel('Override project narrator for this scene')).toBeChecked()
+      await expect(page.getByLabel('Scene Voice')).toHaveValue('af_sarah')
     })
 
     test('image upload targets the image-upload endpoint', async ({ page }, testInfo) => {
@@ -631,6 +683,16 @@ test.describe('Scene Timeline', () => {
       await expect(page.getByRole('button', { name: 'Agent Demo Scene' })).toBeVisible()
       await expect(page.getByRole('button', { name: 'Generate Image' })).toHaveCount(0)
       await expect(page.getByText('Clip Notes / Shot Direction')).toBeVisible()
+      const saveResponse = page.waitForResponse((response) =>
+        response.request().method() === 'PUT'
+        && response.url().includes(`/api/projects/${DISPOSABLE_PROJECT}/plan`),
+      )
+      await page.getByLabel('Clip style').selectOption('auto')
+      await saveResponse
+      await expect(page.getByLabel('Clip style')).toHaveValue('auto')
+      await expect(page.getByLabel('Model selection')).toHaveValue('automatic')
+      await expect(page.locator('p').filter({ hasText: /Clip audio enabled, so Cathode uses the speaking-video lane\./ })).toBeVisible()
+      await expect(page.getByLabel('Scene audio source')).toHaveValue('narration')
       await expect(page.getByLabel('Clip Start (seconds)')).toHaveValue('1.5')
       await expect(page.getByLabel('Playback Speed')).toHaveValue('1.25')
 

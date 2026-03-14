@@ -1,0 +1,5 @@
+Capability mode: mixed media.
+
+- Use video scenes only where footage materially improves the explanation.
+- Keep the overall story cohesive even if only a few scenes become footage-led.
+- When footage would help, make the exact proof moment obvious in the visual prompt and use `footage_asset_id` when supplied assets should be used.

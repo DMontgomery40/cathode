@@ -1,4 +1,3 @@
-import { useEffect, useRef } from 'react'
 import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { BriefSchema, type Brief } from '../../lib/schemas/plan.ts'
@@ -21,8 +20,16 @@ const VISUAL_STRATEGY_OPTIONS = [
   { value: 'video_preferred', label: 'Video Preferred' },
 ]
 
-const COMPOSITION_MODE_OPTIONS = [
-  { value: 'classic', label: 'Classic' },
+const VIDEO_SCENE_STYLE_OPTIONS = [
+  { value: 'auto', label: 'Auto' },
+  { value: 'cinematic', label: 'Cinematic Clips' },
+  { value: 'speaking', label: 'Speaking Clips' },
+  { value: 'mixed', label: 'Mixed Clip Styles' },
+]
+
+const SCENE_ENGINE_OPTIONS = [
+  { value: 'auto', label: 'I Trust Claude to Decide' },
+  { value: 'classic', label: 'Classic Stills' },
   { value: 'hybrid', label: 'Hybrid' },
   { value: 'motion_only', label: 'Motion Only' },
 ]
@@ -38,8 +45,8 @@ interface BriefFormProps {
   loading?: boolean
   isNew?: boolean
   loadingAction?: 'video' | 'storyboard' | null
-  remotionAvailable?: boolean
-  autoHybridPreferred?: boolean
+  remotionAvailable?: boolean | null
+  paidMediaGenerationAvailable?: boolean
 }
 
 export function BriefForm({
@@ -48,15 +55,14 @@ export function BriefForm({
   loading,
   isNew,
   loadingAction,
-  remotionAvailable = false,
-  autoHybridPreferred = false,
+  remotionAvailable = null,
+  paidMediaGenerationAvailable = false,
 }: BriefFormProps) {
   const {
     register,
     handleSubmit,
     control,
     watch,
-    setValue,
     formState: { errors },
   } = useForm<Brief>({
     resolver: zodResolver(BriefSchema),
@@ -72,31 +78,29 @@ export function BriefForm({
       must_include: '',
       must_avoid: '',
       ending_cta: '',
-      composition_mode: 'classic',
+      paid_media_budget_usd: '',
+      composition_mode: 'auto',
       visual_source_strategy: 'images_only',
+      video_scene_style: 'auto',
       text_render_mode: 'visual_authored',
       ...defaults,
     },
   })
 
   const targetLength = watch('target_length_minutes')
-  const compositionMode = watch('composition_mode')
-  const compositionTouchedRef = useRef(false)
-
-  useEffect(() => {
-    if (compositionTouchedRef.current || !remotionAvailable) {
-      return
-    }
-    if (autoHybridPreferred && compositionMode === 'classic') {
-      setValue('composition_mode', 'hybrid', { shouldDirty: true })
-    }
-  }, [autoHybridPreferred, compositionMode, remotionAvailable, setValue])
+  const visualSourceStrategy = watch('visual_source_strategy')
+  const budgetAppliesToVideo = visualSourceStrategy === 'mixed_media' || visualSourceStrategy === 'video_preferred'
+  const showPaidMediaBudget = paidMediaGenerationAvailable
 
   const submitVideo = handleSubmit((data) => onSubmit(data, 'video'))
   const submitStoryboard = handleSubmit((data) => onSubmit(data, 'storyboard'))
-  const compositionModeOptions = remotionAvailable
-    ? COMPOSITION_MODE_OPTIONS
-    : COMPOSITION_MODE_OPTIONS.filter((option) => option.value === 'classic')
+  const sceneEngineOptions = remotionAvailable === false
+    ? SCENE_ENGINE_OPTIONS.map((option) => (
+      option.value === 'hybrid' || option.value === 'motion_only'
+        ? { ...option, label: `${option.label} (requires Remotion)`, disabled: true }
+        : option
+    ))
+    : SCENE_ENGINE_OPTIONS
 
   return (
     <form onSubmit={(event) => {
@@ -130,16 +134,24 @@ export function BriefForm({
                 error={errors.source_mode?.message}
                 {...register('source_mode')}
               />
-              <Select
-                label="Composition Mode"
-                options={compositionModeOptions}
-                error={errors.composition_mode?.message}
-                {...register('composition_mode', {
-                  onChange: () => {
-                    compositionTouchedRef.current = true
-                  },
-                })}
-              />
+              <div className="grid gap-[var(--space-4)] md:grid-cols-2">
+                <Select
+                  label="Scene Engine"
+                  options={sceneEngineOptions}
+                  hint={remotionAvailable === false
+                    ? 'Auto and Classic stay available. Hybrid and Motion Only need the local Remotion toolchain.'
+                    : 'Auto lets Claude choose the right split between classic stills, hybrid scenes, and motion-first beats.'}
+                  error={errors.composition_mode?.message}
+                  {...register('composition_mode')}
+                />
+                <Select
+                  label="Text Strategy"
+                  options={TEXT_RENDER_MODE_OPTIONS}
+                  hint="Visual-authored text bakes copy into generated visuals. Deterministic overlay keeps text in Cathode's renderer instead."
+                  error={errors.text_render_mode?.message}
+                  {...register('text_render_mode')}
+                />
+              </div>
             </div>
           </fieldset>
         </GlassPanel>
@@ -229,12 +241,37 @@ export function BriefForm({
                 {...register('visual_source_strategy')}
               />
               <Select
-                label="Text Strategy"
-                options={TEXT_RENDER_MODE_OPTIONS}
-                hint="Visual-authored text bakes copy into generated visuals. Deterministic overlay keeps text in Cathode's renderer instead."
-                error={errors.text_render_mode?.message}
-                {...register('text_render_mode')}
+                label="Generated Video Scene Style"
+                options={VIDEO_SCENE_STYLE_OPTIONS}
+                hint="When Cathode plans generated video scenes, tell it whether to lean cinematic, speaking-to-camera, or a mix."
+                error={errors.video_scene_style?.message}
+                {...register('video_scene_style')}
               />
+              {showPaidMediaBudget && (
+                <div className="rounded-[var(--radius-lg)] border border-[var(--border-accent)] bg-[linear-gradient(135deg,rgba(255,196,83,0.14),rgba(255,86,56,0.08))] p-[var(--space-4)]">
+                  <div className="text-[var(--text-primary)]" style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--weight-semibold)' }}>
+                    Paid media path
+                  </div>
+                  <p className="m-0 mt-[var(--space-1)] text-[var(--text-secondary)]" style={{ fontSize: 'var(--text-xs)' }}>
+                    Use this only for image/video generation spend such as Qwen Image or Kling-style clips. TTS is intentionally left out here because the spend is usually too small to budget separately.
+                  </p>
+                  <div className="mt-[var(--space-3)]">
+                    <TextInput
+                      label="Paid Media Budget (USD)"
+                      type="number"
+                      min="0"
+                      step="1"
+                      inputMode="numeric"
+                      placeholder={budgetAppliesToVideo ? 'e.g. 60' : 'e.g. 25'}
+                      hint={budgetAppliesToVideo
+                        ? 'Useful when the chosen media strategy may invoke both still-image and video generation.'
+                        : 'Useful when you want Cathode to stay disciplined about paid image generation.'}
+                      error={errors.paid_media_budget_usd?.message}
+                      {...register('paid_media_budget_usd')}
+                    />
+                  </div>
+                </div>
+              )}
             </div>
           </fieldset>
         </GlassPanel>

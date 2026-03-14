@@ -49,7 +49,7 @@ async def get_providers() -> dict[str, Any]:
         "api_keys": keys,
         "llm_provider": llm_provider,
         "image_providers": available_image_generation_providers(keys),
-        "video_providers": available_video_generation_providers(),
+        "video_providers": available_video_generation_providers(keys),
         "tts_providers": available_tts_providers(keys),
         "tts_voice_options": _tts_voice_options(),
         "image_edit_models": available_image_edit_models(

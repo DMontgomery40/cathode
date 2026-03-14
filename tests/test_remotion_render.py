@@ -58,6 +58,7 @@ def test_build_remotion_manifest_uses_api_media_urls_and_motion_templates(tmp_pa
                 "scene_type": "video",
                 "title": "App walkthrough",
                 "video_path": str(project_dir / "clips" / "scene_002.mp4"),
+                "video_audio_source": "clip",
                 "audio_path": str(project_dir / "audio" / "scene_002.wav"),
                 "video_trim_start": 1.5,
                 "video_trim_end": 3.0,
@@ -92,11 +93,82 @@ def test_build_remotion_manifest_uses_api_media_urls_and_motion_templates(tmp_pa
     assert manifest["textRenderMode"] == "deterministic_overlay"
     assert len(manifest["scenes"]) == 3
     assert manifest["scenes"][0]["imageUrl"].endswith("/api/projects/demo_project/media/images/scene_001.png")
+    assert manifest["scenes"][0]["textLayerKind"] == "captions"
+    assert manifest["scenes"][0]["sequenceDurationInFrames"] == manifest["scenes"][0]["durationInFrames"]
     assert manifest["scenes"][1]["videoUrl"].endswith("/api/projects/demo_project/media/clips/scene_002.mp4")
+    assert manifest["scenes"][1]["audioUrl"] is None
+    assert manifest["scenes"][1]["videoAudioSource"] == "clip"
+    assert manifest["scenes"][1]["textLayerKind"] == "none"
+    assert manifest["scenes"][1]["sequenceDurationInFrames"] == manifest["scenes"][1]["durationInFrames"]
     assert manifest["scenes"][1]["trimBeforeFrames"] == 36
     assert manifest["scenes"][1]["trimAfterFrames"] == 72
+    assert manifest["scenes"][1]["composition"]["family"] == "static_media"
     assert manifest["scenes"][2]["motion"]["templateId"] == "bullet_stack"
+    assert manifest["scenes"][2]["composition"]["family"] == "bullet_stack"
+    assert manifest["scenes"][2]["composition"]["mode"] == "native"
+    assert manifest["scenes"][2]["textLayerKind"] == "none"
     assert manifest["totalDurationInFrames"] >= sum(scene["durationInFrames"] for scene in manifest["scenes"])
+
+
+def test_build_remotion_manifest_tracks_overlay_ownership_and_transition_safe_sequence_lengths(tmp_path):
+    project_dir = tmp_path / "overlay_demo"
+    (project_dir / "images").mkdir(parents=True)
+    (project_dir / "audio").mkdir()
+    (project_dir / "images" / "scene_001.png").write_bytes(b"png")
+    (project_dir / "images" / "scene_002.png").write_bytes(b"png")
+    (project_dir / "audio" / "scene_001.wav").write_bytes(b"wav")
+    (project_dir / "audio" / "scene_002.wav").write_bytes(b"wav")
+
+    plan = {
+        "meta": {
+            "project_name": "overlay_demo",
+            "brief": {"text_render_mode": "deterministic_overlay"},
+            "render_profile": {"fps": 24, "render_backend": "remotion"},
+        },
+        "scenes": [
+            {
+                "uid": "scene_001",
+                "id": 1,
+                "scene_type": "image",
+                "title": "Hero still",
+                "on_screen_text": ["Exact overlay copy"],
+                "image_path": str(project_dir / "images" / "scene_001.png"),
+                "audio_path": str(project_dir / "audio" / "scene_001.wav"),
+                "composition": {
+                    "family": "media_pan",
+                    "mode": "overlay",
+                    "transition_after": {"kind": "fade", "duration_in_frames": 20},
+                },
+            },
+            {
+                "uid": "scene_002",
+                "id": 2,
+                "scene_type": "image",
+                "title": "Product proof",
+                "on_screen_text": ["Pinned callout", "Readable when overlaid"],
+                "image_path": str(project_dir / "images" / "scene_002.png"),
+                "audio_path": str(project_dir / "audio" / "scene_002.wav"),
+                "composition": {
+                    "family": "software_demo_focus",
+                    "mode": "native",
+                    "props": {"headline": "Pinned callout"},
+                },
+            },
+        ],
+    }
+
+    manifest = build_remotion_manifest(
+        project_dir=project_dir,
+        plan=plan,
+        output_path=project_dir / "overlay_demo.mp4",
+        render_profile=plan["meta"]["render_profile"],
+    )
+
+    first_scene, second_scene = manifest["scenes"]
+    assert first_scene["textLayerKind"] == "captions"
+    assert first_scene["sequenceDurationInFrames"] == first_scene["durationInFrames"] + 20
+    assert second_scene["textLayerKind"] == "software_demo_focus"
+    assert second_scene["sequenceDurationInFrames"] == second_scene["durationInFrames"]
 
 
 def test_ffmpeg_motion_scene_accepts_rendered_preview_clip(tmp_path):

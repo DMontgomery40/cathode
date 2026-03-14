@@ -1,0 +1,14 @@
+{
+  "project_name": "pure_creative_concept",
+  "source_mode": "ideas_notes",
+  "video_goal": "Introduce an abstract AI research idea in a visually memorable way without feeling corporate.",
+  "audience": "Curious technical viewers who enjoy beautiful explainers.",
+  "source_material": "Explain an invisible machine that turns messy prompts into coordinated specialist agents and a polished result. Make it elegant, cinematic, and strange in a good way. This should stay image-first, with no fake UI or software demo.",
+  "target_length_minutes": 2.0,
+  "tone": "poetic but precise",
+  "visual_style": "editorial science-fiction diagrams and cinematic stills",
+  "composition_mode": "classic",
+  "visual_source_strategy": "images_only",
+  "video_scene_style": "auto",
+  "text_render_mode": "visual_authored"
+}

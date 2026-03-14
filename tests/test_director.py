@@ -1,6 +1,11 @@
 import base64
 
-from core.director import _build_storyboard_user_prompt_from_brief, _validate_scenes, analyze_style_references
+from core.director import (
+    _build_storyboard_user_prompt_from_brief,
+    _validate_scenes,
+    analyze_style_references,
+    build_director_system_prompt,
+)
 from core.project_schema import normalize_brief
 
 
@@ -15,11 +20,13 @@ def test_director_prompt_includes_source_mode_behavior_and_brief_payload():
             "target_length_minutes": 4.0,
             "tone": "direct and concise",
             "visual_style": "modern infographic",
+            "video_scene_style": "speaking",
             "text_render_mode": "deterministic_overlay",
             "style_reference_summary": "High-contrast editorial lighting, restrained teal-and-amber palette, premium product-demo polish, crisp typography, dense but organized composition.",
             "must_include": "timeline",
             "must_avoid": "jargon",
             "ending_cta": "Book a pilot",
+            "composition_mode": "hybrid",
         }
     )
 
@@ -29,10 +36,66 @@ def test_director_prompt_includes_source_mode_behavior_and_brief_payload():
     assert "Perform minimal rewriting" in prompt
     assert '"video_goal": "Explain the product launch"' in prompt
     assert '"visual_style": "modern infographic"' in prompt
+    assert '"video_scene_style": "speaking"' in prompt
     assert '"text_render_mode": "deterministic_overlay"' in prompt
     assert '"style_reference_summary": "High-contrast editorial lighting, restrained teal-and-amber palette, premium product-demo polish, crisp typography, dense but organized composition."' in prompt
+    assert '"composition_mode": "hybrid"' in prompt
     assert "target narration words" in prompt
     assert 'reserve on_screen_text for Cathode\'s deterministic overlay' in prompt
+    assert '"staging_notes"' in prompt
+    assert '"data_points"' in prompt
+    assert '"transition_hint"' in prompt
+    assert '"composition_intent"' not in prompt
+
+
+def test_director_system_prompt_selects_capability_blocks():
+    prompt = build_director_system_prompt(
+        normalize_brief(
+            {
+                "source_mode": "ideas_notes",
+                "source_material": "Use Bella as narrator and different ElevenLabs voices for each section.",
+                "visual_source_strategy": "mixed_media",
+                "video_scene_style": "speaking",
+                "text_render_mode": "deterministic_overlay",
+                "composition_mode": "hybrid",
+            }
+        )
+    )
+
+    assert "Capability mode: mixed media." in prompt
+    assert "Video style preference: speaking." in prompt
+    assert "Capability mode: deterministic overlay." in prompt
+    assert "Capability mode: hybrid composition." in prompt
+    assert "Capability mode: multi-voice storytelling." in prompt
+
+
+def test_director_system_prompt_selects_promoted_examples(tmp_path, monkeypatch):
+    examples_dir = tmp_path / "director_examples"
+    example_dir = examples_dir / "multi_voice_pitch__v1"
+    example_dir.mkdir(parents=True)
+    (example_dir / "input_brief.json").write_text('{"project_name":"pitch"}', encoding="utf-8")
+    (example_dir / "expected_storyboard.json").write_text('{"scenes":[{"title":"Pitch"}]}', encoding="utf-8")
+    (example_dir / "why_it_is_good.md").write_text("Great multi-voice pacing.", encoding="utf-8")
+    index_path = examples_dir / "index.json"
+    index_path.write_text(
+        '[{"id":"multi_voice_pitch__v1","title":"Pitch Example","intents":["multi_voice_pitch"]}]',
+        encoding="utf-8",
+    )
+
+    monkeypatch.setattr("core.director._DIRECTOR_EXAMPLES_INDEX", index_path)
+
+    prompt = build_director_system_prompt(
+        normalize_brief(
+            {
+                "source_mode": "ideas_notes",
+                "source_material": "Use Bella as narrator and different voices for commercial examples.",
+            }
+        )
+    )
+
+    assert "Promoted Cathode examples:" in prompt
+    assert 'Example "Pitch Example"' in prompt
+    assert "Great multi-voice pacing." in prompt
 
 
 def test_director_prompt_mentions_reviewed_footage_assets():
@@ -141,3 +204,70 @@ def test_validate_scenes_drops_model_supplied_video_path():
 
     assert scenes[0]["footage_asset_id"] == "hero_capture"
     assert scenes[0]["video_path"] is None
+
+
+def test_validate_scenes_preserves_video_scene_kind_and_speaker_name():
+    scenes = _validate_scenes(
+        [
+            {
+                "id": 0,
+                "title": "Founder Pitch",
+                "narration": "We built this to save teams hours every week.",
+                "visual_prompt": "Founder speaking directly to camera in a bright office.",
+                "scene_type": "video",
+                "video_scene_kind": "speaking",
+                "speaker_name": "Founder",
+            }
+        ]
+    )
+
+    assert scenes[0]["video_scene_kind"] == "speaking"
+    assert scenes[0]["speaker_name"] == "Founder"
+
+
+def test_validate_scenes_keeps_thin_motion_fields():
+    scenes = _validate_scenes(
+        [
+            {
+                "id": 0,
+                "title": "Pricing proof",
+                "narration": "The key number needs a stronger animated beat.",
+                "visual_prompt": "Centered pricing card.",
+                "scene_type": "motion",
+                "staging_notes": "headline slams in, source line fades up",
+                "transition_hint": "fade",
+                "data_points": ["$500 per video", "$200 to salesperson"],
+            }
+        ]
+    )
+
+    assert scenes[0]["scene_type"] == "motion"
+    assert scenes[0]["staging_notes"] == "headline slams in, source line fades up"
+    assert scenes[0]["transition_hint"] == "fade"
+    assert scenes[0]["data_points"] == ["$500 per video", "$200 to salesperson"]
+
+
+def test_validate_scenes_still_accepts_legacy_composition_intent():
+    scenes = _validate_scenes(
+        [
+            {
+                "id": 0,
+                "title": "Legacy ranking scene",
+                "narration": "Show the top categories as a spatial ranking.",
+                "visual_prompt": "Three-dimensional comparison world.",
+                "composition_intent": {
+                    "family_hint": "three_data_stage",
+                    "mode_hint": "native",
+                    "layout": "three podium towers in depth",
+                    "motion_notes": "camera rises from lowest rank to highest rank",
+                    "transition_after": "fade",
+                    "data_points": ["#3 Services", "#2 Licensing", "#1 Production"]
+                }
+            }
+        ]
+    )
+
+    assert scenes[0]["staging_notes"] == "three podium towers in depth camera rises from lowest rank to highest rank"
+    assert scenes[0]["transition_hint"] == "fade"
+    assert scenes[0]["data_points"] == ["#3 Services", "#2 Licensing", "#1 Production"]
+    assert scenes[0]["composition_intent"]["family_hint"] == "three_data_stage"

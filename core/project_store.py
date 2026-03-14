@@ -8,8 +8,10 @@ import shutil
 from pathlib import Path
 from typing import Any
 
+from .costs import refresh_plan_costs
 from .project_schema import backfill_plan, sanitize_project_name
 from .runtime import PROJECTS_DIR
+from .video_assembly import media_has_audio_stream
 
 
 def get_project_path(project_name: str, overwrite: bool = False) -> Path:
@@ -44,6 +46,7 @@ def load_plan(project_dir: Path) -> dict[str, Any] | None:
 
     raw = json.loads(plan_path.read_text())
     plan = backfill_plan(raw, base_dir=project_dir)
+    plan = refresh_plan_costs(plan)
     if plan != raw:
         plan_path.write_text(json.dumps(plan, indent=2))
     return plan
@@ -54,6 +57,7 @@ def save_plan(project_dir: Path, plan: dict[str, Any]) -> dict[str, Any]:
     project_dir = Path(project_dir)
     project_dir.mkdir(parents=True, exist_ok=True)
     normalized = backfill_plan(plan, base_dir=project_dir)
+    normalized = refresh_plan_costs(normalized)
     (project_dir / "plan.json").write_text(json.dumps(normalized, indent=2))
     return normalized
 
@@ -106,8 +110,15 @@ def annotate_plan_asset_existence(project_dir: Path, plan: dict[str, Any]) -> di
             continue
         scene["image_exists"] = asset_path_exists(project_dir, scene.get("image_path"))
         scene["video_exists"] = asset_path_exists(project_dir, scene.get("video_path"))
+        scene["video_audio_exists"] = bool(
+            scene["video_exists"] and media_has_audio_stream(_resolve_asset_path(project_dir, scene.get("video_path")) or "")
+        )
         scene["audio_exists"] = asset_path_exists(project_dir, scene.get("audio_path"))
         scene["preview_exists"] = asset_path_exists(project_dir, scene.get("preview_path"))
+        composition = scene.get("composition")
+        if isinstance(composition, dict):
+            composition["render_exists"] = asset_path_exists(project_dir, composition.get("render_path"))
+            composition["preview_exists"] = asset_path_exists(project_dir, composition.get("preview_path"))
         motion = scene.get("motion")
         if isinstance(motion, dict):
             motion["render_exists"] = asset_path_exists(project_dir, motion.get("render_path"))
