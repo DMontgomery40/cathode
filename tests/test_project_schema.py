@@ -16,6 +16,7 @@ def test_normalize_brief_defaults_and_fallbacks():
     assert brief["project_name"] == "My_Demo_"
     assert brief["source_mode"] == "source_text"
     assert brief["visual_source_strategy"] == "images_only"
+    assert brief["text_render_mode"] == "visual_authored"
     assert brief["target_length_minutes"] == 3.0
     assert brief["source_material"] == "Use this as source."
 
@@ -43,6 +44,7 @@ def test_backfill_legacy_plan_adds_generic_defaults():
     assert meta["pipeline_mode"] == "generic_slides_v1"
     assert meta["brief"]["source_material"] == "Legacy source text"
     assert meta["render_profile"]["aspect_ratio"] == "16:9"
+    assert meta["render_profile"]["text_render_mode"] == "visual_authored"
     assert meta["tts_profile"]["provider"] == "kokoro"
     assert meta["video_profile"]["provider"] == "manual"
     assert scene["scene_type"] == "image"
@@ -334,6 +336,7 @@ def test_normalize_brief_preserves_visual_source_strategy_and_footage_notes():
     brief = normalize_brief(
         {
             "visual_source_strategy": "mixed_media",
+            "text_render_mode": "deterministic_overlay",
             "available_footage": "Dashboard recording, onboarding flow, alert moment",
             "footage_manifest": [
                 {
@@ -350,6 +353,7 @@ def test_normalize_brief_preserves_visual_source_strategy_and_footage_notes():
     )
 
     assert brief["visual_source_strategy"] == "mixed_media"
+    assert brief["text_render_mode"] == "deterministic_overlay"
     assert brief["available_footage"] == "Dashboard recording, onboarding flow, alert moment"
     assert brief["footage_manifest"][0]["id"] == "hero_capture"
     assert brief["footage_manifest"][0]["review_status"] == "warn"

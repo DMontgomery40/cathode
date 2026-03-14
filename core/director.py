@@ -146,6 +146,7 @@ def _brief_for_prompt(payload: dict[str, Any]) -> dict[str, Any]:
         "must_avoid": brief["must_avoid"],
         "ending_cta": brief["ending_cta"],
         "visual_source_strategy": brief["visual_source_strategy"],
+        "text_render_mode": brief["text_render_mode"],
         "available_footage": brief["available_footage"],
         "footage_manifest": footage_manifest,
         "style_reference_summary": brief["style_reference_summary"],
@@ -221,6 +222,9 @@ Quality constraints:
   - exact text labels when needed
   - key objects, graphics, or metaphors
   - lighting, mood, and finish
+- Treat text_render_mode as a hard contract:
+  - "visual_authored": visible copy may be authored into the generated visual itself, and on_screen_text should stay aligned with that authored text when present.
+  - "deterministic_overlay": for image scenes, avoid asking the image model to render readable title/body copy into the visual; reserve on_screen_text for Cathode's deterministic overlay and motion templates instead. Footage scenes may still naturally contain product text from the captured UI.
 - Use on_screen_text when there are exact phrases or labels the slide should visibly support.
 - If style_reference_summary is present, treat it as the canonical visual direction and make every scene compatible with that style while still matching the scene's content.
 - Treat visual_source_strategy as a hard preference:

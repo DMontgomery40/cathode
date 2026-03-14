@@ -27,6 +27,11 @@ const COMPOSITION_MODE_OPTIONS = [
   { value: 'motion_only', label: 'Motion Only' },
 ]
 
+const TEXT_RENDER_MODE_OPTIONS = [
+  { value: 'visual_authored', label: 'Visual-Authored Text' },
+  { value: 'deterministic_overlay', label: 'Deterministic Overlay' },
+]
+
 interface BriefFormProps {
   defaults?: Partial<Brief>
   onSubmit: (data: Brief, action: 'video' | 'storyboard') => void
@@ -69,6 +74,7 @@ export function BriefForm({
       ending_cta: '',
       composition_mode: 'classic',
       visual_source_strategy: 'images_only',
+      text_render_mode: 'visual_authored',
       ...defaults,
     },
   })
@@ -221,6 +227,13 @@ export function BriefForm({
                 options={VISUAL_STRATEGY_OPTIONS}
                 error={errors.visual_source_strategy?.message}
                 {...register('visual_source_strategy')}
+              />
+              <Select
+                label="Text Strategy"
+                options={TEXT_RENDER_MODE_OPTIONS}
+                hint="Visual-authored text bakes copy into generated visuals. Deterministic overlay keeps text in Cathode's renderer instead."
+                error={errors.text_render_mode?.message}
+                {...register('text_render_mode')}
               />
             </div>
           </fieldset>
