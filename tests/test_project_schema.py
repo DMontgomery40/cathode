@@ -333,6 +333,155 @@ def test_backfill_plan_clears_missing_absolute_paths_inside_project(tmp_path):
     assert plan["meta"]["video_path"] is None
 
 
+def test_backfill_plan_preserves_motion_scene_metadata():
+    plan = backfill_plan(
+        {
+            "meta": {
+                "project_name": "motion_demo",
+                "brief": {
+                    "project_name": "motion_demo",
+                    "source_material": "Prompt stack demo",
+                    "composition_mode": "motion_only",
+                },
+            },
+            "scenes": [
+                {
+                    "title": "Prompt ladder",
+                    "narration": "Show prompts calling prompts.",
+                    "scene_type": "motion",
+                    "motion": {
+                        "template_id": "bullet_stack",
+                        "props": {
+                            "headline": "Prompts on prompts",
+                            "bullets": ["One prompt", "Many agents", "Final render"],
+                        },
+                        "preview_path": "projects/motion_demo/previews/motion_scene.mp4",
+                        "rationale": "Text-first beat",
+                    },
+                }
+            ],
+        }
+    )
+
+    scene = plan["scenes"][0]
+    assert scene["scene_type"] == "motion"
+    assert scene["motion"]["template_id"] == "bullet_stack"
+    assert scene["motion"]["props"]["headline"] == "Prompts on prompts"
+    assert scene["motion"]["props"]["bullets"] == ["One prompt", "Many agents", "Final render"]
+    assert scene["motion"]["preview_path"] == "projects/motion_demo/previews/motion_scene.mp4"
+    assert plan["meta"]["render_profile"]["render_backend"] == "remotion"
+
+
+def test_infer_composition_mode_defaults_to_hybrid_for_demo_context():
+    mode = infer_composition_mode(
+        {
+            "project_name": "demo_run",
+            "source_material": "Prompt notes",
+        },
+        agent_demo_profile={"workspace_path": "/tmp/workspace"},
+    )
+
+    assert mode == "hybrid"
+
+
+def test_backfill_plan_heals_same_project_absolute_asset_paths(tmp_path):
+    project_dir = tmp_path / "demo_project"
+    images_dir = project_dir / "images"
+    audio_dir = project_dir / "audio"
+    previews_dir = project_dir / "previews"
+    images_dir.mkdir(parents=True)
+    audio_dir.mkdir(parents=True)
+    previews_dir.mkdir(parents=True)
+    image_path = images_dir / "scene_000.png"
+    audio_path = audio_dir / "scene_000.wav"
+    preview_path = previews_dir / "preview_scene_000.mp4"
+    video_path = project_dir / "demo_project.mp4"
+    for path in (image_path, audio_path, preview_path, video_path):
+        path.write_bytes(b"demo")
+
+    old_root = Path("/tmp/other_checkout/projects/demo_project")
+    plan = backfill_plan(
+        {
+            "meta": {
+                "project_name": "demo_project",
+                "video_path": str(old_root / "demo_project.mp4"),
+            },
+            "scenes": [
+                {
+                    "image_path": str(old_root / "images" / "scene_000.png"),
+                    "audio_path": str(old_root / "audio" / "scene_000.wav"),
+                    "preview_path": str(old_root / "previews" / "preview_scene_000.mp4"),
+                }
+            ],
+        },
+        base_dir=project_dir,
+    )
+
+    scene = plan["scenes"][0]
+    assert scene["image_path"] == str(image_path.resolve())
+    assert scene["audio_path"] == str(audio_path.resolve())
+    assert scene["preview_path"] == str(preview_path.resolve())
+    assert plan["meta"]["video_path"] == str(video_path.resolve())
+
+
+def test_backfill_plan_clears_unhealed_same_project_asset_paths(tmp_path):
+    project_dir = tmp_path / "demo_project"
+    project_dir.mkdir()
+    old_root = Path("/tmp/other_checkout/projects/demo_project")
+
+    plan = backfill_plan(
+        {
+            "meta": {
+                "project_name": "demo_project",
+                "video_path": str(old_root / "demo_project.mp4"),
+            },
+            "scenes": [
+                {
+                    "image_path": str(old_root / "images" / "scene_000.png"),
+                    "audio_path": str(old_root / "audio" / "scene_000.wav"),
+                    "preview_path": str(old_root / "previews" / "preview_scene_000.mp4"),
+                }
+            ],
+        },
+        base_dir=project_dir,
+    )
+
+    scene = plan["scenes"][0]
+    assert scene["image_path"] is None
+    assert scene["audio_path"] is None
+    assert scene["preview_path"] is None
+    assert plan["meta"]["video_path"] is None
+
+
+def test_backfill_plan_clears_missing_absolute_paths_inside_project(tmp_path):
+    project_dir = tmp_path / "demo_project"
+    project_dir.mkdir()
+    missing_image = project_dir / "images" / "scene_000.png"
+    missing_audio = project_dir / "audio" / "scene_000.wav"
+    missing_video = project_dir / "demo_project.mp4"
+
+    plan = backfill_plan(
+        {
+            "meta": {
+                "project_name": "demo_project",
+                "video_path": str(missing_video),
+            },
+            "scenes": [
+                {
+                    "image_path": str(missing_image),
+                    "audio_path": str(missing_audio),
+                }
+            ],
+        },
+        base_dir=project_dir,
+    )
+
+    scene = plan["scenes"][0]
+    assert scene["image_path"] is None
+    assert scene["audio_path"] is None
+    assert plan["meta"]["video_path"] is None
+
+
 def test_backfill_plan_adds_image_profile_defaults_and_compatibility():
     plan = backfill_plan(
         {
