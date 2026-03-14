@@ -1,0 +1,14 @@
+{
+  "project_name": "roadmap_bullet_stack",
+  "source_mode": "source_text",
+  "video_goal": "Explain a three-step workflow with exact text and strong pacing.",
+  "audience": "Busy operators who need the process immediately.",
+  "source_material": "The workflow is simple. First capture intent. Then let the director draft the storyboard. Then generate, refine, and render. Keep it elegant but crystal clear.",
+  "target_length_minutes": 1.0,
+  "tone": "clear, premium, fast",
+  "visual_style": "dark editorial motion graphics",
+  "composition_mode": "motion_only",
+  "visual_source_strategy": "images_only",
+  "video_scene_style": "auto",
+  "text_render_mode": "deterministic_overlay"
+}

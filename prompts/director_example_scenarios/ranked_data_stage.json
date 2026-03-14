@@ -1,0 +1,14 @@
+{
+  "project_name": "ranked_data_stage",
+  "source_mode": "ideas_notes",
+  "video_goal": "Compare the top business categories for a creative-video sales engine.",
+  "audience": "A practical decision-maker who wants to see the opportunity ranked clearly.",
+  "source_material": "Show the strongest business categories in ranked order and explain why the best ones are easiest to sell and fulfill. This should feel like a staged comparison world, not just a spoken list.",
+  "target_length_minutes": 1.0,
+  "tone": "clear, strategic, decisive",
+  "visual_style": "premium dark data theatre",
+  "composition_mode": "hybrid",
+  "visual_source_strategy": "images_only",
+  "video_scene_style": "auto",
+  "text_render_mode": "deterministic_overlay"
+}

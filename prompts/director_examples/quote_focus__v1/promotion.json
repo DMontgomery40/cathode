@@ -1,0 +1,9 @@
+{
+  "id": "quote_focus__v1",
+  "title": "Quote Focus",
+  "intents": [
+    "quote_focus"
+  ],
+  "source_run": "experiments/director_golden/runs/20260314-095504_quote_focus_claude-sonnet-4-6",
+  "promoted_utc": "2026-03-14T09:58:24.608912+00:00"
+}

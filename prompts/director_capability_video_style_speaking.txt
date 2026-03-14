@@ -1,0 +1,4 @@
+Video style preference: speaking.
+
+- When you choose generated or footage-led video scenes, prefer direct-to-camera spokesperson or interview-style beats.
+- Make the narration sound naturally speakable and keep the visual prompt grounded in one visible speaker.

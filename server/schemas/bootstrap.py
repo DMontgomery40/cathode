@@ -22,9 +22,11 @@ class ProvidersInfo(BaseModel):
     video_providers: list[str]
     render_backends: list[str]
     remotion_available: bool = False
+    remotion_capabilities: dict[str, bool] = {}
     tts_providers: dict[str, str]
     tts_voice_options: dict[str, list[dict[str, str]]]
     image_edit_models: list[str]
+    cost_catalog: dict[str, Any] = {}
 
 
 class DefaultProfiles(BaseModel):

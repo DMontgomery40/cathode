@@ -3,7 +3,7 @@ import { clsx } from 'clsx'
 import { useUIStore } from '../../stores/ui.ts'
 import { handleArrowNav } from '../../design-system/a11y/index.ts'
 import type { Scene } from '../../lib/schemas/plan.ts'
-import { sceneHasPreview, sceneHasRenderableVisual, sceneVisualUrl } from '../../lib/scene-media.ts'
+import { sceneHasPreview, sceneHasRenderableAudio, sceneHasRenderableVisual, sceneVisualUrl } from '../../lib/scene-media.ts'
 import { GlassPanel } from '../../components/primitives/GlassPanel.tsx'
 
 interface TimelineStripProps {
@@ -38,12 +38,12 @@ function AssetDots({ scene, project, renderBackend }: { scene: Scene; project: s
       <span
         className={clsx(
           'inline-block rounded-full',
-          (typeof scene.audio_exists === 'boolean' ? scene.audio_exists : Boolean(scene.audio_path))
+          sceneHasRenderableAudio(project, scene)
             ? 'bg-[var(--signal-success)]'
             : 'bg-[var(--text-tertiary)]',
         )}
         style={{ width: 5, height: 5 }}
-        title={(typeof scene.audio_exists === 'boolean' ? scene.audio_exists : Boolean(scene.audio_path)) ? 'Has audio' : 'No audio'}
+        title={sceneHasRenderableAudio(project, scene) ? 'Has audio' : 'No audio'}
       />
       <span
         className={clsx(

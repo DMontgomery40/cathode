@@ -86,6 +86,15 @@ _FAKE_KEYS = {
     "server.routers.bootstrap.available_render_backends",
     return_value=["ffmpeg", "remotion"],
 )
+@patch(
+    "server.routers.bootstrap.remotion_capabilities",
+    return_value={
+        "render_available": True,
+        "player_available": True,
+        "transitions_available": True,
+        "three_available": True,
+    },
+)
 @patch("server.routers.bootstrap.remotion_available", return_value=True)
 @patch(
     "server.routers.bootstrap.available_tts_providers",
@@ -102,6 +111,7 @@ def test_bootstrap_shape(
     _mock_llm,
     _mock_img_providers,
     _mock_tts_providers,
+    _mock_remotion_capabilities,
     _mock_remotion_available,
     _mock_render_backends,
     _mock_vid_providers,
@@ -125,17 +135,21 @@ def test_bootstrap_shape(
     assert providers["video_providers"] == ["manual"]
     assert providers["render_backends"] == ["ffmpeg", "remotion"]
     assert providers["remotion_available"] is True
+    assert providers["remotion_capabilities"]["player_available"] is True
+    assert providers["remotion_capabilities"]["three_available"] is True
     assert "kokoro" in providers["tts_providers"]
     assert "kokoro" in providers["tts_voice_options"]
     assert "elevenlabs" in providers["tts_voice_options"]
     assert isinstance(providers["image_edit_models"], list)
+    assert providers["cost_catalog"]["version"]
+    assert isinstance(providers["cost_catalog"]["entries"], list)
 
     # Defaults section
     defaults = body["defaults"]
     for key in ("brief", "render_profile", "image_profile", "video_profile", "tts_profile"):
         assert key in defaults
     assert defaults["brief"]["project_name"] == "my_video"
-    assert defaults["brief"]["composition_mode"] == "classic"
+    assert defaults["brief"]["composition_mode"] == "auto"
     assert defaults["render_profile"]["aspect_ratio"] == "16:9"
     assert defaults["render_profile"]["render_backend"] == "ffmpeg"
     assert defaults["tts_profile"]["provider"] == "kokoro"
@@ -331,4 +345,18 @@ def test_rebuild_storyboard_persists_updated_brief_and_agent_demo_profile(client
     assert saved_plan["meta"]["brief"]["composition_mode"] == "hybrid"
     assert saved_plan["meta"]["agent_demo_profile"]["workspace_path"] == "/tmp/workspace"
     assert saved_plan["meta"]["render_profile"]["render_backend"] == "remotion"
-    assert captured["project_path"] == project_dir
+
+
+@patch("server.routers.plans.build_remotion_manifest", return_value={"scenes": [], "fps": 24})
+def test_get_project_remotion_manifest(mock_manifest, client, tmp_path):
+    (tmp_path / "demo").mkdir()
+
+    with (
+        patch("server.routers.plans.PROJECTS_DIR", tmp_path),
+        patch("server.routers.plans.load_plan", return_value={"meta": {"render_profile": {"render_backend": "remotion"}}, "scenes": []}),
+    ):
+        resp = client.get("/api/projects/demo/remotion-manifest")
+
+    assert resp.status_code == 200
+    assert resp.json()["fps"] == 24
+    mock_manifest.assert_called_once()

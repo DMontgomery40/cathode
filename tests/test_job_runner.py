@@ -7,6 +7,7 @@ import pytest
 
 from core.job_runner import (
     JOB_STATUS_FAILED,
+    JOB_STATUS_PARTIAL,
     JOB_STATUS_SUCCEEDED,
     cancel_job,
     create_make_video_job,
@@ -114,6 +115,40 @@ def test_run_job_file_records_failure(monkeypatch, tmp_path):
     assert saved["error"]["message"] == "boom"
 
 
+def test_run_job_file_stops_after_storyboard_when_cost_estimate_is_over_budget(monkeypatch, tmp_path):
+    project_dir = tmp_path / "budget_project"
+    project_dir.mkdir(parents=True)
+    job_file = project_dir / ".cathode" / "jobs" / "job-123.json"
+    job_file.parent.mkdir(parents=True, exist_ok=True)
+    write_job_file(job_file, _job_payload(project_dir))
+
+    def fake_create_project_from_brief_service(**kwargs):
+        plan = {
+            "meta": {
+                "project_name": kwargs["project_name"],
+                "llm_provider": "anthropic",
+                "cost_estimate": {
+                    "status": "over_budget",
+                    "budget_usd": 10.0,
+                    "gating_total_usd": 24.0,
+                },
+            },
+            "scenes": [],
+        }
+        (project_dir / "plan.json").write_text(json.dumps(plan))
+        return project_dir, plan
+
+    monkeypatch.setattr("core.job_runner.create_project_from_brief_service", fake_create_project_from_brief_service)
+
+    result = run_job_file(job_file)
+    saved = read_job_file(job_file)
+
+    assert result["status"] == JOB_STATUS_PARTIAL
+    assert saved["status"] == JOB_STATUS_PARTIAL
+    assert saved["result"]["confirmation_required"] is True
+    assert saved["result"]["current_stage"] == "storyboard"
+
+
 def test_cancel_job_returns_structured_error_for_missing_job():
     result = cancel_job("missing-job-id")
 
@@ -174,7 +209,8 @@ def test_create_make_video_job_infers_hybrid_and_agent_provider(monkeypatch, tmp
 
     assert saved["request"]["brief"]["composition_mode"] == "hybrid"
     assert saved["request"]["video_profile"]["provider"] == "agent"
-    assert saved["request"]["render_profile"]["render_backend"] == "remotion"
+    assert saved["request"]["render_profile"]["render_strategy"] == "auto"
+    assert "render_backend" not in saved["request"]["render_profile"]
 
 
 @pytest.mark.parametrize("stage", ["storyboard", "assets", "render"])

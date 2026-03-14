@@ -7,13 +7,20 @@ from pathlib import Path
 from typing import Any, Callable
 
 from .agent_demo import build_agent_demo_prompt, run_agent_demo_cli, choose_agent_cli
+from .costs import (
+    append_actual_cost_entry,
+    image_generation_entry,
+    resolve_video_cost_context,
+    tts_entry,
+    video_generation_entry,
+)
 from .demo_assets import (
     apply_footage_manifest_to_scenes,
     build_footage_summary,
     copy_footage_manifest_into_project,
     normalize_footage_manifest,
 )
-from .director import analyze_style_references
+from .director import analyze_style_references_with_metadata
 from .image_gen import generate_scene_image
 from .project_schema import (
     default_image_profile,
@@ -21,14 +28,15 @@ from .project_schema import (
     infer_composition_mode,
     normalize_agent_demo_profile,
     normalize_brief,
+    resolve_render_strategy,
     resolve_render_backend,
 )
 from .project_store import copy_external_files, ensure_project_dir, load_plan, save_plan
 from .remotion_render import build_remotion_manifest, render_manifest_with_remotion, scene_has_renderable_visual
 from .runtime import choose_llm_provider, resolve_image_profile, resolve_tts_profile, resolve_video_profile
 from .video_assembly import assemble_video
-from .video_gen import generate_scene_video
-from .voice_gen import generate_scene_audio
+from .video_gen import generate_scene_video_result
+from .voice_gen import generate_scene_audio_result
 from .workflow import create_plan_from_brief, rebuild_plan_from_meta
 
 
@@ -61,10 +69,16 @@ def prepare_project_execution_profiles(
         next_video_profile["provider"] = "agent"
 
     resolved_render_profile = dict(render_profile or {})
-    resolved_render_profile["render_backend"] = resolve_render_backend(
-        resolved_render_profile,
-        composition_mode=str(normalized_brief.get("composition_mode") or "classic"),
+    resolved_render_profile["render_strategy"] = resolve_render_strategy(
+        resolved_render_profile.get("render_strategy")
     )
+    if resolved_render_profile["render_strategy"] == "auto":
+        resolved_render_profile.pop("render_backend", None)
+    else:
+        resolved_render_profile["render_backend"] = resolve_render_backend(
+            resolved_render_profile,
+            composition_mode=str(normalized_brief.get("composition_mode") or "classic"),
+        )
     resolved_render_profile["text_render_mode"] = str(normalized_brief.get("text_render_mode") or "visual_authored")
 
     return normalized_brief, resolve_video_profile(next_video_profile or None), resolved_render_profile
@@ -94,6 +108,8 @@ def tts_kwargs_from_profile(profile: dict | None) -> dict[str, Any]:
             kwargs["elevenlabs_use_speaker_boost"] = bool(profile["use_speaker_boost"])
     if provider == "chatterbox" and profile.get("exaggeration") is not None:
         kwargs["exaggeration"] = float(profile["exaggeration"])
+    if provider == "openai" and profile.get("model_id"):
+        kwargs["openai_model_id"] = str(profile["model_id"])
     return kwargs
 
 
@@ -155,7 +171,7 @@ def create_project_from_brief_service(
     saved_footage_manifest = _persist_footage_manifest(project_dir, normalized_brief.get("footage_manifest"))
     style_reference_summary = str(normalized_brief.get("style_reference_summary") or "").strip()
     if saved_style_refs and not style_reference_summary:
-        style_reference_summary = analyze_style_references(
+        style_reference_summary, style_ref_meta = analyze_style_references_with_metadata(
             [str(path) for path in saved_style_refs],
             normalized_brief,
             provider=chosen_provider,
@@ -164,6 +180,8 @@ def create_project_from_brief_service(
             style_reference_summary,
             encoding="utf-8",
         )
+    else:
+        style_ref_meta = {}
 
     normalized_brief["style_reference_paths"] = [str(path) for path in saved_style_refs]
     normalized_brief["style_reference_summary"] = style_reference_summary
@@ -183,6 +201,10 @@ def create_project_from_brief_service(
         render_profile=resolved_render_profile,
     )
     plan["scenes"] = apply_footage_manifest_to_scenes(plan.get("scenes", []), saved_footage_manifest)
+    if isinstance(style_ref_meta.get("actual"), dict):
+        append_actual_cost_entry(plan, style_ref_meta["actual"])
+    if isinstance(style_ref_meta.get("preflight"), dict):
+        plan.setdefault("meta", {}).setdefault("cost_actual", {})["llm_preflight_style_refs"] = style_ref_meta["preflight"]
     plan.setdefault("meta", {})["brief"] = normalize_brief(normalized_brief, base_dir=project_dir)
     plan.setdefault("meta", {})["footage_manifest"] = saved_footage_manifest
     normalized_agent_demo_profile = normalize_agent_demo_profile(agent_demo_profile)
@@ -326,6 +348,9 @@ def generate_project_assets_service(
     video_profile = resolve_video_profile(meta.get("video_profile"))
     video_provider = str(video_profile.get("provider") or "manual")
     video_generation_model = str(video_profile.get("generation_model") or "")
+    video_model_selection_mode = str(video_profile.get("model_selection_mode") or "automatic")
+    video_quality_mode = str(video_profile.get("quality_mode") or "standard")
+    video_generate_audio = True if video_profile.get("generate_audio") is None else bool(video_profile.get("generate_audio"))
     agent_demo_profile = meta.get("agent_demo_profile") if isinstance(meta.get("agent_demo_profile"), dict) else {}
     tts_profile = resolve_tts_profile(meta.get("tts_profile"))
     tts_kwargs = tts_kwargs_from_profile(tts_profile)
@@ -355,8 +380,35 @@ def generate_project_assets_service(
 
     for scene in scenes:
         scene_type = _scene_type(scene)
+        video_cost_context = (
+            resolve_video_cost_context(
+                scene=scene,
+                provider=video_provider,
+                model=video_generation_model,
+                model_selection_mode=video_model_selection_mode,
+                quality_mode=video_quality_mode,
+                generate_audio=video_generate_audio,
+            )
+            if scene_type == "video"
+            else None
+        )
+        clip_audio_expected = bool(video_cost_context and video_cost_context.get("uses_clip_audio"))
         has_audio = scene.get("audio_path") and Path(str(scene["audio_path"])).exists()
-        if generate_audio and (regenerate_audio or not has_audio):
+        if generate_audio and clip_audio_expected:
+            scene["video_audio_source"] = "clip"
+            scene["audio_path"] = None
+            result["audio_skipped"] += 1
+            _emit_asset_progress(
+                progress_callback,
+                completed=completed_work_items,
+                total_work_items=total_work_items,
+                total_scenes=total_scenes,
+                asset_kind="audio",
+                scene=scene,
+                status="skipped",
+            )
+            completed_work_items += 1
+        elif generate_audio and (regenerate_audio or not has_audio):
             _emit_asset_progress(
                 progress_callback,
                 completed=completed_work_items,
@@ -367,9 +419,20 @@ def generate_project_assets_service(
                 status="running",
             )
             try:
-                path = generate_scene_audio(scene, project_dir, **tts_kwargs)
+                audio_result = generate_scene_audio_result(scene, project_dir, **tts_kwargs)
+                path = Path(str(audio_result["path"]))
                 scene["audio_path"] = str(path)
                 result["audio_generated"] += 1
+                cost_entry = tts_entry(
+                    scene=scene,
+                    provider=str(audio_result.get("provider") or tts_kwargs.get("tts_provider") or "kokoro"),
+                    model=str(audio_result.get("model") or tts_kwargs.get("openai_model_id") or tts_kwargs.get("elevenlabs_model_id") or ""),
+                    estimated=False,
+                    operation="asset_pass",
+                    purpose="narration",
+                    text=str(scene.get("narration") or ""),
+                )
+                append_actual_cost_entry(plan, cost_entry)
                 _emit_asset_progress(
                     progress_callback,
                     completed=completed_work_items,
@@ -457,6 +520,16 @@ def generate_project_assets_service(
                     )
                     scene["image_path"] = str(path)
                     result["images_generated"] += 1
+                    append_actual_cost_entry(
+                        plan,
+                        image_generation_entry(
+                            scene=scene,
+                            provider=image_provider,
+                            model=image_generation_model,
+                            estimated=False,
+                            operation="asset_pass",
+                        ),
+                    )
                     _emit_asset_progress(
                         progress_callback,
                         completed=completed_work_items,
@@ -490,7 +563,7 @@ def generate_project_assets_service(
                     asset_kind="image",
                     scene=scene,
                     status="skipped",
-                )
+                    )
                 completed_work_items += 1
 
         if scene_type == "video" and generate_videos:
@@ -562,7 +635,7 @@ def generate_project_assets_service(
                         status="error",
                     )
                 completed_work_items += 1
-            elif video_provider != "local":
+            elif video_provider not in {"local", "replicate"}:
                 if has_video:
                     result["videos_skipped"] += 1
                     _emit_asset_progress(
@@ -578,7 +651,7 @@ def generate_project_assets_service(
                     result["video_failures"].append(
                         {
                             "scene_id": int(scene.get("id", 0)),
-                            "error": "Video generation is configured for upload/local-manual clips only.",
+                            "error": "Video generation is configured for upload-only clips, local backends, or supported cloud providers only.",
                         }
                     )
                     _emit_asset_progress(
@@ -602,15 +675,64 @@ def generate_project_assets_service(
                     status="running",
                 )
                 try:
-                    path = generate_scene_video(
+                    video_result = generate_scene_video_result(
                         scene,
                         project_dir,
                         brief=brief,
                         provider=video_provider,
                         model=video_generation_model,
+                        model_selection_mode=video_model_selection_mode,
+                        quality_mode=video_quality_mode,
+                        generate_audio=video_generate_audio,
+                        image_provider=image_provider,
+                        image_model=image_generation_model,
+                        tts_kwargs=tts_kwargs,
                     )
+                    path = Path(str(video_result["path"]))
                     scene["video_path"] = str(path)
+                    uses_clip_audio = bool(video_result.get("provider") == "replicate" and video_result.get("generate_audio"))
+                    scene["video_audio_source"] = "clip" if uses_clip_audio else "narration"
+                    if uses_clip_audio:
+                        scene["audio_path"] = None
                     result["videos_generated"] += 1
+                    append_actual_cost_entry(
+                        plan,
+                        video_generation_entry(
+                            scene=scene,
+                            provider=str(video_result.get("provider") or video_provider),
+                            model=str(video_result.get("model") or video_generation_model),
+                            model_selection_mode=video_model_selection_mode,
+                            quality_mode=str(video_result.get("quality_mode") or video_quality_mode),
+                            generate_audio=bool(video_result.get("generate_audio")),
+                            estimated=False,
+                            operation="asset_pass",
+                            duration_seconds=float(video_result.get("duration_seconds") or 0.0),
+                        ),
+                    )
+                    if video_result.get("reference_image_generated"):
+                        append_actual_cost_entry(
+                            plan,
+                            image_generation_entry(
+                                scene=scene,
+                                provider=image_provider,
+                                model=image_generation_model,
+                                estimated=False,
+                                operation="video_reference_image",
+                            ),
+                        )
+                    if video_result.get("reference_audio_generated"):
+                        append_actual_cost_entry(
+                            plan,
+                            tts_entry(
+                                scene=scene,
+                                provider=str(video_result.get("reference_audio_provider") or tts_kwargs.get("tts_provider") or "kokoro"),
+                                model=str(video_result.get("reference_audio_model") or tts_kwargs.get("openai_model_id") or tts_kwargs.get("elevenlabs_model_id") or ""),
+                                estimated=False,
+                                operation="video_reference_audio",
+                                purpose="reference_audio",
+                                text=str(scene.get("narration") or ""),
+                            ),
+                        )
                     _emit_asset_progress(
                         progress_callback,
                         completed=completed_work_items,

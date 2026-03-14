@@ -16,6 +16,7 @@ PROJECTS_DIR = REPO_ROOT / "projects"
 PROJECTS_DIR.mkdir(exist_ok=True)
 _KOKORO_VOICE_PATTERN = re.compile(r"^[ab][fm]_[a-z0-9]+$")
 _OPENAI_TTS_VOICES = {"alloy", "ash", "ballad", "coral", "echo", "fable", "nova", "onyx", "sage", "shimmer"}
+DEFAULT_REPLICATE_VIDEO_MODEL = "kwaivgi/kling-v3-video"
 
 
 def check_api_keys() -> dict[str, bool]:
@@ -35,8 +36,12 @@ def available_tts_providers(keys: dict[str, bool] | None = None) -> dict[str, st
     providers = {"kokoro": "Kokoro (Local)"}
     if keys.get("replicate"):
         providers["chatterbox"] = "Chatterbox (Cloud / Replicate)"
-    if keys.get("elevenlabs"):
+    if keys.get("elevenlabs") and keys.get("replicate"):
+        providers["elevenlabs"] = "ElevenLabs (API / Replicate fallback)"
+    elif keys.get("elevenlabs"):
         providers["elevenlabs"] = "ElevenLabs (Cloud)"
+    elif keys.get("replicate"):
+        providers["elevenlabs"] = "ElevenLabs (Replicate)"
     if keys.get("openai"):
         providers["openai"] = "OpenAI TTS (Cloud)"
     return providers
@@ -132,9 +137,33 @@ def remotion_available() -> bool:
     )
 
 
-def available_video_generation_providers() -> list[str]:
+def remotion_capabilities() -> dict[str, bool]:
+    """Return the locally available Remotion feature surface for the UI."""
+    frontend_dir = REPO_ROOT / "frontend"
+    node_modules = frontend_dir / "node_modules"
+    has_node = bool(shutil.which("node"))
+    return {
+        "render_available": remotion_available(),
+        "player_available": has_node and (node_modules / "@remotion" / "player" / "package.json").exists(),
+        "transitions_available": has_node and (node_modules / "@remotion" / "transitions" / "package.json").exists(),
+        "three_available": has_node
+        and (node_modules / "three" / "package.json").exists()
+        and (node_modules / "@react-three" / "fiber" / "package.json").exists()
+        and (node_modules / "@react-three" / "drei" / "package.json").exists(),
+    }
+
+
+def default_replicate_video_generation_model() -> str:
+    """Return the default Replicate-hosted video model slug."""
+    return DEFAULT_REPLICATE_VIDEO_MODEL
+
+
+def available_video_generation_providers(keys: dict[str, bool] | None = None) -> list[str]:
     """Return supported video-generation providers in UI preference order."""
+    keys = keys or check_api_keys()
     providers = ["manual"]
+    if keys.get("replicate"):
+        providers.insert(0, "replicate")
     if local_video_generation_available():
         providers.insert(0, "local")
     return providers
@@ -213,13 +242,25 @@ def resolve_video_profile(profile: dict | None = None) -> dict:
     if isinstance(profile, dict):
         resolved.update(profile)
 
+    keys = check_api_keys()
     provider = str(resolved.get("provider") or "manual").strip().lower()
     if provider == "local" and not local_video_generation_available():
         provider = "manual"
-    if provider not in {"manual", "local", "agent"}:
+    if provider == "replicate" and not keys.get("replicate"):
+        provider = "manual"
+    if provider not in {"manual", "local", "replicate", "agent"}:
         provider = "manual"
     resolved["provider"] = provider
-    resolved["generation_model"] = str(
-        resolved.get("generation_model") or default_local_video_generation_model()
-    ).strip()
+    generation_model = str(resolved.get("generation_model") or "").strip()
+    if provider == "local":
+        generation_model = generation_model or default_local_video_generation_model()
+    elif provider == "replicate":
+        generation_model = generation_model or default_replicate_video_generation_model()
+    resolved["generation_model"] = generation_model.strip()
+    selection_mode = str(resolved.get("model_selection_mode") or "automatic").strip().lower()
+    resolved["model_selection_mode"] = selection_mode if selection_mode in {"automatic", "advanced"} else "automatic"
+    quality_mode = str(resolved.get("quality_mode") or "standard").strip().lower()
+    resolved["quality_mode"] = quality_mode if quality_mode in {"standard", "pro"} else "standard"
+    raw_generate_audio = resolved.get("generate_audio")
+    resolved["generate_audio"] = True if raw_generate_audio is None else bool(raw_generate_audio)
     return resolved

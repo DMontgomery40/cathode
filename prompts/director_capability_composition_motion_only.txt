@@ -1,0 +1,5 @@
+Capability mode: motion only.
+
+- Every scene should be conceived as a deterministically staged motion beat rather than a still image or raw footage beat.
+- Lean on exact `on_screen_text`, structured copy, and `data_points`.
+- Use `staging_notes` to describe the visual rhythm, reveals, and layout feel of each beat.

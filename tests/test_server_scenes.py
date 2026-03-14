@@ -191,6 +191,7 @@ def test_video_upload(client, tmp_path):
     assert "clip_abc1" in scene["video_path"]
     assert scene["image_path"] is None
     assert scene["preview_path"] is None
+    assert scene["video_audio_source"] == "narration"
 
 
 def test_video_upload_rejects_wrong_content_type(client, tmp_path):
@@ -408,11 +409,18 @@ def test_image_generate_error(mock_gen, client, tmp_path):
 # ---------------------------------------------------------------------------
 
 
-@patch("server.routers.scenes.generate_scene_video")
+@patch("server.routers.scenes.generate_scene_video_result")
 def test_video_generate(mock_gen, client, tmp_path):
     project_dir = tmp_path / "demo"
     project_dir.mkdir()
-    mock_gen.return_value = project_dir / "clips" / "scene_000.mp4"
+    mock_gen.return_value = {
+        "path": project_dir / "clips" / "scene_000.mp4",
+        "provider": "local",
+        "model": "wan/wan-2.1",
+        "generate_audio": False,
+        "quality_mode": "standard",
+        "duration_seconds": 5.0,
+    }
     plan = _fresh_plan()
     plan["scenes"][0]["image_path"] = "projects/demo/images/existing.png"
     plan["scenes"][0]["preview_path"] = "projects/demo/previews/existing.mp4"
@@ -423,7 +431,11 @@ def test_video_generate(mock_gen, client, tmp_path):
         patch("server.routers.scenes.save_plan", side_effect=lambda d, p: p),
         patch(
             "server.routers.scenes.resolve_video_profile",
-            return_value={"provider": "local", "generation_model": "wan/wan-2.1"},
+            return_value={
+                "provider": "local",
+                "generation_model": "wan/wan-2.1",
+                "model_selection_mode": "automatic",
+            },
         ),
     ):
         resp = client.post("/api/projects/demo/scenes/abc1/video-generate", json={})
@@ -435,10 +447,92 @@ def test_video_generate(mock_gen, client, tmp_path):
     assert scene["image_path"] is None
     assert scene["preview_path"] is None
     assert scene["video_path"] == str(project_dir / "clips" / "scene_000.mp4")
+    assert scene["video_audio_source"] == "narration"
+
+
+@patch("server.routers.scenes.generate_scene_video_result")
+def test_video_generate_replicate_defaults_scene_to_clip_audio(mock_gen, client, tmp_path):
+    project_dir = tmp_path / "demo"
+    project_dir.mkdir()
+    mock_gen.return_value = {
+        "path": project_dir / "clips" / "scene_000.mp4",
+        "provider": "replicate",
+        "model": "kwaivgi/kling-avatar-v2",
+        "generate_audio": True,
+        "quality_mode": "standard",
+        "duration_seconds": 5.0,
+    }
+
+    with (
+        patch("server.routers.scenes.PROJECTS_DIR", tmp_path),
+        patch("server.routers.scenes.load_plan", return_value=_fresh_plan()),
+        patch("server.routers.scenes.save_plan", side_effect=lambda d, p: p),
+        patch(
+            "server.routers.scenes.resolve_video_profile",
+            return_value={
+                "provider": "replicate",
+                "generation_model": "wan/wan-2.1",
+                "model_selection_mode": "automatic",
+                "quality_mode": "standard",
+                "generate_audio": True,
+            },
+        ),
+    ):
+        resp = client.post("/api/projects/demo/scenes/abc1/video-generate", json={})
+
+    assert resp.status_code == 200
+    kwargs = mock_gen.call_args.kwargs
+    assert kwargs["provider"] == "replicate"
+    assert kwargs["model"] == "wan/wan-2.1"
+    assert kwargs["model_selection_mode"] == "automatic"
+    assert kwargs["quality_mode"] == "standard"
+    assert kwargs["generate_audio"] is True
+    scene = resp.json()["scenes"][0]
+    assert scene["video_audio_source"] == "clip"
+    assert scene["audio_path"] is None
+
+
+@patch("server.routers.scenes.generate_scene_video_result")
+def test_video_generate_accepts_model_selection_mode_override(mock_gen, client, tmp_path):
+    project_dir = tmp_path / "demo"
+    project_dir.mkdir()
+    mock_gen.return_value = {
+        "path": project_dir / "clips" / "scene_000.mp4",
+        "provider": "replicate",
+        "model": "wan/wan-2.1",
+        "generate_audio": True,
+        "quality_mode": "standard",
+        "duration_seconds": 5.0,
+    }
+
+    with (
+        patch("server.routers.scenes.PROJECTS_DIR", tmp_path),
+        patch("server.routers.scenes.load_plan", return_value=_fresh_plan()),
+        patch("server.routers.scenes.save_plan", side_effect=lambda d, p: p),
+        patch(
+            "server.routers.scenes.resolve_video_profile",
+            return_value={
+                "provider": "replicate",
+                "generation_model": "",
+                "model_selection_mode": "automatic",
+                "quality_mode": "standard",
+                "generate_audio": True,
+            },
+        ),
+    ):
+        resp = client.post(
+            "/api/projects/demo/scenes/abc1/video-generate",
+            json={"model_selection_mode": "advanced", "model": "wan/wan-2.1"},
+        )
+
+    assert resp.status_code == 200
+    kwargs = mock_gen.call_args.kwargs
+    assert kwargs["model_selection_mode"] == "advanced"
+    assert kwargs["model"] == "wan/wan-2.1"
 
 
 @patch(
-    "server.routers.scenes.generate_scene_video",
+    "server.routers.scenes.generate_scene_video_result",
     side_effect=ValueError("Local video generation is not configured."),
 )
 def test_video_generate_error(mock_gen, client, tmp_path):
@@ -463,10 +557,14 @@ def test_video_generate_error(mock_gen, client, tmp_path):
 # ---------------------------------------------------------------------------
 
 
-@patch("server.routers.scenes.generate_scene_audio")
+@patch("server.routers.scenes.generate_scene_audio_result")
 def test_audio_generate(mock_gen, client, tmp_path):
     (tmp_path / "demo").mkdir()
-    mock_gen.return_value = tmp_path / "demo" / "audio" / "scene_000.wav"
+    mock_gen.return_value = {
+        "path": tmp_path / "demo" / "audio" / "scene_000.wav",
+        "provider": "kokoro",
+        "model": "kokoro-local",
+    }
 
     with (
         patch("server.routers.scenes.PROJECTS_DIR", tmp_path),
@@ -486,12 +584,27 @@ def test_audio_generate(mock_gen, client, tmp_path):
     mock_gen.assert_called_once()
 
 
+@patch("server.routers.scenes.build_remotion_manifest", return_value={"scenes": [{"uid": "abc1"}], "fps": 24})
+def test_scene_remotion_manifest_endpoint(mock_manifest, client, tmp_path):
+    (tmp_path / "demo").mkdir()
+
+    with (
+        patch("server.routers.scenes.PROJECTS_DIR", tmp_path),
+        patch("server.routers.scenes.load_plan", return_value=_fresh_plan()),
+    ):
+        resp = client.get("/api/projects/demo/scenes/abc1/remotion-manifest")
+
+    assert resp.status_code == 200
+    assert resp.json()["fps"] == 24
+    mock_manifest.assert_called_once()
+
+
 # ---------------------------------------------------------------------------
 # Prompt refine
 # ---------------------------------------------------------------------------
 
 
-@patch("server.routers.scenes.refine_prompt", return_value="improved prompt")
+@patch("server.routers.scenes.refine_prompt_with_metadata", return_value=("improved prompt", {"actual": None, "preflight": None}))
 @patch("server.routers.scenes.choose_llm_provider", return_value="openai")
 def test_prompt_refine(mock_llm, mock_refine, client, tmp_path):
     (tmp_path / "demo").mkdir()
@@ -529,7 +642,7 @@ def test_prompt_refine_missing_feedback(client, tmp_path):
 # ---------------------------------------------------------------------------
 
 
-@patch("server.routers.scenes.refine_narration", return_value="improved narration")
+@patch("server.routers.scenes.refine_narration_with_metadata", return_value=("improved narration", {"actual": None, "preflight": None}))
 @patch("server.routers.scenes.choose_llm_provider", return_value="openai")
 def test_narration_refine(mock_llm, mock_refine, client, tmp_path):
     (tmp_path / "demo").mkdir()
@@ -591,6 +704,11 @@ def test_motion_preview_runs_in_threadpool(mock_manifest, mock_render, client, t
         "template_id": "kinetic_title",
         "props": {"headline": "Prompts on prompts"},
     }
+    plan["scenes"][0]["composition"] = {
+        "family": "kinetic_title",
+        "mode": "native",
+        "props": {"headline": "Prompts on prompts"},
+    }
 
     captured: dict[str, object] = {}
 
@@ -611,6 +729,7 @@ def test_motion_preview_runs_in_threadpool(mock_manifest, mock_render, client, t
     saved_scene = resp.json()["scenes"][0]
     assert saved_scene["preview_path"] == "/tmp/previews/preview_motion_scene.mp4"
     assert saved_scene["motion"]["preview_path"] == "/tmp/previews/preview_motion_scene.mp4"
+    assert saved_scene["composition"]["preview_path"] == "/tmp/previews/preview_motion_scene.mp4"
 
 
 def test_preview_project_not_found(client, tmp_path):

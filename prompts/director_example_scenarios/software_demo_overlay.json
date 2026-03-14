@@ -1,0 +1,14 @@
+{
+  "project_name": "software_demo_overlay",
+  "source_mode": "source_text",
+  "video_goal": "Explain a software workflow with one clean proof moment the viewer can track instantly.",
+  "audience": "Operators evaluating whether a tool really shortens the workflow.",
+  "source_material": "Show a workspace where a user pastes a brief, gets a storyboard, edits a scene, and previews the result. The viewer should clearly notice the proof moment where the right panel updates after save.",
+  "target_length_minutes": 1.5,
+  "tone": "confident and concrete",
+  "visual_style": "clean product-demo editorial",
+  "composition_mode": "hybrid",
+  "visual_source_strategy": "mixed_media",
+  "video_scene_style": "cinematic",
+  "text_render_mode": "deterministic_overlay"
+}

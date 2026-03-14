@@ -169,3 +169,39 @@ def test_generate_audio_falls_back_to_kokoro_when_elevenlabs_fails(monkeypatch, 
 
     assert path.exists()
     assert path.read_bytes() == b"wav"
+
+
+def test_generate_audio_falls_back_to_replicate_hosted_elevenlabs_before_kokoro(monkeypatch, tmp_path):
+    output_path = tmp_path / "audio.wav"
+
+    def fail_elevenlabs(**kwargs):
+        raise RuntimeError("401 Unauthorized")
+
+    def fake_replicate(**kwargs):
+        Path(kwargs["output_path"]).parent.mkdir(parents=True, exist_ok=True)
+        Path(kwargs["output_path"]).write_bytes(b"replicate-wav")
+        return Path(kwargs["output_path"])
+
+    def fail_kokoro(*args, **kwargs):  # pragma: no cover - should not be reached
+        raise AssertionError("Kokoro fallback should not run when Replicate ElevenLabs succeeds")
+
+    monkeypatch.setattr(voice_gen, "_generate_with_elevenlabs", fail_elevenlabs)
+    monkeypatch.setattr(voice_gen, "_generate_with_replicate_elevenlabs", fake_replicate)
+    monkeypatch.setattr(voice_gen, "_generate_with_kokoro", fail_kokoro)
+
+    path = voice_gen.generate_audio(
+        "Hello world",
+        output_path,
+        voice="Bella",
+        speed=1.0,
+        tts_provider="elevenlabs",
+    )
+
+    assert path.exists()
+    assert path.read_bytes() == b"replicate-wav"
+
+
+def test_normalize_voice_for_replicate_elevenlabs_maps_curated_names():
+    assert voice_gen._normalize_voice_for_replicate_elevenlabs("Bella") == "Sarah"
+    assert voice_gen._normalize_voice_for_replicate_elevenlabs("Domi") == "Domi"
+    assert voice_gen._normalize_voice_for_replicate_elevenlabs("Unknown Voice") == "Rachel"

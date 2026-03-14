@@ -1,0 +1,9 @@
+{
+  "id": "ranked_data_stage__v1",
+  "title": "Ranked Data Stage",
+  "intents": [
+    "ranked_data_stage"
+  ],
+  "source_run": "experiments/director_golden/runs/20260314-095301_ranked_data_stage_claude-sonnet-4-6",
+  "promoted_utc": "2026-03-14T09:58:24.016911+00:00"
+}

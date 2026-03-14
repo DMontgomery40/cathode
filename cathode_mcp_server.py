@@ -198,8 +198,10 @@ def build_server() -> FastMCP:
         llm_provider: Annotated[str | None, Field(description="Optional storyboard provider override.", default=None)] = None,
         image_provider: Annotated[Literal["replicate", "local", "manual"] | None, Field(description="Optional image provider override.", default=None)] = None,
         image_generation_model: Annotated[str | None, Field(description="Optional image generation model override or local Hugging Face repo id/path.", default=None)] = None,
-        video_provider: Annotated[Literal["manual", "local", "agent"] | None, Field(description="Optional video provider override.", default=None)] = None,
-        video_generation_model: Annotated[str | None, Field(description="Optional local video model label or path override.", default=None)] = None,
+        video_provider: Annotated[Literal["manual", "local", "replicate", "agent"] | None, Field(description="Optional video provider override.", default=None)] = None,
+        video_generation_model: Annotated[str | None, Field(description="Optional video model label or provider-specific slug override.", default=None)] = None,
+        video_quality_mode: Annotated[Literal["standard", "pro"] | None, Field(description="Optional cloud video quality override.", default=None)] = None,
+        video_generate_audio: Annotated[bool | None, Field(description="Optional cloud video audio generation override.", default=None)] = None,
         tts_provider: Annotated[str | None, Field(description="Optional TTS provider override.", default=None)] = None,
         tts_voice: Annotated[str | None, Field(description="Optional TTS voice override.", default=None)] = None,
         tts_speed: Annotated[float | None, Field(description="Optional TTS speed override.", default=None, ge=0.25, le=4.0)] = None,
@@ -276,6 +278,8 @@ def build_server() -> FastMCP:
             {
                 "provider": video_provider,
                 "generation_model": video_generation_model,
+                "quality_mode": video_quality_mode,
+                "generate_audio": video_generate_audio,
             }
         )
         tts_profile = resolve_tts_profile(

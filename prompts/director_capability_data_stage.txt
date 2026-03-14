@@ -1,0 +1,4 @@
+Capability mode: ranked and data-led beats.
+
+- When the story hinges on ordered comparisons, ranked options, or structured values, use `data_points` with the exact labels or values in order.
+- Prefer motion-first or strongly staged beats for this material instead of hoping a still image will carry the logic by itself.
