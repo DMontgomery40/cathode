@@ -45,6 +45,7 @@ test.describe('Brief Studio', () => {
       await expect(page.getByLabel('Tone')).toBeVisible()
       await expect(page.getByLabel('Visual Style')).toBeVisible()
       await expect(page.getByLabel('Visual Source Strategy')).toBeVisible()
+      await expect(page.getByLabel('Text Strategy')).toBeVisible()
     })
 
     test('Constraints fieldset renders', async ({ page }) => {
@@ -112,6 +113,18 @@ test.describe('Brief Studio', () => {
 
       await select.selectOption('video_preferred')
       await expect(select).toHaveValue('video_preferred')
+    })
+
+    test('Text Strategy select has both modes', async ({ page }) => {
+      const select = page.getByLabel('Text Strategy')
+      const options = select.locator('option')
+      await expect(options).toHaveCount(2)
+
+      await select.selectOption('deterministic_overlay')
+      await expect(select).toHaveValue('deterministic_overlay')
+
+      await select.selectOption('visual_authored')
+      await expect(select).toHaveValue('visual_authored')
     })
 
     test('Composition Mode select has all options', async ({ page }) => {

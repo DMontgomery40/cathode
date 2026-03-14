@@ -15,6 +15,7 @@ def test_director_prompt_includes_source_mode_behavior_and_brief_payload():
             "target_length_minutes": 4.0,
             "tone": "direct and concise",
             "visual_style": "modern infographic",
+            "text_render_mode": "deterministic_overlay",
             "style_reference_summary": "High-contrast editorial lighting, restrained teal-and-amber palette, premium product-demo polish, crisp typography, dense but organized composition.",
             "must_include": "timeline",
             "must_avoid": "jargon",
@@ -28,8 +29,10 @@ def test_director_prompt_includes_source_mode_behavior_and_brief_payload():
     assert "Perform minimal rewriting" in prompt
     assert '"video_goal": "Explain the product launch"' in prompt
     assert '"visual_style": "modern infographic"' in prompt
+    assert '"text_render_mode": "deterministic_overlay"' in prompt
     assert '"style_reference_summary": "High-contrast editorial lighting, restrained teal-and-amber palette, premium product-demo polish, crisp typography, dense but organized composition."' in prompt
     assert "target narration words" in prompt
+    assert 'reserve on_screen_text for Cathode\'s deterministic overlay' in prompt
 
 
 def test_director_prompt_mentions_reviewed_footage_assets():

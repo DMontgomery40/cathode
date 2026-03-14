@@ -39,6 +39,7 @@ def test_build_remotion_manifest_uses_api_media_urls_and_motion_templates(tmp_pa
     plan = {
         "meta": {
             "project_name": "demo_project",
+            "brief": {"text_render_mode": "deterministic_overlay"},
             "render_profile": {"fps": 24, "render_backend": "remotion"},
         },
         "scenes": [
@@ -88,6 +89,7 @@ def test_build_remotion_manifest_uses_api_media_urls_and_motion_templates(tmp_pa
 
     assert manifest["projectName"] == "demo_project"
     assert manifest["fps"] == 24
+    assert manifest["textRenderMode"] == "deterministic_overlay"
     assert len(manifest["scenes"]) == 3
     assert manifest["scenes"][0]["imageUrl"].endswith("/api/projects/demo_project/media/images/scene_001.png")
     assert manifest["scenes"][1]["videoUrl"].endswith("/api/projects/demo_project/media/clips/scene_002.mp4")

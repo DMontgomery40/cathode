@@ -13,6 +13,7 @@ import {
   useProjectJobs,
   useCancelJob,
   useJobLog,
+  useSavePlan,
 } from '../lib/api/scene-hooks.ts'
 import type { Job } from '../lib/api/jobs.ts'
 import { WorkspaceCanvas, WorkspaceGrid, WorkspacePanel } from '../design-system/recipes'
@@ -28,6 +29,14 @@ function resolveRenderFps(renderProfile: Record<string, unknown> | null): number
   return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_FPS
 }
 
+function resolveTextRenderMode(
+  renderProfile: Record<string, unknown> | null,
+  brief: Record<string, unknown> | null,
+): string {
+  const candidate = String(renderProfile?.text_render_mode ?? brief?.text_render_mode ?? 'visual_authored').trim().toLowerCase()
+  return candidate === 'deterministic_overlay' ? 'deterministic_overlay' : 'visual_authored'
+}
+
 export function RenderControl() {
   const { projectId = '' } = useParams<{ projectId: string }>()
   const { data: plan } = usePlan(projectId)
@@ -35,17 +44,29 @@ export function RenderControl() {
   const startRender = useStartRender(projectId)
   const genAssets = useGenerateAssets(projectId)
   const cancelJobMut = useCancelJob()
+  const savePlan = useSavePlan(projectId)
 
   const [outputFilename, setOutputFilename] = useState(DEFAULT_OUTPUT_FILENAME)
   const [fps, setFps] = useState(DEFAULT_FPS)
   const [outputFilenameDirty, setOutputFilenameDirty] = useState(false)
   const [fpsDirty, setFpsDirty] = useState(false)
+  const [textRenderMode, setTextRenderMode] = useState('visual_authored')
+  const [textRenderModeDirty, setTextRenderModeDirty] = useState(false)
 
   const scenes = plan?.scenes ?? []
   const renderProfile = plan?.meta?.render_profile ?? null
+  const brief = typeof plan?.meta?.brief === 'object' && plan?.meta?.brief
+    ? plan.meta.brief as Record<string, unknown>
+    : null
   const renderBackend = typeof renderProfile === 'object' && renderProfile
     ? String((renderProfile as Record<string, unknown>).render_backend || 'ffmpeg')
     : 'ffmpeg'
+  const planTextRenderMode = resolveTextRenderMode(
+    typeof renderProfile === 'object' && renderProfile
+      ? renderProfile as Record<string, unknown>
+      : null,
+    brief,
+  )
 
   // Readiness checks
   const scenesWithVisual = scenes.filter((s) => sceneHasRenderableVisual(projectId, s, renderBackend))
@@ -90,6 +111,8 @@ export function RenderControl() {
     setFpsDirty(false)
     setOutputFilename(DEFAULT_OUTPUT_FILENAME)
     setFps(DEFAULT_FPS)
+    setTextRenderModeDirty(false)
+    setTextRenderMode('visual_authored')
   }, [projectId])
 
   useEffect(() => {
@@ -104,6 +127,12 @@ export function RenderControl() {
     }
   }, [fpsDirty, renderFps])
 
+  useEffect(() => {
+    if (!textRenderModeDirty) {
+      setTextRenderMode(planTextRenderMode)
+    }
+  }, [planTextRenderMode, textRenderModeDirty])
+
   const handleOutputFilenameChange = (value: string) => {
     setOutputFilenameDirty(true)
     setOutputFilename(value)
@@ -114,9 +143,36 @@ export function RenderControl() {
     setFps(value)
   }
 
+  const handleTextRenderModeChange = (value: string) => {
+    if (!plan || savePlan.isPending) return
+    setTextRenderModeDirty(true)
+    setTextRenderMode(value)
+    savePlan.mutate(
+      {
+        ...plan,
+        meta: {
+          ...plan.meta,
+          brief: {
+            ...(brief ?? {}),
+            text_render_mode: value,
+          },
+          render_profile: {
+            ...(typeof renderProfile === 'object' && renderProfile ? renderProfile as Record<string, unknown> : {}),
+            text_render_mode: value,
+          },
+        },
+      },
+      {
+        onSettled: () => {
+          setTextRenderModeDirty(false)
+        },
+      },
+    )
+  }
+
   const status = hasActiveJob
     ? 'rendering' as const
-    : startRender.isError || genAssets.isError
+    : startRender.isError || genAssets.isError || savePlan.isError
       ? 'error' as const
       : 'idle' as const
 
@@ -192,7 +248,7 @@ export function RenderControl() {
                   </button>
                   <button
                     onClick={() => startRender.mutate({ output_filename: outputFilename, fps })}
-                    disabled={!allReady || startRender.isPending || hasActiveJob}
+                    disabled={!allReady || startRender.isPending || hasActiveJob || savePlan.isPending}
                     className={clsx(
                       'rounded-[var(--radius-md)] border cursor-pointer outline-none text-left',
                       'focus-visible:shadow-[var(--focus-ring)]',
@@ -218,6 +274,9 @@ export function RenderControl() {
                 onOutputFilenameChange={handleOutputFilenameChange}
                 fps={fps}
                 onFpsChange={handleFpsChange}
+                textRenderMode={textRenderMode}
+                onTextRenderModeChange={handleTextRenderModeChange}
+                textRenderModeDisabled={!plan || savePlan.isPending}
                 renderProfile={renderProfile as Record<string, unknown> | null}
               />
 
