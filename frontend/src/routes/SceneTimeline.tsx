@@ -23,14 +23,15 @@ import {
   useRefineNarration,
   useGenerateScenePreview,
   useRunAgentDemo,
+  useSceneRemotionManifest,
 } from '../lib/api/scene-hooks.ts'
 import { LiveRegion } from '../design-system/a11y/index.ts'
 import type { ImageActionHistoryEntry, Scene, Plan } from '../lib/schemas/plan.ts'
 import { ResizeHandle, workspaceLayout } from '../design-system/layout'
 import { getApiErrorMessage } from '../lib/api/errors.ts'
-import { hasProjectMediaPath } from '../lib/media-url.ts'
 import { useInvalidateProjectOnJobCompletion } from '../lib/api/project-job-sync.ts'
-import { sceneHasRenderableVisual } from '../lib/scene-media.ts'
+import { sceneHasRenderableAudio, sceneHasRenderableVisual } from '../lib/scene-media.ts'
+import { resolveReplicateVideoRoute } from '../lib/video-generation.ts'
 
 interface SceneActionTrace {
   title: string
@@ -77,6 +78,9 @@ export function SceneTimeline() {
   const refineP = useRefinePrompt(projectId)
   const refineN = useRefineNarration(projectId)
   const genPreview = useGenerateScenePreview(projectId)
+  const selectedSceneRemotionManifest = useSceneRemotionManifest(projectId, selectedSceneId, {
+    enabled: Boolean(bootstrap?.providers?.remotion_capabilities?.player_available && selectedSceneId),
+  })
 
   const [liveMsg, setLiveMsg] = useState('')
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -103,7 +107,8 @@ export function SceneTimeline() {
     }
   }, [])
 
-  const scenes = plan?.scenes ?? EMPTY_SCENES
+  const currentPlan = latestPlanRef.current ?? plan ?? null
+  const scenes = currentPlan?.scenes ?? EMPTY_SCENES
   const selectedScene = scenes.find((s) => s.uid === selectedSceneId) ?? null
   const selectedIndex = scenes.findIndex((s) => s.uid === selectedSceneId)
   const renderWorkspacePath = `/projects/${encodeURIComponent(projectId)}/render`
@@ -184,21 +189,21 @@ export function SceneTimeline() {
 
   const handleReorder = useCallback(
     (reordered: Scene[]) => {
-      if (!plan) return
+      if (!currentPlan) return
       const updated: Plan = {
-        ...plan,
+        ...currentPlan,
         scenes: reordered.map((s, i) => ({ ...s, id: i + 1 })),
       }
       debouncedSave(updated)
       setLiveMsg('Scenes reordered')
     },
-    [plan, debouncedSave],
+    [currentPlan, debouncedSave],
   )
 
   const handleAddScene = useCallback(() => {
-    if (!plan) return
-    const compositionMode = typeof plan.meta?.brief === 'object' && plan.meta?.brief
-      ? String((plan.meta.brief as Record<string, unknown>).composition_mode || 'classic')
+    if (!currentPlan) return
+    const compositionMode = typeof currentPlan.meta?.brief === 'object' && currentPlan.meta?.brief
+      ? String((currentPlan.meta.brief as Record<string, unknown>).composition_mode || 'classic')
       : 'classic'
     const sceneType: Scene['scene_type'] = compositionMode === 'motion_only' ? 'motion' : 'image'
     const uid = `scene_${Date.now()}`
@@ -214,6 +219,27 @@ export function SceneTimeline() {
       video_path: null,
       audio_path: null,
       preview_path: null,
+      composition: sceneType === 'motion'
+        ? {
+            family: 'kinetic_title',
+            mode: 'native',
+            props: {},
+            transition_after: null,
+            data: {},
+            render_path: null,
+            preview_path: null,
+            rationale: '',
+          }
+        : {
+            family: 'static_media',
+            mode: 'none',
+            props: {},
+            transition_after: null,
+            data: {},
+            render_path: null,
+            preview_path: null,
+            rationale: '',
+          },
       motion: sceneType === 'motion'
         ? {
             template_id: 'kinetic_title',
@@ -224,19 +250,19 @@ export function SceneTimeline() {
           }
         : null,
     }
-    const updated: Plan = { ...plan, scenes: [...scenes, newScene] }
+    const updated: Plan = { ...currentPlan, scenes: [...scenes, newScene] }
     debouncedSave(updated)
     setSelectedScene(uid)
     setLiveMsg('Scene added')
-  }, [plan, scenes, debouncedSave, setSelectedScene])
+  }, [currentPlan, scenes, debouncedSave, setSelectedScene])
 
   const handleDeleteScene = useCallback(
     (uid: string) => {
-      if (!plan) return
+      if (!currentPlan) return
       if (!window.confirm('Delete this scene?')) return
       const updated: Plan = {
-        ...plan,
-        scenes: plan.scenes.filter((s) => s.uid !== uid).map((s, i) => ({ ...s, id: i + 1 })),
+        ...currentPlan,
+        scenes: currentPlan.scenes.filter((s) => s.uid !== uid).map((s, i) => ({ ...s, id: i + 1 })),
       }
       debouncedSave(updated)
       if (selectedSceneId === uid) {
@@ -244,19 +270,19 @@ export function SceneTimeline() {
       }
       setLiveMsg('Scene deleted')
     },
-    [plan, debouncedSave, selectedSceneId, setSelectedScene],
+    [currentPlan, debouncedSave, selectedSceneId, setSelectedScene],
   )
 
   const handleSceneChange = useCallback(
     (updated: Scene) => {
-      if (!plan) return
+      if (!currentPlan) return
       const updatedPlan: Plan = {
-        ...plan,
-        scenes: plan.scenes.map((s) => (s.uid === updated.uid ? updated : s)),
+        ...currentPlan,
+        scenes: currentPlan.scenes.map((s) => (s.uid === updated.uid ? updated : s)),
       }
       debouncedSave(updatedPlan)
     },
-    [plan, debouncedSave],
+    [currentPlan, debouncedSave],
   )
 
   const handleStageUpload = useCallback(
@@ -331,25 +357,41 @@ export function SceneTimeline() {
   const compactTimelineActions = timelineLayoutMode === 'rail' && sceneTimelineHeight <= 170
   const timelineDensityLabel = timelineLayoutMode === 'grid' ? 'Compact Rail' : 'Board View'
   const compactStageActions = !sceneInspectorCollapsed
-  const imageEditModel = typeof plan?.meta?.image_profile === 'object' && plan?.meta?.image_profile
-    ? String((plan.meta.image_profile as Record<string, unknown>).edit_model || '')
+  const imageEditModel = typeof currentPlan?.meta?.image_profile === 'object' && currentPlan?.meta?.image_profile
+    ? String((currentPlan.meta.image_profile as Record<string, unknown>).edit_model || '')
     : ''
-  const imageProfile = typeof plan?.meta?.image_profile === 'object' && plan?.meta?.image_profile
-    ? plan.meta.image_profile as Record<string, unknown>
+  const imageProfile = typeof currentPlan?.meta?.image_profile === 'object' && currentPlan?.meta?.image_profile
+    ? currentPlan.meta.image_profile as Record<string, unknown>
     : {}
-  const imageActionHistory = Array.isArray(plan?.meta?.image_action_history)
-    ? (plan?.meta?.image_action_history as ImageActionHistoryEntry[]).filter((entry): entry is ImageActionHistoryEntry => Boolean(entry && typeof entry === 'object'))
+  const imageActionHistory = Array.isArray(currentPlan?.meta?.image_action_history)
+    ? (currentPlan?.meta?.image_action_history as ImageActionHistoryEntry[]).filter((entry): entry is ImageActionHistoryEntry => Boolean(entry && typeof entry === 'object'))
     : []
   const imageGenerationProvider = String(imageProfile.provider || 'manual')
   const imageGenerationModel = String(imageProfile.generation_model || '')
-  const videoProfile = typeof plan?.meta?.video_profile === 'object' && plan?.meta?.video_profile
-    ? plan.meta.video_profile as Record<string, unknown>
+  const videoProfile = typeof currentPlan?.meta?.video_profile === 'object' && currentPlan?.meta?.video_profile
+    ? currentPlan.meta.video_profile as Record<string, unknown>
     : {}
   const videoGenerationProvider = String(videoProfile.provider || 'manual')
   const videoGenerationModel = String(videoProfile.generation_model || '')
+  const videoModelSelectionMode = String(videoProfile.model_selection_mode || 'automatic')
+  const videoQualityMode = String(videoProfile.quality_mode || 'standard')
+  const videoGenerateAudio = Boolean(videoProfile.generate_audio ?? true)
   const videoProviders = bootstrap?.providers?.video_providers ?? []
-  const renderProfile = typeof plan?.meta?.render_profile === 'object' && plan?.meta?.render_profile
-    ? plan.meta.render_profile as Record<string, unknown>
+  const ttsProviders = bootstrap?.providers?.tts_providers ?? {}
+  const ttsVoiceOptions = bootstrap?.providers?.tts_voice_options ?? {}
+  const ttsProfile = typeof currentPlan?.meta?.tts_profile === 'object' && currentPlan?.meta?.tts_profile
+    ? currentPlan.meta.tts_profile as Record<string, unknown>
+    : {}
+  const selectedSceneVideoRoute = videoGenerationProvider === 'replicate' && selectedScene
+    ? resolveReplicateVideoRoute({
+        modelSelectionMode: videoModelSelectionMode,
+        generationModel: videoGenerationModel,
+        generateAudio: videoGenerateAudio,
+        sceneKind: String(selectedScene.video_scene_kind || ''),
+      })
+    : null
+  const renderProfile = typeof currentPlan?.meta?.render_profile === 'object' && currentPlan?.meta?.render_profile
+    ? currentPlan.meta.render_profile as Record<string, unknown>
     : {}
   const renderBackend = String(renderProfile.render_backend || 'ffmpeg')
   const imageEditModels = bootstrap?.providers?.image_edit_models ?? []
@@ -369,14 +411,10 @@ export function SceneTimeline() {
     (job) => (job.requested_stage === 'render' || job.current_stage === 'render') && (job.status === 'queued' || job.status === 'running'),
   )
   const scenesWithVisual = scenes.filter((scene) => sceneHasRenderableVisual(projectId, scene, renderBackend))
-  const scenesWithAudio = scenes.filter((scene) => (
-    typeof scene.audio_exists === 'boolean'
-      ? scene.audio_exists
-      : hasProjectMediaPath(projectId, scene.audio_path)
-  ))
+  const scenesWithAudio = scenes.filter((scene) => sceneHasRenderableAudio(projectId, scene))
   const allReadyToRender = scenes.length > 0 && scenesWithVisual.length === scenes.length && scenesWithAudio.length === scenes.length
-  const projectVideoPath = typeof plan?.meta?.video_path === 'string' ? plan.meta.video_path : null
-  const projectVideoExists = typeof plan?.meta?.video_exists === 'boolean' ? plan.meta.video_exists : undefined
+  const projectVideoPath = typeof currentPlan?.meta?.video_path === 'string' ? currentPlan.meta.video_path : null
+  const projectVideoExists = typeof currentPlan?.meta?.video_exists === 'boolean' ? currentPlan.meta.video_exists : undefined
   const renderOutputFilename = projectVideoPath?.split('/').pop() ?? 'final_video.mp4'
   const renderReadinessCopy = allReadyToRender
     ? (projectVideoExists ? 'Ready to re-render from the current storyboard.' : 'All visuals and audio are in place. Ready to render.')
@@ -470,17 +508,38 @@ export function SceneTimeline() {
     },
     video: {
       provider: videoGenerationProvider,
-      model: videoGenerationModel || null,
+      selection_mode: videoModelSelectionMode,
+      configured_model: videoGenerationModel || null,
+      resolved_model: selectedSceneVideoRoute?.resolvedModel ?? (videoGenerationModel || null),
+      route_kind: selectedSceneVideoRoute?.routeKind ?? null,
+      route_reason: selectedSceneVideoRoute?.reason ?? null,
+      quality_mode: videoQualityMode,
+      generate_audio: videoGenerateAudio,
+      scene_kind: selectedScene?.video_scene_kind || null,
     },
     motion: {
       template_id: selectedScene?.motion?.template_id || null,
       props: selectedScene?.motion?.props || null,
       rationale: selectedScene?.motion?.rationale || null,
     },
+    composition: {
+      family: selectedScene?.composition?.family || null,
+      mode: selectedScene?.composition?.mode || null,
+      props: selectedScene?.composition?.props || null,
+      transition_after: selectedScene?.composition?.transition_after || null,
+      rationale: selectedScene?.composition?.rationale || null,
+    },
+    audio: {
+      provider: selectedScene?.tts_override_enabled ? selectedScene?.tts_provider || ttsProfile.provider || null : ttsProfile.provider || null,
+      voice: selectedScene?.tts_override_enabled ? selectedScene?.tts_voice || ttsProfile.voice || null : ttsProfile.voice || null,
+      speed: selectedScene?.tts_override_enabled ? selectedScene?.tts_speed ?? ttsProfile.speed ?? null : ttsProfile.speed ?? null,
+      override_enabled: selectedScene?.tts_override_enabled ?? false,
+      speaker_name: selectedScene?.speaker_name || null,
+    },
     render: {
       backend: renderBackend,
-      composition_mode: typeof plan?.meta?.brief === 'object' && plan?.meta?.brief
-        ? (plan.meta.brief as Record<string, unknown>).composition_mode || 'classic'
+      composition_mode: typeof currentPlan?.meta?.brief === 'object' && currentPlan?.meta?.brief
+        ? (currentPlan.meta.brief as Record<string, unknown>).composition_mode || 'classic'
         : 'classic',
     },
   }
@@ -516,36 +575,36 @@ export function SceneTimeline() {
   }, [sceneInspectorCollapsed, toggleSceneInspectorCollapsed])
 
   const handleImageProfileChange = useCallback((patch: Record<string, unknown>) => {
-    if (!plan) return
+    if (!currentPlan) return
     const nextPlan: Plan = {
-      ...plan,
+      ...currentPlan,
       meta: {
-        ...plan.meta,
+        ...currentPlan.meta,
         image_profile: {
-          ...(typeof plan.meta.image_profile === 'object' && plan.meta.image_profile ? plan.meta.image_profile : {}),
+          ...(typeof currentPlan.meta.image_profile === 'object' && currentPlan.meta.image_profile ? currentPlan.meta.image_profile : {}),
           ...patch,
         },
       },
     }
     debouncedSave(nextPlan)
     setLiveMsg('Image profile updated')
-  }, [debouncedSave, plan])
+  }, [debouncedSave, currentPlan])
 
   const handleVideoProfileChange = useCallback((patch: Record<string, unknown>) => {
-    if (!plan) return
+    if (!currentPlan) return
     const nextPlan: Plan = {
-      ...plan,
+      ...currentPlan,
       meta: {
-        ...plan.meta,
+        ...currentPlan.meta,
         video_profile: {
-          ...(typeof plan.meta.video_profile === 'object' && plan.meta.video_profile ? plan.meta.video_profile : {}),
+          ...(typeof currentPlan.meta.video_profile === 'object' && currentPlan.meta.video_profile ? currentPlan.meta.video_profile : {}),
           ...patch,
         },
       },
     }
     debouncedSave(nextPlan)
     setLiveMsg('Video profile updated')
-  }, [debouncedSave, plan])
+  }, [debouncedSave, currentPlan])
 
   if (isLoading) {
     return (
@@ -566,7 +625,7 @@ export function SceneTimeline() {
     )
   }
 
-  if (!plan || scenes.length === 0) {
+  if (!currentPlan || scenes.length === 0) {
     return (
       <div className="flex flex-col h-full">
         <WorkspaceHeader
@@ -699,6 +758,7 @@ export function SceneTimeline() {
             <MediaStage
               scene={selectedScene}
               project={projectId}
+              remotionManifest={selectedSceneRemotionManifest.data ?? null}
               actions={
                 <>
                   <button
@@ -858,6 +918,9 @@ export function SceneTimeline() {
                   }}
                   videoGenerationProvider={videoGenerationProvider}
                   videoGenerationModel={videoGenerationModel}
+                  videoModelSelectionMode={videoModelSelectionMode}
+                  videoQualityMode={videoQualityMode}
+                  videoGenerateAudio={videoGenerateAudio}
                   videoProviders={videoProviders}
                   onVideoProfileChange={handleVideoProfileChange}
                   onGenerateVideo={() => {
@@ -867,7 +930,13 @@ export function SceneTimeline() {
                       endpoint: `/api/projects/${projectId}/scenes/${selectedScene.uid}/video-generate`,
                       request: {
                         provider: videoGenerationProvider,
+                        model_selection_mode: videoModelSelectionMode,
                         model: videoGenerationModel || null,
+                        resolved_model: selectedSceneVideoRoute?.resolvedModel ?? (videoGenerationModel || null),
+                        route_reason: selectedSceneVideoRoute?.reason ?? null,
+                        scene_kind: selectedScene.video_scene_kind || null,
+                        quality_mode: videoQualityMode,
+                        generate_audio: videoGenerateAudio,
                       },
                       status: 'running',
                       happenedAt: new Date().toISOString(),
@@ -877,7 +946,13 @@ export function SceneTimeline() {
                       genVideo.mutate(
                         {
                           sceneUid: selectedScene.uid,
-                          opts: { provider: videoGenerationProvider, model: videoGenerationModel || undefined },
+                          opts: {
+                            provider: videoGenerationProvider,
+                            model: videoGenerationModel || undefined,
+                            model_selection_mode: videoModelSelectionMode,
+                            quality_mode: videoQualityMode,
+                            generate_audio: videoGenerateAudio,
+                          },
                         },
                         {
                           onSuccess: () => {
@@ -894,12 +969,21 @@ export function SceneTimeline() {
                   }}
                   videoGeneratePending={genVideo.isPending}
                   videoGenerateError={videoGenerateError}
+                  ttsProfile={ttsProfile}
+                  ttsProviders={ttsProviders}
+                  ttsVoiceOptions={ttsVoiceOptions}
                   onGenerateAudio={() => {
                     if (!selectedScene) return
                     const trace: SceneActionTrace = {
                       title: 'Generate scene audio',
                       endpoint: `/api/projects/${projectId}/scenes/${selectedScene.uid}/audio-generate`,
-                      request: {},
+                      request: {
+                        provider: selectedScene.tts_override_enabled ? selectedScene.tts_provider || ttsProfile.provider || null : ttsProfile.provider || null,
+                        voice: selectedScene.tts_override_enabled ? selectedScene.tts_voice || ttsProfile.voice || null : ttsProfile.voice || null,
+                        speed: selectedScene.tts_override_enabled ? selectedScene.tts_speed ?? ttsProfile.speed ?? null : ttsProfile.speed ?? null,
+                        override_enabled: selectedScene.tts_override_enabled ?? false,
+                        speaker_name: selectedScene.speaker_name || null,
+                      },
                       status: 'running',
                       happenedAt: new Date().toISOString(),
                       error: null,

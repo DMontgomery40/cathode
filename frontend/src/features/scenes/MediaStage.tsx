@@ -5,10 +5,12 @@ import { scenePreviewUrl, sceneVisualUrl } from '../../lib/scene-media.ts'
 import { GlassPanel } from '../../components/primitives/GlassPanel.tsx'
 import { Button } from '../../components/primitives/Button.tsx'
 import { describeRejectedFiles, splitAcceptedFiles } from '../../lib/uploads.ts'
+import { PlayerSurface } from '../../remotion/PlayerSurface.tsx'
 
 interface MediaStageProps {
   scene: Scene | null
   project: string
+  remotionManifest?: Record<string, unknown> | null
   actions?: React.ReactNode
   onUpload: (file: File) => void
   uploadPending?: boolean
@@ -16,7 +18,7 @@ interface MediaStageProps {
   compactActions?: boolean
 }
 
-export function MediaStage({ scene, project, actions, onUpload, uploadPending, uploadError, compactActions }: MediaStageProps) {
+export function MediaStage({ scene, project, remotionManifest, actions, onUpload, uploadPending, uploadError, compactActions }: MediaStageProps) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const fileRef = useRef<HTMLInputElement>(null)
   const [playing, setPlaying] = useState(false)
@@ -240,7 +242,13 @@ export function MediaStage({ scene, project, actions, onUpload, uploadPending, u
           </div>
         )}
 
-        {scene && isMotionScene && !previewUrl && (
+        {scene && remotionManifest && (
+          <div className="flex min-h-0 flex-1 p-[var(--space-4)]">
+            <PlayerSurface manifest={remotionManifest} className="flex-1" height={420} />
+          </div>
+        )}
+
+        {scene && isMotionScene && !previewUrl && !remotionManifest && (
           <div className="flex h-full flex-col justify-between px-[var(--space-6)] py-[var(--space-6)]">
             <div className="flex flex-col gap-[var(--space-3)]">
               <span
@@ -257,13 +265,13 @@ export function MediaStage({ scene, project, actions, onUpload, uploadPending, u
                   className="text-[var(--text-primary)] font-[family-name:var(--font-display)]"
                   style={{ fontSize: 'var(--text-xl)', lineHeight: 'var(--leading-tight)' }}
                 >
-                  {scene.motion?.props?.headline as string || scene.title || 'Motion scene'}
+                  {scene.motion?.props?.headline as string || scene.composition?.props?.headline as string || scene.title || 'Motion scene'}
                 </div>
                 <div
                   className="mt-[var(--space-3)] text-[var(--text-secondary)]"
                   style={{ fontSize: 'var(--text-sm)', maxWidth: '38rem' }}
                 >
-                  {scene.motion?.props?.body as string || scene.narration || 'Generate a preview to see the motion composition with the current template and audio timing.'}
+                  {scene.motion?.props?.body as string || scene.composition?.props?.body as string || scene.narration || 'Generate a preview to see the motion composition with the current template and audio timing.'}
                 </div>
               </div>
             </div>
@@ -283,7 +291,7 @@ export function MediaStage({ scene, project, actions, onUpload, uploadPending, u
           </div>
         )}
 
-        {scene && hasImageVisual && !hasVideoVisual && !isMotionScene && visualUrl && (
+        {scene && hasImageVisual && !hasVideoVisual && !isMotionScene && visualUrl && !remotionManifest && (
           <div className="flex min-h-0 flex-1 items-center justify-center p-[var(--space-4)]">
             <img
               src={visualUrl ?? undefined}
@@ -293,7 +301,7 @@ export function MediaStage({ scene, project, actions, onUpload, uploadPending, u
           </div>
         )}
 
-        {scene && (hasVideoVisual || previewUrl) && (
+        {scene && (hasVideoVisual || previewUrl) && !remotionManifest && (
           <div className="flex min-h-0 flex-1 flex-col">
             <div className="flex min-h-0 flex-1 items-center justify-center p-[var(--space-4)] pb-[var(--space-3)]">
               <video

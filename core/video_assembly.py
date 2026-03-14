@@ -133,6 +133,40 @@ def get_media_duration(path: str | Path) -> float | None:
     return _probe_duration(media_path)
 
 
+def media_has_audio_stream(path: str | Path) -> bool:
+    """Return whether a media file contains at least one audio stream."""
+    media_path = Path(path)
+    if not media_path.exists():
+        return False
+    try:
+        completed = _run_command(
+            [
+                "ffprobe",
+                "-v",
+                "error",
+                "-select_streams",
+                "a",
+                "-show_entries",
+                "stream=index",
+                "-of",
+                "default=noprint_wrappers=1:nokey=1",
+                str(media_path),
+            ],
+            capture=True,
+        )
+    except (FileNotFoundError, subprocess.CalledProcessError):
+        return False
+    return bool(completed.stdout.strip())
+
+
+def scene_uses_clip_audio(scene: dict[str, Any]) -> bool:
+    """Return whether a video scene should render from the clip's embedded audio."""
+    return (
+        str(scene.get("scene_type") or "image").strip().lower() == "video"
+        and str(scene.get("video_audio_source") or "narration").strip().lower() == "clip"
+    )
+
+
 def resolve_scene_video_path(scene: dict[str, Any]) -> str | None:
     """Return the playable clip path for video-like scenes."""
     scene_type = str(scene.get("scene_type") or "image").strip().lower()
@@ -286,13 +320,36 @@ def _audio_filter(target_duration: float) -> str:
     )
 
 
+def _tempo_audio_filters(playback_speed: float) -> list[str]:
+    """Return one or more atempo filters for the requested playback speed."""
+    speed = max(float(playback_speed), 0.01)
+    filters: list[str] = []
+    while speed > 2.0:
+        filters.append("atempo=2.0")
+        speed /= 2.0
+    while speed < 0.5:
+        filters.append("atempo=0.5")
+        speed /= 0.5
+    if abs(speed - 1.0) > 1e-6:
+        filters.append(f"atempo={speed:.8f}")
+    return filters
+
+
 def _scene_target_duration(scene: dict[str, Any], default_duration: float) -> tuple[float, bool]:
+    scene_type = str(scene.get("scene_type") or "image").strip().lower()
+    if scene_type == "video" and scene_uses_clip_audio(scene):
+        timing = get_video_scene_timing(scene)
+        video_path = resolve_scene_video_path(scene)
+        return (
+            float(timing["effective_duration"] or default_duration),
+            bool(video_path and Path(video_path).exists() and media_has_audio_stream(video_path)),
+        )
+
     audio_path = scene.get("audio_path")
     if audio_path and Path(audio_path).exists():
         audio_duration = get_media_duration(audio_path)
         return float(audio_duration or default_duration), True
 
-    scene_type = str(scene.get("scene_type") or "image").strip().lower()
     if scene_type in {"video", "motion"}:
         timing = get_video_scene_timing(scene)
         return float(timing["effective_duration"] or default_duration), False
@@ -384,7 +441,12 @@ def _render_video_scene(
         raise ValueError(f"Scene {scene_id}: no playable clip found at {video_path!r}")
 
     source_duration = get_media_duration(video_path)
-    timing = get_video_scene_timing(scene, source_duration=source_duration, audio_duration=target_duration)
+    use_clip_audio = scene_uses_clip_audio(scene)
+    timing = get_video_scene_timing(
+        scene,
+        source_duration=source_duration,
+        audio_duration=None if use_clip_audio else target_duration,
+    )
 
     if target_duration > float(timing["effective_duration"] or 0.0) + 0.05 and not bool(timing["hold_last_frame"]):
         extra = target_duration - float(timing["effective_duration"] or 0.0)
@@ -414,6 +476,18 @@ def _render_video_scene(
     filter_steps.append("setpts=PTS-STARTPTS")
 
     audio_path = scene.get("audio_path")
+    use_clip_input_audio = use_clip_audio and media_has_audio_stream(video_path)
+    audio_map = "0:a:0" if use_clip_input_audio else "1:a:0"
+    audio_filter_steps: list[str] = []
+    if use_clip_input_audio:
+        if trim_start > 0.0 or trim_end is not None:
+            trim_filter = f"atrim=start={trim_start:.6f}"
+            if trim_end is not None:
+                trim_filter += f":end={float(trim_end):.6f}"
+            audio_filter_steps.append(trim_filter)
+        audio_filter_steps.extend(_tempo_audio_filters(playback_speed))
+    audio_filter_steps.append(_audio_filter(target_duration))
+
     cmd = [
         "ffmpeg",
         "-y",
@@ -423,9 +497,9 @@ def _render_video_scene(
         "-i",
         str(video_path),
     ]
-    if audio_path and Path(audio_path).exists():
+    if not use_clip_input_audio and audio_path and Path(audio_path).exists():
         cmd.extend(["-i", str(audio_path)])
-    else:
+    elif not use_clip_input_audio:
         cmd.extend(
             [
                 "-f",
@@ -440,11 +514,11 @@ def _render_video_scene(
             "-map",
             "0:v:0",
             "-map",
-            "1:a:0",
+            audio_map,
             "-vf",
             ",".join(filter_steps),
             "-af",
-            _audio_filter(target_duration),
+            ",".join(audio_filter_steps),
             "-t",
             f"{target_duration:.6f}",
             *(_encoder_flags(encoder)),
@@ -729,7 +803,10 @@ def get_video_duration(scenes: list[dict]) -> float:
         scene_type = str(scene.get("scene_type") or "image").strip().lower()
         audio_path = scene.get("audio_path")
 
-        if audio_path and Path(audio_path).exists():
+        if scene_type == "video" and scene_uses_clip_audio(scene):
+            timing = get_video_scene_timing(scene)
+            total_duration += float(timing["effective_duration"] or 5.0)
+        elif audio_path and Path(audio_path).exists():
             total_duration += float(get_media_duration(audio_path) or 0.0)
         elif scene_type == "video":
             timing = get_video_scene_timing(scene)

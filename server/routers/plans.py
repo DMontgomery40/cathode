@@ -2,13 +2,21 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, Body, HTTPException
 
 from core.pipeline_service import rebuild_storyboard_service
-from core.project_schema import infer_composition_mode, normalize_agent_demo_profile, normalize_brief, resolve_render_backend
+from core.project_schema import (
+    infer_composition_mode,
+    normalize_agent_demo_profile,
+    normalize_brief,
+    resolve_render_backend,
+    resolve_render_strategy,
+)
 from core.project_store import annotate_plan_asset_existence, load_plan, save_plan
+from core.remotion_render import build_remotion_manifest
 from core.runtime import PROJECTS_DIR
 from server.schemas.plans import RebuildStoryboardRequest
 
@@ -59,10 +67,16 @@ async def rebuild_storyboard(
         meta.setdefault("brief", {})
         meta["brief"]["composition_mode"] = composition_mode
         render_profile = dict(meta.get("render_profile") or {})
-        render_profile["render_backend"] = resolve_render_backend(
-            {},
-            composition_mode=composition_mode,
+        render_profile["render_strategy"] = resolve_render_strategy(
+            render_profile.get("render_strategy")
         )
+        if render_profile["render_strategy"] == "auto":
+            render_profile.pop("render_backend", None)
+        else:
+            render_profile["render_backend"] = resolve_render_backend(
+                render_profile,
+                composition_mode=composition_mode,
+            )
         meta["render_profile"] = {**render_profile}
         save_plan(project_dir, plan)
     provider = body.provider if body else None
@@ -70,6 +84,25 @@ async def rebuild_storyboard(
         return annotate_plan_asset_existence(
             project_dir,
             rebuild_storyboard_service(project_dir, provider=provider),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.get("/projects/{project}/remotion-manifest")
+async def get_remotion_manifest(project: str) -> dict[str, Any]:
+    project_dir = _project_dir(project)
+    plan = load_plan(project_dir)
+    if plan is None:
+        raise HTTPException(status_code=404, detail=f"No plan.json for project: {project}")
+
+    render_profile = plan.get("meta", {}).get("render_profile")
+    try:
+        return build_remotion_manifest(
+            project_dir=project_dir,
+            plan=plan,
+            output_path=Path(project_dir) / "__player_preview__.mp4",
+            render_profile=render_profile if isinstance(render_profile, dict) else None,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))

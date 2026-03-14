@@ -12,12 +12,19 @@ from .demo_assets import build_footage_summary, normalize_footage_manifest
 
 SOURCE_MODES = ("ideas_notes", "source_text", "final_script")
 SCENE_TYPES = ("image", "video", "motion")
-COMPOSITION_MODES = ("classic", "motion_only", "hybrid")
+COMPOSITION_MODES = ("auto", "classic", "motion_only", "hybrid")
+EXPLICIT_COMPOSITION_MODES = ("classic", "motion_only", "hybrid")
 VISUAL_SOURCE_STRATEGIES = ("images_only", "mixed_media", "video_preferred")
+VIDEO_SCENE_STYLE_OPTIONS = ("auto", "cinematic", "speaking", "mixed")
 TEXT_RENDER_MODES = ("visual_authored", "deterministic_overlay")
 IMAGE_PROVIDERS = ("replicate", "local", "manual")
-VIDEO_PROVIDERS = ("manual", "local", "agent")
+VIDEO_PROVIDERS = ("manual", "local", "replicate", "agent")
+VIDEO_QUALITY_MODES = ("standard", "pro")
+VIDEO_AUDIO_SOURCES = ("narration", "clip")
+VIDEO_MODEL_SELECTION_MODES = ("automatic", "advanced")
+VIDEO_SCENE_KINDS = ("cinematic", "speaking")
 RENDER_BACKENDS = ("ffmpeg", "remotion")
+RENDER_STRATEGIES = ("auto", "force_ffmpeg", "force_remotion")
 AGENT_DEMO_PROFILE_KEYS = (
     "workspace_path",
     "app_url",
@@ -95,8 +102,10 @@ def default_brief() -> dict[str, Any]:
         "must_include": "",
         "must_avoid": "",
         "ending_cta": "",
-        "composition_mode": "classic",
+        "paid_media_budget_usd": "",
+        "composition_mode": "auto",
         "visual_source_strategy": "images_only",
+        "video_scene_style": "auto",
         "text_render_mode": "visual_authored",
         "available_footage": "",
         "footage_manifest": [],
@@ -115,6 +124,7 @@ def default_render_profile() -> dict[str, Any]:
         "height": 928,
         "fps": 24,
         "scene_types": ["image", "video", "motion"],
+        "render_strategy": "auto",
         "render_backend": "ffmpeg",
         "text_render_mode": "visual_authored",
     }
@@ -138,6 +148,9 @@ def default_video_profile() -> dict[str, Any]:
     return {
         "provider": "manual",
         "generation_model": "",
+        "model_selection_mode": "automatic",
+        "quality_mode": "standard",
+        "generate_audio": True,
     }
 
 
@@ -199,7 +212,7 @@ def infer_composition_mode(
     """Infer composition mode when the user did not explicitly choose one."""
     raw = brief if isinstance(brief, dict) else {}
     requested = str(raw.get("composition_mode") or "").strip().lower()
-    if requested in COMPOSITION_MODES:
+    if requested in EXPLICIT_COMPOSITION_MODES:
         return requested
 
     normalized_brief = normalize_brief(raw)
@@ -213,14 +226,22 @@ def resolve_render_backend(
     render_profile: Any,
     *,
     composition_mode: str,
+    scenes: list[dict[str, Any]] | None = None,
 ) -> str:
     """Choose the effective render backend for the current composition mode."""
     raw = render_profile if isinstance(render_profile, dict) else {}
+    requested_strategy = str(raw.get("render_strategy") or "").strip().lower()
+    if requested_strategy == "force_ffmpeg":
+        return "ffmpeg"
+    if requested_strategy == "force_remotion":
+        return "remotion"
+    if scenes and any(scene_requires_remotion(scene) for scene in scenes):
+        return "remotion"
     requested = str(raw.get("render_backend") or "").strip().lower()
-    if requested in RENDER_BACKENDS:
-        return requested
     if composition_mode in {"motion_only", "hybrid"}:
         return "remotion"
+    if requested in RENDER_BACKENDS:
+        return requested
     return "ffmpeg"
 
 
@@ -238,6 +259,123 @@ def resolve_text_render_mode(value: Any) -> str:
     """Normalize the project-wide text rendering strategy."""
     normalized = str(value or "").strip().lower()
     return normalized if normalized in TEXT_RENDER_MODES else "visual_authored"
+
+
+def resolve_render_strategy(value: Any) -> str:
+    """Normalize the persisted render-strategy override."""
+    normalized = str(value or "").strip().lower()
+    return normalized if normalized in RENDER_STRATEGIES else "auto"
+
+
+def default_scene_composition(scene_type: str) -> dict[str, Any]:
+    normalized_type = str(scene_type or "image").strip().lower()
+    if normalized_type == "motion":
+        return {
+            "family": "kinetic_title",
+            "mode": "native",
+            "props": {},
+            "transition_after": None,
+            "data": {},
+            "render_path": None,
+            "preview_path": None,
+            "rationale": "",
+        }
+    return {
+        "family": "static_media",
+        "mode": "none",
+        "props": {},
+        "transition_after": None,
+        "data": {},
+        "render_path": None,
+        "preview_path": None,
+        "rationale": "",
+    }
+
+
+def _normalize_scene_transition(value: Any) -> dict[str, Any] | None:
+    if not isinstance(value, dict):
+        return None
+    kind = str(value.get("kind") or value.get("presentation") or "").strip().lower()
+    if not kind:
+        return None
+    raw_duration = value.get("duration_in_frames") if "duration_in_frames" in value else value.get("durationInFrames")
+    try:
+        duration = max(1, int(raw_duration)) if raw_duration not in (None, "") else 20
+    except (TypeError, ValueError):
+        duration = 20
+    return {
+        "kind": kind,
+        "duration_in_frames": duration,
+    }
+
+
+def scene_composition_payload(scene: Any) -> dict[str, Any]:
+    src = scene if isinstance(scene, dict) else {}
+    composition_raw = src.get("composition") if isinstance(src.get("composition"), dict) else {}
+    motion_raw = src.get("motion") if isinstance(src.get("motion"), dict) else {}
+    legacy_intent = src.get("composition_intent") if isinstance(src.get("composition_intent"), dict) else {}
+    scene_type = str(src.get("scene_type") or "image").strip().lower()
+    defaults = default_scene_composition(scene_type)
+    family = str(
+        composition_raw.get("family")
+        or legacy_intent.get("family_hint")
+        or motion_raw.get("template_id")
+        or defaults["family"]
+    ).strip() or defaults["family"]
+    mode = str(composition_raw.get("mode") or legacy_intent.get("mode_hint") or defaults["mode"]).strip().lower() or defaults["mode"]
+    if mode not in {"none", "overlay", "native"}:
+        mode = defaults["mode"]
+
+    props = (
+        composition_raw.get("props")
+        if isinstance(composition_raw.get("props"), dict)
+        else motion_raw.get("props")
+        if isinstance(motion_raw.get("props"), dict)
+        else {}
+    )
+    data = composition_raw.get("data")
+    if not isinstance(data, (dict, list)):
+        if isinstance(src.get("data_points"), list):
+            normalized_data_points = [str(item).strip() for item in src.get("data_points") if str(item).strip()]
+            data = {"data_points": normalized_data_points} if normalized_data_points else {}
+        elif isinstance(legacy_intent.get("data_points"), list):
+            normalized_data_points = [str(item).strip() for item in legacy_intent.get("data_points") if str(item).strip()]
+            data = {"data_points": normalized_data_points} if normalized_data_points else {}
+        else:
+            data = {}
+    transition_after = _normalize_scene_transition(composition_raw.get("transition_after"))
+    if transition_after is None:
+        transition_hint = str(src.get("transition_hint") or legacy_intent.get("transition_after") or "").strip().lower()
+        if transition_hint in {"fade", "wipe"}:
+            transition_after = {"kind": transition_hint, "duration_in_frames": 20}
+
+    return {
+        "family": family,
+        "mode": mode,
+        "props": props,
+        "transition_after": transition_after,
+        "data": data if isinstance(data, (dict, list)) else {},
+        "render_path": composition_raw.get("render_path") or motion_raw.get("render_path"),
+        "preview_path": composition_raw.get("preview_path") or motion_raw.get("preview_path"),
+        "rationale": str(
+            composition_raw.get("rationale")
+            or motion_raw.get("rationale")
+            or src.get("staging_notes")
+            or legacy_intent.get("motion_notes")
+            or legacy_intent.get("layout")
+            or ""
+        ).strip(),
+    }
+
+
+def scene_requires_remotion(scene: Any) -> bool:
+    payload = scene_composition_payload(scene)
+    scene_type = str((scene or {}).get("scene_type") or "image").strip().lower() if isinstance(scene, dict) else "image"
+    if scene_type == "motion":
+        return True
+    if payload["mode"] in {"overlay", "native"}:
+        return True
+    return bool(payload["transition_after"])
 
 
 def _normalize_float(value: Any, fallback: float) -> float:
@@ -377,6 +515,7 @@ def normalize_brief(
         "must_include",
         "must_avoid",
         "ending_cta",
+        "paid_media_budget_usd",
         "available_footage",
         "style_reference_summary",
         "raw_brief",
@@ -384,7 +523,7 @@ def normalize_brief(
         result[key] = str(result.get(key) or "").strip()
 
     composition_mode = str(result.get("composition_mode") or "").strip()
-    result["composition_mode"] = composition_mode if composition_mode in COMPOSITION_MODES else "classic"
+    result["composition_mode"] = composition_mode if composition_mode in COMPOSITION_MODES else "auto"
 
     style_reference_paths = result.get("style_reference_paths")
     if isinstance(style_reference_paths, list):
@@ -412,6 +551,10 @@ def normalize_brief(
     visual_source_strategy = str(result.get("visual_source_strategy") or "").strip()
     result["visual_source_strategy"] = (
         visual_source_strategy if visual_source_strategy in VISUAL_SOURCE_STRATEGIES else "images_only"
+    )
+    video_scene_style = str(result.get("video_scene_style") or "").strip().lower()
+    result["video_scene_style"] = (
+        video_scene_style if video_scene_style in VIDEO_SCENE_STYLE_OPTIONS else "auto"
     )
     result["text_render_mode"] = resolve_text_render_mode(result.get("text_render_mode"))
 
@@ -447,11 +590,48 @@ def normalize_scene(
         out["on_screen_text"] = [str(item).strip() for item in on_screen if str(item).strip()]
     else:
         out["on_screen_text"] = []
+    out["staging_notes"] = str(src.get("staging_notes") or "").strip() or None
+    data_points = src.get("data_points")
+    if isinstance(data_points, list):
+        out["data_points"] = [str(item).strip() for item in data_points if str(item).strip()]
+    else:
+        out["data_points"] = []
+    transition_hint = str(src.get("transition_hint") or "").strip().lower()
+    out["transition_hint"] = transition_hint if transition_hint in {"fade", "wipe"} else None
 
     history = src.get("refinement_history")
     out["refinement_history"] = history if isinstance(history, list) else []
     if src.get("speaker_name") or parsed_speaker:
         out["speaker_name"] = str(src.get("speaker_name") or parsed_speaker).strip()
+    out["tts_override_enabled"] = bool(src.get("tts_override_enabled", False))
+    raw_tts_provider = str(src.get("tts_provider") or "").strip().lower()
+    out["tts_provider"] = raw_tts_provider or None
+    raw_tts_voice = str(src.get("tts_voice") or "").strip()
+    out["tts_voice"] = raw_tts_voice or None
+    if src.get("tts_speed") in (None, ""):
+        out["tts_speed"] = None
+    else:
+        out["tts_speed"] = _normalize_float(src.get("tts_speed"), 1.0)
+    raw_elevenlabs_model_id = str(src.get("elevenlabs_model_id") or "").strip()
+    out["elevenlabs_model_id"] = raw_elevenlabs_model_id or None
+    raw_elevenlabs_text_normalization = str(src.get("elevenlabs_text_normalization") or "").strip().lower()
+    out["elevenlabs_text_normalization"] = raw_elevenlabs_text_normalization or None
+    if src.get("elevenlabs_stability") in (None, ""):
+        out["elevenlabs_stability"] = None
+    else:
+        out["elevenlabs_stability"] = _normalize_float(src.get("elevenlabs_stability"), 0.38)
+    if src.get("elevenlabs_similarity_boost") in (None, ""):
+        out["elevenlabs_similarity_boost"] = None
+    else:
+        out["elevenlabs_similarity_boost"] = _normalize_float(src.get("elevenlabs_similarity_boost"), 0.8)
+    if src.get("elevenlabs_style") in (None, ""):
+        out["elevenlabs_style"] = None
+    else:
+        out["elevenlabs_style"] = _normalize_float(src.get("elevenlabs_style"), 0.65)
+    if src.get("elevenlabs_use_speaker_boost") is None:
+        out["elevenlabs_use_speaker_boost"] = None
+    else:
+        out["elevenlabs_use_speaker_boost"] = bool(src.get("elevenlabs_use_speaker_boost"))
     out["image_path"] = _normalize_project_asset_path(
         src.get("image_path"),
         base_dir=base_dir,
@@ -468,6 +648,23 @@ def normalize_scene(
         out["video_trim_end"] = out["video_trim_start"]
     out["video_playback_speed"] = _normalize_float(src.get("video_playback_speed"), 1.0)
     out["video_hold_last_frame"] = bool(src.get("video_hold_last_frame", True))
+    video_audio_source = str(src.get("video_audio_source") or "narration").strip().lower()
+    out["video_audio_source"] = video_audio_source if video_audio_source in VIDEO_AUDIO_SOURCES else "narration"
+    video_scene_kind = str(src.get("video_scene_kind") or "").strip().lower()
+    if out["scene_type"] == "video":
+        out["video_scene_kind"] = video_scene_kind if video_scene_kind in VIDEO_SCENE_KINDS else None
+    elif "video_scene_kind" in out:
+        out["video_scene_kind"] = video_scene_kind if video_scene_kind in VIDEO_SCENE_KINDS else None
+    out["video_reference_image_path"] = _normalize_project_asset_path(
+        src.get("video_reference_image_path"),
+        base_dir=base_dir,
+        project_name=project_name,
+    )
+    out["video_reference_audio_path"] = _normalize_project_asset_path(
+        src.get("video_reference_audio_path"),
+        base_dir=base_dir,
+        project_name=project_name,
+    )
     out["audio_path"] = _normalize_project_asset_path(
         src.get("audio_path"),
         base_dir=base_dir,
@@ -480,22 +677,42 @@ def normalize_scene(
             project_name=project_name,
         )
 
+    composition = scene_composition_payload(src)
+    out["composition"] = {
+        "family": composition["family"],
+        "mode": composition["mode"],
+        "props": composition["props"] if isinstance(composition["props"], dict) else {},
+        "transition_after": composition["transition_after"],
+        "data": composition["data"],
+        "render_path": _normalize_project_asset_path(
+            composition.get("render_path"),
+            base_dir=base_dir,
+            project_name=project_name,
+        ),
+        "preview_path": _normalize_project_asset_path(
+            composition.get("preview_path"),
+            base_dir=base_dir,
+            project_name=project_name,
+        ),
+        "rationale": str(composition.get("rationale") or "").strip(),
+    }
+
     motion_raw = src.get("motion") if isinstance(src.get("motion"), dict) else {}
     if out["scene_type"] == "motion" or motion_raw:
         out["motion"] = {
-            "template_id": str(motion_raw.get("template_id") or "").strip(),
-            "props": motion_raw.get("props") if isinstance(motion_raw.get("props"), dict) else {},
+            "template_id": str(motion_raw.get("template_id") or out["composition"]["family"] or "").strip(),
+            "props": motion_raw.get("props") if isinstance(motion_raw.get("props"), dict) else out["composition"]["props"],
             "render_path": _normalize_project_asset_path(
-                motion_raw.get("render_path"),
+                motion_raw.get("render_path") or out["composition"]["render_path"],
                 base_dir=base_dir,
                 project_name=project_name,
             ),
             "preview_path": _normalize_project_asset_path(
-                motion_raw.get("preview_path"),
+                motion_raw.get("preview_path") or out["composition"]["preview_path"],
                 base_dir=base_dir,
                 project_name=project_name,
             ),
-            "rationale": str(motion_raw.get("rationale") or "").strip(),
+            "rationale": str(motion_raw.get("rationale") or out["composition"]["rationale"] or "").strip(),
         }
     elif "motion" in out:
         out["motion"] = None
@@ -544,28 +761,6 @@ def backfill_plan(
         brief["source_material"] = input_text
 
     raw_render_profile = meta.get("render_profile") if isinstance(meta.get("render_profile"), dict) else {}
-    render_profile = _merge_with_defaults(default_render_profile(), raw_render_profile)
-    render_profile["aspect_ratio"] = str(render_profile.get("aspect_ratio") or "16:9")
-    render_profile["width"] = int(render_profile.get("width") or 1664)
-    render_profile["height"] = int(render_profile.get("height") or 928)
-    render_profile["fps"] = int(render_profile.get("fps") or 24)
-    if not isinstance(render_profile.get("scene_types"), list):
-        render_profile["scene_types"] = ["image", "video", "motion"]
-    else:
-        normalized_scene_types = [
-            str(scene_type).strip().lower()
-            for scene_type in render_profile["scene_types"]
-            if str(scene_type).strip().lower() in SCENE_TYPES
-        ]
-        render_profile["scene_types"] = normalized_scene_types or ["image", "video", "motion"]
-    render_profile["render_backend"] = resolve_render_backend(
-        raw_render_profile,
-        composition_mode=str(brief.get("composition_mode") or "classic"),
-    )
-    render_profile["text_render_mode"] = resolve_text_render_mode(
-        raw_render_profile.get("text_render_mode") or brief.get("text_render_mode")
-    )
-    brief["text_render_mode"] = render_profile["text_render_mode"]
 
     raw_image_profile = meta.get("image_profile") if isinstance(meta.get("image_profile"), dict) else {}
     image_profile = _merge_with_defaults(default_image_profile(), raw_image_profile)
@@ -584,9 +779,23 @@ def backfill_plan(
         video_profile["provider"] = str(meta["video_provider"])
     if meta.get("video_model") and "generation_model" not in raw_video_profile:
         video_profile["generation_model"] = str(meta["video_model"])
+    if meta.get("video_quality_mode") and "quality_mode" not in raw_video_profile:
+        video_profile["quality_mode"] = str(meta["video_quality_mode"])
+    if meta.get("video_generate_audio") is not None and "generate_audio" not in raw_video_profile:
+        video_profile["generate_audio"] = bool(meta["video_generate_audio"])
+    if meta.get("video_model_selection_mode") and "model_selection_mode" not in raw_video_profile:
+        video_profile["model_selection_mode"] = str(meta["video_model_selection_mode"])
     video_provider = str(video_profile.get("provider") or "manual").strip().lower()
     video_profile["provider"] = video_provider if video_provider in VIDEO_PROVIDERS else "manual"
     video_profile["generation_model"] = str(video_profile.get("generation_model") or "").strip()
+    selection_mode = str(video_profile.get("model_selection_mode") or "automatic").strip().lower()
+    video_profile["model_selection_mode"] = (
+        selection_mode if selection_mode in VIDEO_MODEL_SELECTION_MODES else "automatic"
+    )
+    quality_mode = str(video_profile.get("quality_mode") or "standard").strip().lower()
+    video_profile["quality_mode"] = quality_mode if quality_mode in VIDEO_QUALITY_MODES else "standard"
+    raw_generate_audio = video_profile.get("generate_audio")
+    video_profile["generate_audio"] = True if raw_generate_audio is None else bool(raw_generate_audio)
 
     tts_profile = _merge_with_defaults(default_tts_profile(), meta.get("tts_profile"))
 
@@ -607,6 +816,33 @@ def backfill_plan(
         for i, scene in enumerate(scenes_raw)
     ]
 
+    render_profile = _merge_with_defaults(default_render_profile(), raw_render_profile)
+    render_profile["aspect_ratio"] = str(render_profile.get("aspect_ratio") or "16:9")
+    render_profile["width"] = int(render_profile.get("width") or 1664)
+    render_profile["height"] = int(render_profile.get("height") or 928)
+    render_profile["fps"] = int(render_profile.get("fps") or 24)
+    render_profile["render_strategy"] = resolve_render_strategy(
+        raw_render_profile.get("render_strategy")
+    )
+    if not isinstance(render_profile.get("scene_types"), list):
+        render_profile["scene_types"] = ["image", "video", "motion"]
+    else:
+        normalized_scene_types = [
+            str(scene_type).strip().lower()
+            for scene_type in render_profile["scene_types"]
+            if str(scene_type).strip().lower() in SCENE_TYPES
+        ]
+        render_profile["scene_types"] = normalized_scene_types or ["image", "video", "motion"]
+    render_profile["render_backend"] = resolve_render_backend(
+        raw_render_profile,
+        composition_mode=str(brief.get("composition_mode") or "classic"),
+        scenes=scenes,
+    )
+    render_profile["text_render_mode"] = resolve_text_render_mode(
+        raw_render_profile.get("text_render_mode") or brief.get("text_render_mode")
+    )
+    brief["text_render_mode"] = render_profile["text_render_mode"]
+
     meta["video_path"] = _normalize_project_asset_path(
         meta.get("video_path"),
         base_dir=base_dir,
@@ -624,6 +860,9 @@ def backfill_plan(
     meta["image_model"] = image_profile["generation_model"]
     meta["video_profile"] = video_profile
     meta["video_model"] = video_profile["generation_model"]
+    meta["video_model_selection_mode"] = video_profile["model_selection_mode"]
+    meta["video_quality_mode"] = video_profile["quality_mode"]
+    meta["video_generate_audio"] = video_profile["generate_audio"]
     meta["tts_profile"] = tts_profile
 
     # Keep legacy fallback for older tooling that expects input_text.

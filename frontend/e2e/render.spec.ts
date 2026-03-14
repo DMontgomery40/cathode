@@ -181,6 +181,56 @@ test.describe('Render Control', () => {
     await expect(page.getByText('hwaccel=required')).toBeVisible()
   })
 
+  test('software demo overlay manifests keep the media layer and do not duplicate the headline chip', async ({ page }) => {
+    const overlayImage = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(
+      '<svg xmlns="http://www.w3.org/2000/svg" width="1664" height="928" viewBox="0 0 1664 928"><rect width="1664" height="928" fill="#172033"/><rect x="120" y="120" width="1424" height="688" rx="32" fill="#23314f"/><rect x="220" y="220" width="360" height="220" rx="24" fill="#f4d8a0"/><rect x="620" y="220" width="540" height="40" rx="20" fill="#a9c0ff"/><rect x="620" y="290" width="420" height="32" rx="16" fill="#dce6ff"/><rect x="620" y="346" width="480" height="32" rx="16" fill="#dce6ff"/><rect x="220" y="476" width="1160" height="180" rx="28" fill="#2c3e61"/></svg>',
+    )}`
+
+    await page.route(`**/api/projects/${PROJECT}/remotion-manifest`, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          width: 1664,
+          height: 928,
+          fps: 24,
+          textRenderMode: 'deterministic_overlay',
+          totalDurationInFrames: 120,
+          scenes: [
+            {
+              uid: 'overlay-scene',
+              sceneType: 'image',
+              title: 'Real Estate Demo - The Listing',
+              narration: 'Welcome to four twenty-two Maple Ridge Drive.',
+              onScreenText: ['422 Maple Ridge Drive', 'Top-rated school district · 3 BR · 2.5 BA'],
+              durationInFrames: 120,
+              sequenceDurationInFrames: 120,
+              imageUrl: overlayImage,
+              textLayerKind: 'software_demo_focus',
+              composition: {
+                family: 'software_demo_focus',
+                mode: 'native',
+                props: {
+                  headline: '422 Maple Ridge Drive',
+                },
+                transitionAfter: null,
+                data: {},
+                rationale: '',
+              },
+            },
+          ],
+        }),
+      })
+    })
+
+    await page.goto(`/projects/${PROJECT}/render`)
+    const player = page.getByTestId('remotion-player-surface')
+    await expect(player).toBeVisible()
+    await expect(player.locator('img').first()).toBeVisible()
+    await expect(player.getByText('422 Maple Ridge Drive', { exact: true })).toHaveCount(1)
+    await expect(player.getByText('Top-rated school district · 3 BR · 2.5 BA', { exact: true })).toBeVisible()
+  })
+
   // ── Generate All Assets button state ───────────────────────────
   test('Generate All Assets button is enabled when scenes exist', async ({ page }) => {
     const btn = page.locator('button:has-text("Generate All Assets")')
@@ -417,6 +467,7 @@ test.describe('Render Control', () => {
       await expect(page.getByText('1/1 with visuals')).toBeVisible()
       await expect(page.getByText('1/1 with audio')).toBeVisible()
       await expect(page.getByRole('button', { name: 'Render Video' })).toBeEnabled()
+      await expect(page.getByTestId('remotion-player-surface')).toBeVisible()
     })
   })
 })

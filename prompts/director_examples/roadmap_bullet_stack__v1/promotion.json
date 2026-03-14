@@ -1,0 +1,9 @@
+{
+  "id": "roadmap_bullet_stack__v1",
+  "title": "Roadmap Bullet Stack",
+  "intents": [
+    "bullet_stack"
+  ],
+  "source_run": "experiments/director_golden/runs/20260314-094458_roadmap_bullet_stack_claude-sonnet-4-6",
+  "promoted_utc": "2026-03-14T09:58:21.040386+00:00"
+}

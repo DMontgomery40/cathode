@@ -90,6 +90,7 @@ async function runRenderAttempt({
     },
     chromiumOptions: {
       disableWebSecurity: true,
+      gl: 'angle',
     },
   })
 }

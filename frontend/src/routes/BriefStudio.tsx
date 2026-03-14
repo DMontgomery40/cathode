@@ -7,6 +7,7 @@ import { FootageUpload } from '../features/brief/FootageUpload.tsx'
 import { StyleRefUpload } from '../features/brief/StyleRefUpload.tsx'
 import { ProviderMatrix } from '../features/brief/ProviderMatrix.tsx'
 import { WhyThisNext } from '../features/projects/WhyThisNext.tsx'
+import { CostPanel } from '../features/projects/CostPanel.tsx'
 import {
   useBootstrap,
   usePlan,
@@ -57,6 +58,9 @@ export function BriefStudio() {
   const styleSummary = briefMeta.style_reference_summary as string | null | undefined
   const footageManifest = briefMeta.footage_manifest as Array<Record<string, unknown>> | undefined
   const footageSummary = briefMeta.available_footage as string | null | undefined
+  const imageProviders = bootstrap?.providers?.image_providers ?? []
+  const videoProviders = bootstrap?.providers?.video_providers ?? []
+  const paidMediaGenerationAvailable = imageProviders.includes('replicate') || videoProviders.includes('replicate')
 
   useEffect(() => {
     setDemoTarget({
@@ -102,8 +106,6 @@ export function BriefStudio() {
       }),
     )
   }
-
-  const autoHybridPreferred = Boolean((footageManifest?.length ?? 0) > 0 || Object.keys(normalizedDemoTarget()).length > 0)
 
   function handleSubmit(data: Brief, action: 'video' | 'storyboard') {
     const nextDemoTarget = normalizedDemoTarget()
@@ -208,7 +210,7 @@ export function BriefStudio() {
               <WorkspacePanel
                 title={isNew ? 'Shape the brief' : 'Retune the project brief'}
                 eyebrow="Intent-driven setup"
-                copy="The brief should stay outcome-first, but the primary path now goes straight to a real background video run instead of pretending storyboard generation is the whole product."
+                copy="The brief drives the real pipeline. Define the outcome, source material, and clip preferences here so the director can plan the storyboard and generated-video beats before assets and render run."
               >
                 <BriefForm
                   defaults={defaults}
@@ -216,8 +218,8 @@ export function BriefStudio() {
                   loading={loading}
                   isNew={isNew}
                   loadingAction={loadingAction}
-                  remotionAvailable={Boolean(bootstrap?.providers?.remotion_available)}
-                  autoHybridPreferred={autoHybridPreferred}
+                  remotionAvailable={bootstrap ? Boolean(bootstrap.providers?.remotion_available) : null}
+                  paidMediaGenerationAvailable={paidMediaGenerationAvailable}
                 />
               </WorkspacePanel>
 
@@ -297,6 +299,7 @@ export function BriefStudio() {
           aside={(
             <div className="workspace-panel-stack">
               {!isNew && <WhyThisNext plan={plan} />}
+              {!isNew && <CostPanel plan={plan} />}
               <WorkspacePanel
                 title="Why these panels moved"
                 eyebrow="Layout priority"

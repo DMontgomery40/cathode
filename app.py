@@ -28,6 +28,7 @@ from core.pipeline_service import (
     generate_project_assets_service,
     process_existing_project_service,
     render_project_service,
+    tts_kwargs_from_profile,
 )
 from core.project_store import (
     get_project_path as _get_project_path,
@@ -49,6 +50,7 @@ from core.runtime import (
     available_tts_providers as _available_tts_providers_impl,
     check_api_keys as _check_api_keys_impl,
     default_local_image_generation_model as _default_local_image_generation_model_impl,
+    default_replicate_video_generation_model as _default_replicate_video_generation_model_impl,
     resolve_image_profile as _resolve_image_profile_impl,
     resolve_video_profile as _resolve_video_profile_impl,
 )
@@ -57,9 +59,15 @@ from core.video_assembly import (
     get_media_duration,
     get_video_duration,
     get_video_scene_timing,
+    media_has_audio_stream,
     preview_scene,
+    scene_uses_clip_audio,
 )
-from core.video_gen import generate_scene_video
+from core.video_gen import (
+    DEFAULT_REPLICATE_SPEAKING_VIDEO_MODEL,
+    generate_scene_video,
+    resolve_replicate_video_generation_route,
+)
 from core.voice_gen import (
     DEFAULT_ELEVENLABS_MODEL,
     DEFAULT_ELEVENLABS_SIMILARITY_BOOST,
@@ -151,7 +159,49 @@ IMAGE_PROVIDER_LABELS: dict[str, str] = {
 VIDEO_PROVIDER_LABELS: dict[str, str] = {
     "manual": "Upload / Local Clips Only",
     "local": "Local Video Backend",
+    "replicate": "Cloud Video Generation",
 }
+
+VIDEO_MODEL_SELECTION_MODE_LABELS: dict[str, str] = {
+    "automatic": "Automatic",
+    "advanced": "Advanced",
+}
+
+VIDEO_SCENE_KIND_LABELS: dict[str, str] = {
+    "auto": "Auto",
+    "cinematic": "Cinematic",
+    "speaking": "Speaking",
+}
+
+BRIEF_VIDEO_SCENE_STYLE_LABELS: dict[str, str] = {
+    "auto": "Auto",
+    "cinematic": "Cinematic Clips",
+    "speaking": "Speaking Clips",
+    "mixed": "Mixed Clip Styles",
+}
+
+REPLICATE_VIDEO_MODEL_LABELS: dict[str, str] = {
+    _default_replicate_video_generation_model_impl(): "Kling 3 Video",
+    DEFAULT_REPLICATE_SPEAKING_VIDEO_MODEL: "Kling Avatar v2",
+    "__custom__": "Custom slug",
+}
+
+
+def _replicate_video_model_preset(model_slug: str | None) -> str:
+    value = str(model_slug or "").strip()
+    if not value:
+        return _default_replicate_video_generation_model_impl()
+    return value if value in REPLICATE_VIDEO_MODEL_LABELS and value != "__custom__" else "__custom__"
+
+
+def _replicate_video_route_summary(scene: dict | None = None) -> dict[str, str]:
+    scene_payload = scene if isinstance(scene, dict) else {}
+    return resolve_replicate_video_generation_route(
+        scene_payload,
+        model=str(st.session_state.video_generation_model or ""),
+        model_selection_mode=str(st.session_state.video_model_selection_mode or "automatic"),
+        generate_audio=bool(st.session_state.video_generate_audio),
+    )
 
 
 def check_api_keys() -> dict[str, bool]:
@@ -221,6 +271,12 @@ def init_session_state():
         st.session_state.video_provider = default_video_profile()["provider"]
     if "video_generation_model" not in st.session_state:
         st.session_state.video_generation_model = default_video_profile()["generation_model"]
+    if "video_model_selection_mode" not in st.session_state:
+        st.session_state.video_model_selection_mode = default_video_profile()["model_selection_mode"]
+    if "video_quality_mode" not in st.session_state:
+        st.session_state.video_quality_mode = default_video_profile()["quality_mode"]
+    if "video_generate_audio" not in st.session_state:
+        st.session_state.video_generate_audio = bool(default_video_profile()["generate_audio"])
 
     # ElevenLabs-specific settings (kept separate from Kokoro voice/speed)
     if "tts_elevenlabs_voice" not in st.session_state:
@@ -370,6 +426,9 @@ def _video_profile_from_state() -> dict:
         {
             "provider": str(st.session_state.video_provider or "manual"),
             "generation_model": str(st.session_state.video_generation_model or ""),
+            "model_selection_mode": str(st.session_state.video_model_selection_mode or "automatic"),
+            "quality_mode": str(st.session_state.video_quality_mode or "standard"),
+            "generate_audio": bool(st.session_state.video_generate_audio),
         }
     )
 
@@ -431,6 +490,17 @@ def _sync_provider_state_from_plan(plan: dict | None) -> None:
     st.session_state.video_generation_model = str(
         video_profile.get("generation_model") or default_video_profile()["generation_model"]
     )
+    st.session_state.video_model_selection_mode = str(
+        video_profile.get("model_selection_mode") or default_video_profile()["model_selection_mode"]
+    )
+    st.session_state.video_quality_mode = str(
+        video_profile.get("quality_mode") or default_video_profile()["quality_mode"]
+    )
+    st.session_state.video_generate_audio = bool(
+        video_profile.get("generate_audio")
+        if video_profile.get("generate_audio") is not None
+        else default_video_profile()["generate_audio"]
+    )
 
 
 def _persist_sidebar_profiles_to_plan() -> None:
@@ -491,14 +561,17 @@ def _new_blank_scene(scene_id: int) -> dict:
         "narration": "",
         "visual_prompt": "",
         "scene_type": "image",
+        "video_scene_kind": None,
         "on_screen_text": [],
         "refinement_history": [],
         "image_path": None,
         "video_path": None,
+        "video_reference_image_path": None,
         "video_trim_start": 0.0,
         "video_trim_end": None,
         "video_playback_speed": 1.0,
         "video_hold_last_frame": True,
+        "video_audio_source": "narration",
         "audio_path": None,
     }
 
@@ -520,6 +593,13 @@ def _scene_has_video(scene: dict) -> bool:
 
 def _scene_has_primary_visual(scene: dict) -> bool:
     return _scene_has_video(scene) if _scene_type(scene) == "video" else _scene_has_image(scene)
+
+
+def _scene_has_renderable_audio(scene: dict) -> bool:
+    if _scene_has_video(scene) and scene_uses_clip_audio(scene):
+        return media_has_audio_stream(scene["video_path"])
+    audio_path = scene.get("audio_path")
+    return bool(audio_path and Path(str(audio_path)).exists())
 
 
 def _existing_style_reference_paths_from_defaults(defaults: dict) -> list[Path]:
@@ -670,12 +750,66 @@ def render_sidebar():
         )
         resolved_video_profile = _video_profile_from_state()
         st.session_state.video_generation_model = str(resolved_video_profile.get("generation_model") or "")
+        st.session_state.video_model_selection_mode = str(
+            resolved_video_profile.get("model_selection_mode") or "automatic"
+        )
+        st.session_state.video_quality_mode = str(resolved_video_profile.get("quality_mode") or "standard")
+        st.session_state.video_generate_audio = bool(resolved_video_profile.get("generate_audio", True))
         if st.session_state.video_provider == "local":
             model_label = str(st.session_state.video_generation_model or "").strip()
             if model_label:
                 st.caption(f"Configured local video model: `{model_label}`")
             st.caption(
                 "Local video generation is env-driven. Cathode will call the configured local command or HTTP endpoint when you generate video clips."
+            )
+        elif st.session_state.video_provider == "replicate":
+            st.selectbox(
+                "Model Selection",
+                options=list(VIDEO_MODEL_SELECTION_MODE_LABELS.keys()),
+                index=list(VIDEO_MODEL_SELECTION_MODE_LABELS.keys()).index(
+                    str(st.session_state.video_model_selection_mode or "automatic")
+                    if str(st.session_state.video_model_selection_mode or "automatic") in VIDEO_MODEL_SELECTION_MODE_LABELS
+                    else "automatic"
+                ),
+                format_func=lambda value: VIDEO_MODEL_SELECTION_MODE_LABELS[value],
+                key="video_model_selection_mode",
+                help="Automatic mode picks the right cloud video model for the scene. Advanced mode lets you override it.",
+            )
+            if st.session_state.video_model_selection_mode == "automatic":
+                st.session_state.video_generation_model = ""
+                st.caption(
+                    "Automatic route: Cathode uses Kling 3 Video for cinematic clips and switches to Kling Avatar v2 for speaking clips when clip audio is enabled."
+                )
+            else:
+                current_preset = _replicate_video_model_preset(st.session_state.video_generation_model)
+                selected_preset = st.selectbox(
+                    "Video Model",
+                    options=list(REPLICATE_VIDEO_MODEL_LABELS.keys()),
+                    index=list(REPLICATE_VIDEO_MODEL_LABELS.keys()).index(current_preset),
+                    format_func=lambda value: REPLICATE_VIDEO_MODEL_LABELS[value],
+                    help="Choose a curated model or switch to a custom Replicate slug.",
+                )
+                if selected_preset == "__custom__":
+                    st.text_input(
+                        "Custom Video Model",
+                        key="video_generation_model",
+                        help="Advanced override for a custom Replicate video model slug.",
+                    )
+                else:
+                    st.session_state.video_generation_model = selected_preset
+            st.selectbox(
+                "Generation quality",
+                options=["standard", "pro"],
+                key="video_quality_mode",
+                help="Higher quality costs more but improves realism and detail.",
+            )
+            st.checkbox(
+                "Generate clip audio",
+                key="video_generate_audio",
+                help="Enable when you want the generated clip to include its own voice or ambient audio.",
+            )
+            st.caption(
+                "Cloud video generation creates scene clips directly from your shot direction. Generated clip audio can be used during render instead of a separate narration track."
             )
         else:
             st.caption("Upload video clips manually in Step 2.")
@@ -904,7 +1038,7 @@ def render_step_1():
 
     st.subheader("Brief")
     st.caption(
-        "Choose how much rewriting is allowed, decide whether this project should use slides, video clips, or both, then paste the content you want turned into scenes below."
+        "Set the outcome, source mode, and clip preferences here. The director uses this brief to plan the storyboard, scene types, and generated-video beats before the rest of the pipeline runs."
     )
     source_mode = st.selectbox(
         "How should the app use the text you paste below?",
@@ -932,6 +1066,21 @@ def render_step_1():
         help=VISUAL_SOURCE_STRATEGY_HELP,
     )
     st.caption(VISUAL_SOURCE_STRATEGY_GUIDANCE[visual_source_strategy])
+
+    video_scene_style = st.selectbox(
+        "How should generated video scenes behave?",
+        options=list(BRIEF_VIDEO_SCENE_STYLE_LABELS.keys()),
+        format_func=lambda value: BRIEF_VIDEO_SCENE_STYLE_LABELS[value],
+        index=list(BRIEF_VIDEO_SCENE_STYLE_LABELS.keys()).index(
+            str(defaults.get("video_scene_style") or "auto")
+            if str(defaults.get("video_scene_style") or "auto") in BRIEF_VIDEO_SCENE_STYLE_LABELS
+            else "auto"
+        ),
+        help="Use this to steer whether the director should plan generated video scenes as cinematic motion, speaking clips, or let Cathode decide beat by beat.",
+    )
+    st.caption(
+        "This setting steers the director and the automatic video route. You can still change individual scenes later."
+    )
 
     existing_style_reference_paths = _existing_style_reference_paths_from_defaults(defaults)
     style_reference_uploads = st.file_uploader(
@@ -1055,6 +1204,7 @@ def render_step_1():
                         "must_avoid": must_avoid,
                         "ending_cta": ending_cta,
                         "visual_source_strategy": visual_source_strategy,
+                        "video_scene_style": video_scene_style,
                         "available_footage": available_footage,
                         "style_reference_paths": [str(path) for path in saved_style_reference_paths],
                         "raw_brief": raw_brief,
@@ -1087,7 +1237,7 @@ def render_step_2():
     st.header("Step 2: Edit Scenes")
     st.info(
         "Each scene can be either an Image Slide or a Video Clip. Image scenes use a generated or uploaded still. "
-        "Video scenes use an uploaded or locally generated clip, optional trim/speed settings, and narration-aware timing during preview/render."
+        "Video scenes use an uploaded or generated clip, optional trim/speed settings, and either clip audio or narration during preview/render."
     )
 
     plan = st.session_state.plan
@@ -1103,7 +1253,12 @@ def render_step_2():
     video_profile = plan.get("meta", {}).get("video_profile", {})
     video_provider = str(video_profile.get("provider") or "manual")
     video_generation_model = str(video_profile.get("generation_model") or "")
-    video_generation_enabled = video_provider == "local"
+    video_model_selection_mode = str(video_profile.get("model_selection_mode") or "automatic")
+    video_quality_mode = str(video_profile.get("quality_mode") or "standard")
+    video_generate_audio = bool(video_profile.get("generate_audio", True))
+    video_generation_enabled = video_provider in {"local", "replicate"}
+    tts_profile = plan.get("meta", {}).get("tts_profile", {})
+    tts_kwargs = tts_kwargs_from_profile(tts_profile)
 
     if st.button("<- Back to Brief"):
         st.session_state.step = 1
@@ -1387,6 +1542,28 @@ def render_step_2():
                             st.caption("Image generation is set to manual mode. Upload a still image instead.")
                 else:
                     st.subheader("Video Clip")
+                    current_video_scene_kind = str(scene.get("video_scene_kind") or "").strip().lower()
+                    if current_video_scene_kind not in {"cinematic", "speaking"}:
+                        current_video_scene_kind = "auto"
+                    selected_video_scene_kind = st.selectbox(
+                        "Generated Clip Style",
+                        options=list(VIDEO_SCENE_KIND_LABELS.keys()),
+                        index=list(VIDEO_SCENE_KIND_LABELS.keys()).index(current_video_scene_kind),
+                        format_func=lambda value: VIDEO_SCENE_KIND_LABELS[value],
+                        key=f"video_scene_kind_{scene_uid}",
+                        help="Auto lets Cathode decide from the brief plus clip-audio setting. Cinematic keeps the motion lane. Speaking prefers the talking-avatar lane.",
+                    )
+                    normalized_video_scene_kind = None if selected_video_scene_kind == "auto" else selected_video_scene_kind
+                    if normalized_video_scene_kind != scene.get("video_scene_kind"):
+                        scene["video_scene_kind"] = normalized_video_scene_kind
+                        save_plan(project_dir, plan)
+                        st.rerun()
+
+                    if video_provider == "replicate":
+                        route_preview = _replicate_video_route_summary(scene)
+                        st.caption(
+                            f"Resolved model: `{route_preview['model']}` ({route_preview['reason']})."
+                        )
                     uploaded_video = st.file_uploader(
                         "Upload / Replace Video Clip",
                         type=["mp4", "mov", "m4v", "webm", "mkv"],
@@ -1401,6 +1578,7 @@ def render_step_2():
                                 upload_path.parent.mkdir(parents=True, exist_ok=True)
                                 upload_path.write_bytes(uploaded_video.getvalue())
                                 scene["video_path"] = str(upload_path)
+                                scene["video_audio_source"] = "narration"
                                 save_plan(project_dir, plan)
                                 st.rerun()
                             except Exception as e:
@@ -1420,21 +1598,55 @@ def render_step_2():
                                     brief=brief,
                                     provider=video_provider,
                                     model=video_generation_model,
+                                    model_selection_mode=video_model_selection_mode,
+                                    quality_mode=video_quality_mode,
+                                    generate_audio=video_generate_audio,
+                                    image_provider=image_provider,
+                                    image_model=image_generation_model,
+                                    tts_kwargs=tts_kwargs,
                                 )
                                 scene["video_path"] = str(path)
+                                scene["video_audio_source"] = (
+                                    "clip" if video_provider == "replicate" and video_generate_audio else "narration"
+                                )
                                 save_plan(project_dir, plan)
                                 st.rerun()
                             except Exception as e:
                                 st.error(f"Error: {e}")
 
                     if video_generation_enabled:
-                        st.caption(
-                            "Local video generation uses the clip notes plus scene narration context. Generate audio first if you want exact duration matching."
-                        )
+                        if video_provider == "local":
+                            st.caption(
+                                "Local video generation uses the clip notes plus scene narration context. Generate audio first if you want exact duration matching."
+                            )
+                        else:
+                            st.caption(
+                                "Cloud video generation creates a full scene clip from your shot direction. Automatic mode switches between cinematic and speaking models for you. Use Scene Audio Source to choose whether render follows the clip's audio or a separate narration track."
+                            )
                     else:
                         st.caption(
-                            "Video generation is set to upload-only mode. Switch the sidebar Video Generation dropdown to a configured local backend to generate clips here."
+                            "Video generation is set to upload-only mode. Switch the sidebar Video Generation dropdown to a configured generation backend to create clips here."
                         )
+
+                    audio_source_options = {
+                        "narration": "Narration track",
+                        "clip": "Clip audio",
+                    }
+                    current_audio_source = str(scene.get("video_audio_source") or "narration")
+                    if current_audio_source not in audio_source_options:
+                        current_audio_source = "narration"
+                    selected_audio_source = st.selectbox(
+                        "Scene Audio Source",
+                        options=list(audio_source_options.keys()),
+                        index=list(audio_source_options.keys()).index(current_audio_source),
+                        format_func=lambda value: audio_source_options[value],
+                        key=f"video_audio_source_{scene_uid}",
+                        help="Narration uses the scene audio track. Clip audio uses the video's embedded sound during preview and final render.",
+                    )
+                    if selected_audio_source != current_audio_source:
+                        scene["video_audio_source"] = selected_audio_source
+                        save_plan(project_dir, plan)
+                        st.rerun()
 
                     if _scene_has_video(scene):
                         st.video(scene["video_path"])
@@ -1511,11 +1723,13 @@ def render_step_2():
                         scene["video_hold_last_frame"] = hold_last_frame
                         save_plan(project_dir, plan)
 
-                    audio_duration = (
+                    uses_clip_audio = scene_uses_clip_audio(scene)
+                    narration_duration = (
                         get_media_duration(scene["audio_path"])
                         if scene.get("audio_path") and Path(scene["audio_path"]).exists()
                         else None
                     )
+                    audio_duration = None if uses_clip_audio else narration_duration
                     timing = get_video_scene_timing(
                         scene,
                         source_duration=source_duration,
@@ -1527,7 +1741,13 @@ def render_step_2():
                         st.caption(
                             f"Usable clip after trim/speed: {float(timing['effective_duration']):.1f}s"
                         )
-                    if audio_duration is not None:
+                    if uses_clip_audio:
+                        if _scene_has_video(scene):
+                            if media_has_audio_stream(scene["video_path"]):
+                                st.caption("Render will use the clip's embedded audio for this scene.")
+                            else:
+                                st.warning("This clip does not currently have an embedded audio track. Switch Scene Audio Source to narration or regenerate the clip with audio.")
+                    elif audio_duration is not None:
                         st.caption(f"Narration duration: {audio_duration:.1f}s")
                         freeze_duration = float(timing["freeze_duration"] or 0.0)
                         if freeze_duration > 5.0:
@@ -1557,9 +1777,14 @@ def render_step_2():
                                 )
 
                 st.subheader("Audio")
-                st.caption(
-                    "Narration drives final timing. For video scenes, the clip is trimmed or held against this audio duration."
-                )
+                if scene.get("scene_type") == "video" and scene_uses_clip_audio(scene):
+                    st.caption(
+                        "This scene is currently set to use the clip's embedded audio during render. Generate narration only if you want to switch the scene back to a separate audio track."
+                    )
+                else:
+                    st.caption(
+                        "Narration drives final timing. For video scenes using narration audio, the clip is trimmed or held against this track."
+                    )
                 speaker_name = st.text_input(
                     "Speaker / Character (optional)",
                     value=str(scene.get("speaker_name") or ""),
@@ -1671,7 +1896,7 @@ def render_step_2():
                                 st.error(f"Error: {e}")
 
                 has_visual = _scene_has_primary_visual(scene)
-                has_audio = scene.get("audio_path") and Path(scene["audio_path"]).exists()
+                has_audio = _scene_has_renderable_audio(scene)
                 if has_visual and has_audio:
                     st.divider()
                     st.subheader("Preview")
@@ -1793,7 +2018,7 @@ def render_step_2():
             st.rerun()
 
         all_visuals = all(_scene_has_primary_visual(scene) for scene in scenes)
-        all_audio = all(scene.get("audio_path") and Path(scene["audio_path"]).exists() for scene in scenes)
+        all_audio = all(_scene_has_renderable_audio(scene) for scene in scenes)
         if not all_visuals:
             st.caption("Missing image or video clip")
         if not all_audio:

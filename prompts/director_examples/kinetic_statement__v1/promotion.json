@@ -1,0 +1,9 @@
+{
+  "id": "kinetic_statement__v1",
+  "title": "Kinetic Statement",
+  "intents": [
+    "kinetic_statement"
+  ],
+  "source_run": "experiments/director_golden/runs/20260314-095631_kinetic_statement_claude-sonnet-4-6",
+  "promoted_utc": "2026-03-14T09:58:25.191056+00:00"
+}

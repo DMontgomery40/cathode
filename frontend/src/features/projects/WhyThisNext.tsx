@@ -2,7 +2,7 @@ import { GlassPanel } from '../../components/primitives/GlassPanel.tsx'
 import { Badge } from '../../components/primitives/Badge.tsx'
 import type { Plan } from '../../lib/schemas/plan.ts'
 import { hasProjectMediaPath } from '../../lib/media-url.ts'
-import { sceneHasPreview, sceneHasRenderableVisual } from '../../lib/scene-media.ts'
+import { sceneHasPreview, sceneHasRenderableAudio, sceneHasRenderableVisual } from '../../lib/scene-media.ts'
 
 interface WhyThisNextProps {
   plan: Plan | undefined
@@ -19,11 +19,7 @@ export function WhyThisNext({ plan }: WhyThisNextProps) {
     ? String((plan.meta.render_profile as Record<string, unknown>).render_backend || 'ffmpeg')
     : 'ffmpeg'
   const missingImages = scenes.filter((s) => !sceneHasRenderableVisual(projectName, s, renderBackend)).length
-  const missingAudio = scenes.filter((s) => !(
-    typeof s.audio_exists === 'boolean'
-      ? s.audio_exists
-      : hasProjectMediaPath(projectName, s.audio_path)
-  )).length
+  const missingAudio = scenes.filter((s) => !sceneHasRenderableAudio(projectName, s)).length
   const missingPreviews = scenes.filter((s) => !sceneHasPreview(projectName, s)).length
   const hasVideo = typeof plan.meta?.video_exists === 'boolean'
     ? plan.meta.video_exists
@@ -40,7 +36,7 @@ export function WhyThisNext({ plan }: WhyThisNextProps) {
   if (missingAudio > 0) {
     items.push({ label: `${missingAudio} scene${missingAudio > 1 ? 's' : ''} need audio`, variant: 'warning' })
   } else {
-    items.push({ label: 'All audio generated', variant: 'success' })
+    items.push({ label: 'All scene audio ready', variant: 'success' })
   }
 
   if (missingPreviews > 0 && missingImages === 0 && missingAudio === 0) {

@@ -20,6 +20,7 @@ Both rely on the same underlying pipeline services and project store.
 ## Core Contract
 
 - Input is brief-driven.
+- The brief wizard / Brief Studio is the canonical product entrypoint.
 - Source modes:
   - `ideas_notes`
   - `source_text`
@@ -27,17 +28,66 @@ Both rely on the same underlying pipeline services and project store.
 - Scene types:
   - `image`
   - `video`
+  - `motion`
 - Output is a local project folder plus a rendered MP4.
 
 ## Important Files
 
 - `projects/<project>/plan.json`: normalized storyboard, metadata, and asset paths
 - `projects/<project>/.cathode/jobs/*.json`: persisted background job state
+- `core/director.py`: storyboard generation logic and source-mode behavior
 - `prompts/`: director and refiner prompts
 - `core/pipeline_service.py`: shared app/batch/MCP execution helpers
 - `core/project_store.py`: project persistence
 - `core/job_runner.py`: background execution
 - `core/runtime.py`: provider discovery and profile resolution
+
+## Pipeline Integrity Rules
+
+- Do not bypass the brief -> director -> normalized plan pipeline for product work.
+- Do not bypass, demote, or misdescribe the brief wizard / Brief Studio. It is how Cathode captures intent, source material, and constraints before the pipeline runs.
+- Preserve the one-click raw-brief flow that powers the primary Brief Studio button. New prompt or planner work must keep the `make_video` path capable of turning a raw user dump into a finished project without hand-authored scene content.
+- Do not describe storyboard generation as fake, optional, or something the product should skip past. Storyboard planning is a core product step, even when later stages run automatically in the background.
+- If the brief flow is missing fields or cannot express a needed behavior, extend the brief schema and wiring instead of inventing side channels or per-project overrides.
+- If Cathode needs to support a new storytelling pattern, scene shape, or media-planning behavior, update the real pipeline:
+  - `core/director.py`
+  - the relevant prompts under `prompts/`
+  - normalization/schema code when required
+- Do not hand-author one-off storyboard copy, scene lists, motion cards, or `plan.json` content inside `projects/<project>/` to simulate a feature that the pipeline does not actually support.
+- Do not treat a manually written project folder as an acceptable implementation of new product behavior, even for demos or urgent user requests.
+- If the requested output cannot be produced cleanly through the existing pipeline, stop and fix the pipeline or explicitly report the gap. Do not paper over it with custom per-project content.
+- `projects/<project>/plan.json` is the persisted result of the pipeline, not a scratchpad for ad hoc authored scenes.
+- When working from `final_script`, preserve the user's script and let the director do the segmentation/planning work. Do not replace that flow with a manually assembled project.
+
+## Paid Generation Guardrails
+
+- Before making paid image, video, or TTS calls for a new capability, first verify that the director/prompt/schema path is producing the right storyboard structure.
+- Keep paid-cost logic centralized. Price hints, preflight estimates, and actual-cost recording should come from a shared catalog/ledger layer rather than hardcoded UI strings or one-off provider checks.
+- Do not hand-author prompt examples or fake “golden” storyboard outputs. Prompt examples must be harvested from Anthropic through the director-golden workflow, then curated and promoted.
+- Prefer local inspection, tests, dry runs, or storyboard-only regeneration before spending paid generation calls on assets.
+- Do not spend paid generation calls on a one-off bypass path that would be thrown away instead of improving the product.
+- If the pipeline behavior is still wrong, pause before more paid calls and fix the pipeline first.
+
+## Director Contract Rules
+
+- Claude gets the full normalized brief plus the full raw user input.
+- Brief options select capability blocks and examples for the director prompt; they do not replace the core prompt or the raw user dump.
+- Remotion is not “extra UI stuff.” It is Cathode’s deterministic manifestation layer for scenes that Claude dreams up.
+- Keep the model-facing scene contract thin. Avoid forcing Claude to emit brittle nested renderer schemas when Cathode can map creative signals into deterministic composition internally.
+- Preserve backward compatibility for stored plans that still carry older composition-hint fields.
+
+## Prompt Example Rules
+
+- Raw corpus artifacts belong under ignored `experiments/director_golden/`.
+- Promoted examples belong under tracked `prompts/director_examples/`.
+- Do not move raw Anthropic transcripts into `prompts/`.
+- A promoted example is not valid unless it parsed, normalized through Cathode’s planner, produced a valid Remotion manifest, and yielded at least a preview/frame.
+
+## Memory Rules
+
+- Update project-local Codex memory as material repo truths are discovered.
+- For this repo, use `/Users/davidmontgomery/.codex/projects/-Users-davidmontgomery-cathode/MEMORY.md` and its sibling `memory/` directory.
+- Do not write repo-specific memory into global cross-project memory locations.
 
 ## Live Demo Skill
 
@@ -89,6 +139,7 @@ Use the packaged `capture_live_demo.py` script for deterministic browser capture
 
 - Long-running or failure-prone operations need visible operator feedback in the app: pending state, useful error text, and enough context to understand what Cathode tried to do.
 - Prefer showing the effective request parameters for provider-backed actions when they materially affect output quality.
+- When provider/model choice materially changes spend, surface the cost basis where the choice is made and again where the resulting plan is estimated. Do not hide meaningful price deltas behind one default label.
 - Persisted job logs should be surfaced through the product where practical; do not hide them as backend-only artifacts.
 - Unexpected API failures should return structured JSON with a concise operator hint rather than a blank 500 page or generic browser error.
 
@@ -107,3 +158,4 @@ These are intentionally different:
 - Keep MCP tool behavior practical and bounded.
 - Do not add external publish/QC systems or work-specific automations to this fork.
 - Keep reviewed footage plumbing generic. Do not add domain-specific capture or review logic to core Cathode.
+- Do not solve product gaps by manually authoring project-specific output. Solve them in the reusable pipeline.
