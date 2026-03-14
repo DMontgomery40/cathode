@@ -1,0 +1,9 @@
+{
+  "id": "software_demo_overlay__v1",
+  "title": "Software Demo Overlay",
+  "intents": [
+    "software_demo_overlay"
+  ],
+  "source_run": "experiments/director_golden/runs/20260314-095117_software_demo_overlay_claude-sonnet-4-6",
+  "promoted_utc": "2026-03-14T09:58:23.299773+00:00"
+}

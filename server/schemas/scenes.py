@@ -13,6 +13,9 @@ class ImageGenerateRequest(BaseModel):
 class VideoGenerateRequest(BaseModel):
     provider: str | None = None
     model: str | None = None
+    model_selection_mode: str | None = None
+    quality_mode: str | None = None
+    generate_audio: bool | None = None
 
 
 class ImageEditRequest(BaseModel):

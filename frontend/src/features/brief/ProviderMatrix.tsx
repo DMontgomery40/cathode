@@ -43,15 +43,21 @@ export function ProviderMatrix() {
 
   const { providers } = bootstrap
 
+  const llmItems = [
+    providers.api_keys.anthropic ? {
+      name: 'anthropic',
+      available: true,
+    } : null,
+    providers.api_keys.openai ? {
+      name: 'openai',
+      available: true,
+    } : null,
+  ].filter((item): item is { name: string; available: boolean } => Boolean(item))
+
   const groups = [
     {
       label: 'LLM',
-      items: [
-        {
-          name: providers.llm_provider || 'None',
-          available: !!providers.llm_provider,
-        },
-      ],
+      items: llmItems,
     },
     {
       label: 'Images',
@@ -91,6 +97,9 @@ export function ProviderMatrix() {
           <h3 className="workspace-panel-title">Providers</h3>
           <p className="workspace-panel-copy m-0 mt-[var(--space-1)]">
             Cathode only surfaces configured or always-available capabilities, so this page mirrors the real machine instead of pretending every backend exists.
+          </p>
+          <p className="workspace-panel-copy m-0 mt-[var(--space-1)]">
+            Exact costs are model- and route-specific. Provider badges stay generic; the precise pricing belongs on the model or route choice itself.
           </p>
         </div>
       </div>

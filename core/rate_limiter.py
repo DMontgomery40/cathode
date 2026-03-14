@@ -63,6 +63,10 @@ class RateLimiter:
                 result = func(*args, **kwargs)
                 _log(f"  Attempt {attempt + 1}/{self.max_retries}: SUCCESS")
                 return result
+            except NonRetryableError as e:
+                _log(f"  Attempt {attempt + 1}/{self.max_retries}: NON-RETRYABLE FAILURE - {type(e).__name__}: {e}")
+                _log(f"  Full traceback:\n{traceback.format_exc()}")
+                raise
             except Exception as e:
                 last_exception = e
                 _log(f"  Attempt {attempt + 1}/{self.max_retries}: FAILED - {type(e).__name__}: {e}")
@@ -81,6 +85,10 @@ class RateLimiter:
 
         # Should never reach here, but satisfy type checker
         raise last_exception  # type: ignore
+
+
+class NonRetryableError(RuntimeError):
+    """Signal that a provider failure should not be retried by the rate limiter."""
 
 
 def _env_float(name: str, default: float) -> float:

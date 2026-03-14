@@ -1,0 +1,5 @@
+Capability mode: video preferred.
+
+- Prefer footage-led scenes when the story or available assets support them.
+- Still use image or motion scenes when they communicate better than a generic clip would.
+- Make video beats feel intentional, not random filler between slides.

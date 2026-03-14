@@ -5,6 +5,9 @@ interface RenderSettingsProps {
   onOutputFilenameChange: (v: string) => void
   fps: number
   onFpsChange: (v: number) => void
+  textRenderMode: string
+  onTextRenderModeChange: (v: string) => void
+  textRenderModeDisabled?: boolean
   renderProfile?: Record<string, unknown> | null
 }
 
@@ -13,10 +16,16 @@ export function RenderSettings({
   onOutputFilenameChange,
   fps,
   onFpsChange,
+  textRenderMode,
+  onTextRenderModeChange,
+  textRenderModeDisabled = false,
   renderProfile,
 }: RenderSettingsProps) {
   const aspect = renderProfile?.aspect_ratio as string | undefined
   const resolution = renderProfile?.resolution as string | undefined
+  const textStrategyCopy = textRenderMode === 'deterministic_overlay'
+    ? "Cathode overlays the scene's on-screen text during Remotion renders. Rebuild visuals if you want generated images to stop baking their own copy."
+    : 'Generated visuals and footage own the visible copy, and Remotion avoids adding a second generic text layer.'
 
   return (
     <GlassPanel variant="default" padding="md">
@@ -81,6 +90,33 @@ export function RenderSettings({
             <option value={30}>30 fps</option>
             <option value={60}>60 fps</option>
           </select>
+        </div>
+
+        <div className="flex flex-col gap-[var(--space-1)]">
+          <label
+            htmlFor="text-render-mode-select"
+            className="text-[var(--text-tertiary)]"
+            style={{ fontSize: 'var(--text-xs)' }}
+          >
+            Text strategy
+          </label>
+          <select
+            id="text-render-mode-select"
+            value={textRenderMode}
+            onChange={(e) => onTextRenderModeChange(e.target.value)}
+            disabled={textRenderModeDisabled}
+            className="w-full bg-[var(--surface-stage)] text-[var(--text-primary)] border border-[var(--border-subtle)] rounded-[var(--radius-md)] outline-none focus-visible:shadow-[var(--focus-ring)]"
+            style={{
+              fontSize: 'var(--text-sm)',
+              padding: `var(--space-2) var(--space-3)`,
+            }}
+          >
+            <option value="visual_authored">Visual-authored text</option>
+            <option value="deterministic_overlay">Deterministic overlay</option>
+          </select>
+          <p className="m-0 text-[var(--text-tertiary)]" style={{ fontSize: 'var(--text-xs)' }}>
+            {textStrategyCopy}
+          </p>
         </div>
 
         {/* Read-only profile info */}

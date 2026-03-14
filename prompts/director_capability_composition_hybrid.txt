@@ -1,0 +1,5 @@
+Capability mode: hybrid composition.
+
+- Cathode can combine classic media beats with deterministic motion or overlay beats inside the same project.
+- Use motion-first scenes only where they add clarity, rhythm, or exactness.
+- Give enough `staging_notes`, `on_screen_text`, `data_points`, and `transition_hint` for Cathode to realize those richer beats deterministically.

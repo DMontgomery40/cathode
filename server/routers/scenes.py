@@ -9,14 +9,15 @@ from typing import Any
 from fastapi import APIRouter, Body, HTTPException, UploadFile
 from starlette.concurrency import run_in_threadpool
 
-from core.director import refine_narration, refine_prompt
+from core.costs import append_actual_cost_entry, image_edit_entry, image_generation_entry, tts_entry, video_generation_entry
+from core.director import refine_narration_with_metadata, refine_prompt_with_metadata
 from core.image_gen import edit_image, generate_scene_image
 from core.project_store import annotate_plan_asset_existence, load_plan, save_plan
 from core.remotion_render import build_remotion_manifest, render_manifest_with_remotion
 from core.runtime import PROJECTS_DIR, choose_llm_provider, resolve_image_profile, resolve_tts_profile, resolve_video_profile
-from core.video_gen import generate_scene_video
+from core.video_gen import generate_scene_video_result
 from core.video_assembly import preview_scene
-from core.voice_gen import generate_scene_audio
+from core.voice_gen import generate_scene_audio_result
 from core.pipeline_service import tts_kwargs_from_profile
 from server.services.uploads import IMAGE_UPLOAD_SPEC, VIDEO_UPLOAD_SPEC, persist_upload
 from server.schemas.scenes import (
@@ -85,6 +86,9 @@ def _render_preview_asset(
         preview_path = render_manifest_with_remotion(manifest, output_path=output_path)
         motion = scene.get("motion") if isinstance(scene.get("motion"), dict) else {}
         motion["preview_path"] = str(preview_path)
+        composition = scene.get("composition") if isinstance(scene.get("composition"), dict) else {}
+        composition["preview_path"] = str(preview_path)
+        scene["composition"] = composition
         return preview_path, motion
 
     return preview_scene(scene, project_dir, render_profile=render_profile), None
@@ -226,6 +230,7 @@ async def upload_scene_video(project: str, scene_uid: str, file: UploadFile) -> 
     scene["image_path"] = None
     scene["preview_path"] = None
     scene["scene_type"] = "video"
+    scene["video_audio_source"] = "narration"
     plan["scenes"][idx] = scene
     return _present_plan(project_dir, save_plan(project_dir, plan))
 
@@ -300,20 +305,84 @@ async def generate_video_for_scene(
     meta = plan.get("meta", {})
     brief = meta.get("brief", {})
 
+    image_profile = resolve_image_profile(meta.get("image_profile"))
     video_profile = resolve_video_profile(meta.get("video_profile"))
+    tts_profile = resolve_tts_profile(meta.get("tts_profile"))
+    tts_kwargs = tts_kwargs_from_profile(tts_profile)
     provider = (body.provider if body and body.provider else None) or video_profile["provider"]
     model = (body.model if body and body.model else None) or video_profile["generation_model"]
+    model_selection_mode = (
+        (body.model_selection_mode if body and body.model_selection_mode else None)
+        or video_profile.get("model_selection_mode")
+    )
+    quality_mode = (body.quality_mode if body and body.quality_mode else None) or video_profile.get("quality_mode")
+    generate_audio = body.generate_audio if body and body.generate_audio is not None else video_profile.get("generate_audio")
 
     try:
-        path = generate_scene_video(scene, project_dir, brief=brief, provider=provider, model=model)
+        video_result = generate_scene_video_result(
+            scene,
+            project_dir,
+            brief=brief,
+            provider=provider,
+            model=model,
+            model_selection_mode=str(model_selection_mode or "automatic"),
+            quality_mode=str(quality_mode or "standard"),
+            generate_audio=bool(True if generate_audio is None else generate_audio),
+            image_provider=str(image_profile.get("provider") or "manual"),
+            image_model=str(image_profile.get("generation_model") or ""),
+            tts_kwargs=tts_kwargs,
+        )
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
+    path = Path(str(video_result["path"]))
     scene["video_path"] = str(path)
     scene["image_path"] = None
     scene["preview_path"] = None
     scene["scene_type"] = "video"
+    uses_clip_audio = bool(video_result.get("provider") == "replicate" and video_result.get("generate_audio"))
+    scene["video_audio_source"] = "clip" if uses_clip_audio else "narration"
+    if uses_clip_audio:
+        scene["audio_path"] = None
     plan["scenes"][idx] = scene
+    append_actual_cost_entry(
+        plan,
+        video_generation_entry(
+            scene=scene,
+            provider=str(video_result.get("provider") or provider or video_profile["provider"]),
+            model=str(video_result.get("model") or model or video_profile["generation_model"]),
+            model_selection_mode=str(model_selection_mode or video_profile.get("model_selection_mode") or "automatic"),
+            quality_mode=str(video_result.get("quality_mode") or quality_mode or video_profile.get("quality_mode") or "standard"),
+            generate_audio=bool(video_result.get("generate_audio")),
+            estimated=False,
+            operation="scene_video_generate",
+            duration_seconds=float(video_result.get("duration_seconds") or 0.0),
+        ),
+    )
+    if video_result.get("reference_image_generated"):
+        append_actual_cost_entry(
+            plan,
+            image_generation_entry(
+                scene=scene,
+                provider=str(image_profile.get("provider") or "manual"),
+                model=str(image_profile.get("generation_model") or ""),
+                estimated=False,
+                operation="video_reference_image",
+            ),
+        )
+    if video_result.get("reference_audio_generated"):
+        append_actual_cost_entry(
+            plan,
+            tts_entry(
+                scene=scene,
+                provider=str(video_result.get("reference_audio_provider") or tts_kwargs.get("tts_provider") or "kokoro"),
+                model=str(video_result.get("reference_audio_model") or tts_kwargs.get("openai_model_id") or tts_kwargs.get("elevenlabs_model_id") or ""),
+                estimated=False,
+                operation="video_reference_audio",
+                purpose="reference_audio",
+                text=str(scene.get("narration") or ""),
+            ),
+        )
     return _present_plan(project_dir, save_plan(project_dir, plan))
 
 
@@ -415,6 +484,16 @@ async def edit_image_for_scene(
     scene["preview_path"] = None
     scene["scene_type"] = "image"
     plan["scenes"][idx] = scene
+    append_actual_cost_entry(
+        plan,
+        image_edit_entry(
+            scene=scene,
+            provider="dashscope" if model.startswith("qwen-image-edit") else "replicate",
+            model=model,
+            estimated=False,
+            operation="scene_image_edit",
+        ),
+    )
     _record_image_action(
         plan,
         scene=scene,
@@ -452,13 +531,45 @@ async def generate_audio_for_scene(
             tts_kwargs["speed"] = body.speed
 
     try:
-        path = generate_scene_audio(scene, project_dir, **tts_kwargs)
+        audio_result = generate_scene_audio_result(scene, project_dir, **tts_kwargs)
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
+    path = Path(str(audio_result["path"]))
     scene["audio_path"] = str(path)
     plan["scenes"][idx] = scene
+    append_actual_cost_entry(
+        plan,
+        tts_entry(
+            scene=scene,
+            provider=str(audio_result.get("provider") or tts_kwargs.get("tts_provider") or "kokoro"),
+            model=str(audio_result.get("model") or tts_kwargs.get("openai_model_id") or tts_kwargs.get("elevenlabs_model_id") or ""),
+            estimated=False,
+            operation="scene_audio_generate",
+            purpose="narration",
+            text=str(scene.get("narration") or ""),
+        ),
+    )
     return _present_plan(project_dir, save_plan(project_dir, plan))
+
+
+@router.get("/projects/{project}/scenes/{scene_uid}/remotion-manifest")
+async def get_scene_remotion_manifest(project: str, scene_uid: str) -> dict[str, Any]:
+    project_dir = _project_dir(project)
+    plan = _load_plan_or_404(project_dir)
+    _find_scene(plan, scene_uid)
+    render_profile = plan.get("meta", {}).get("render_profile")
+
+    try:
+        return build_remotion_manifest(
+            project_dir=project_dir,
+            plan=plan,
+            output_path=project_dir / "previews" / f"preview_{scene_uid}.mp4",
+            render_profile=render_profile if isinstance(render_profile, dict) else None,
+            preview_scene_uid=scene_uid,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
 
 
 # ---- Refinement endpoints -------------------------------------------------
@@ -476,7 +587,7 @@ async def refine_scene_prompt(
 
     provider = body.provider or choose_llm_provider()
     try:
-        refined = refine_prompt(
+        refined, llm_meta = refine_prompt_with_metadata(
             original_prompt=scene.get("visual_prompt", ""),
             feedback=body.feedback,
             narration=scene.get("narration", ""),
@@ -487,6 +598,10 @@ async def refine_scene_prompt(
 
     scene["visual_prompt"] = refined
     plan["scenes"][idx] = scene
+    if isinstance(llm_meta.get("actual"), dict):
+        append_actual_cost_entry(plan, llm_meta["actual"])
+    if isinstance(llm_meta.get("preflight"), dict):
+        plan.setdefault("meta", {}).setdefault("cost_actual", {})["llm_preflight_refine_prompt"] = llm_meta["preflight"]
     return _present_plan(project_dir, save_plan(project_dir, plan))
 
 
@@ -502,7 +617,7 @@ async def refine_scene_narration(
 
     provider = body.provider or choose_llm_provider()
     try:
-        refined = refine_narration(
+        refined, llm_meta = refine_narration_with_metadata(
             original_narration=scene.get("narration", ""),
             feedback=body.feedback,
             provider=provider,
@@ -512,6 +627,10 @@ async def refine_scene_narration(
 
     scene["narration"] = refined
     plan["scenes"][idx] = scene
+    if isinstance(llm_meta.get("actual"), dict):
+        append_actual_cost_entry(plan, llm_meta["actual"])
+    if isinstance(llm_meta.get("preflight"), dict):
+        plan.setdefault("meta", {}).setdefault("cost_actual", {})["llm_preflight_refine_narration"] = llm_meta["preflight"]
     return _present_plan(project_dir, save_plan(project_dir, plan))
 
 

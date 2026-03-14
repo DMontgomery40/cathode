@@ -1,0 +1,5 @@
+Capability mode: deterministic overlay.
+
+- Treat `on_screen_text` as the exact source of visible copy Cathode should preserve.
+- Avoid leaning on image-model text rendering for critical headings, labels, prices, steps, or proof points.
+- If a scene depends on exact text or structured copy, prefer a motion beat or a clean media scene with deterministic overlays.

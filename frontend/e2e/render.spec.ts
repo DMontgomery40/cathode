@@ -1,12 +1,13 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { test, expect } from '@playwright/test'
-import { cleanupProjectFixture, cloneProjectFixture } from './helpers/project-fixture'
+import { cleanupProjectFixture, cloneProjectFixture, readProjectPlan } from './helpers/project-fixture'
 
 const PROJECT = 'bet365_feature_act_01'
 const BROKEN_PROJECT = `e2e_render_broken_${Date.now()}`
 const MOTION_RENDER_PROJECT = `e2e_render_motion_${Date.now()}`
 const ROUTE_RESET_PROJECT = `e2e_render_route_reset_${Date.now()}`
+const TEXT_MODE_PROJECT = `e2e_render_text_mode_${Date.now()}`
 
 test.describe('Render Control', () => {
   test.beforeEach(async ({ page }) => {
@@ -180,6 +181,56 @@ test.describe('Render Control', () => {
     await expect(page.getByText('hwaccel=required')).toBeVisible()
   })
 
+  test('software demo overlay manifests keep the media layer and do not duplicate the headline chip', async ({ page }) => {
+    const overlayImage = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(
+      '<svg xmlns="http://www.w3.org/2000/svg" width="1664" height="928" viewBox="0 0 1664 928"><rect width="1664" height="928" fill="#172033"/><rect x="120" y="120" width="1424" height="688" rx="32" fill="#23314f"/><rect x="220" y="220" width="360" height="220" rx="24" fill="#f4d8a0"/><rect x="620" y="220" width="540" height="40" rx="20" fill="#a9c0ff"/><rect x="620" y="290" width="420" height="32" rx="16" fill="#dce6ff"/><rect x="620" y="346" width="480" height="32" rx="16" fill="#dce6ff"/><rect x="220" y="476" width="1160" height="180" rx="28" fill="#2c3e61"/></svg>',
+    )}`
+
+    await page.route(`**/api/projects/${PROJECT}/remotion-manifest`, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          width: 1664,
+          height: 928,
+          fps: 24,
+          textRenderMode: 'deterministic_overlay',
+          totalDurationInFrames: 120,
+          scenes: [
+            {
+              uid: 'overlay-scene',
+              sceneType: 'image',
+              title: 'Real Estate Demo - The Listing',
+              narration: 'Welcome to four twenty-two Maple Ridge Drive.',
+              onScreenText: ['422 Maple Ridge Drive', 'Top-rated school district · 3 BR · 2.5 BA'],
+              durationInFrames: 120,
+              sequenceDurationInFrames: 120,
+              imageUrl: overlayImage,
+              textLayerKind: 'software_demo_focus',
+              composition: {
+                family: 'software_demo_focus',
+                mode: 'native',
+                props: {
+                  headline: '422 Maple Ridge Drive',
+                },
+                transitionAfter: null,
+                data: {},
+                rationale: '',
+              },
+            },
+          ],
+        }),
+      })
+    })
+
+    await page.goto(`/projects/${PROJECT}/render`)
+    const player = page.getByTestId('remotion-player-surface')
+    await expect(player).toBeVisible()
+    await expect(player.locator('img').first()).toBeVisible()
+    await expect(player.getByText('422 Maple Ridge Drive', { exact: true })).toHaveCount(1)
+    await expect(player.getByText('Top-rated school district · 3 BR · 2.5 BA', { exact: true })).toBeVisible()
+  })
+
   // ── Generate All Assets button state ───────────────────────────
   test('Generate All Assets button is enabled when scenes exist', async ({ page }) => {
     const btn = page.locator('button:has-text("Generate All Assets")')
@@ -221,6 +272,7 @@ test.describe('Render Control', () => {
 
   // ── Keyboard interaction ───────────────────────────────────────
   test('Tab through render settings fields', async ({ page }) => {
+    await expect(page.getByText(/Backend: (ffmpeg|remotion)/)).toBeVisible()
     const filenameInput = page.locator('#output-filename')
     await filenameInput.focus()
     await expect(filenameInput).toBeFocused()
@@ -228,6 +280,10 @@ test.describe('Render Control', () => {
     await page.keyboard.press('Tab')
     const fpsSelect = page.locator('#fps-select')
     await expect(fpsSelect).toBeFocused()
+
+    await page.keyboard.press('Tab')
+    const textModeSelect = page.locator('#text-render-mode-select')
+    await expect(textModeSelect).toBeFocused()
   })
 
   // ── Breadcrumb navigation ──────────────────────────────────────
@@ -281,6 +337,49 @@ test.describe('Render Control', () => {
       await expect(page.getByRole('banner').getByRole('link', { name: ROUTE_RESET_PROJECT })).toBeVisible()
       await expect(page.locator('#output-filename')).toHaveValue('route-reset.mp4')
       await expect(page.locator('#fps-select')).toHaveValue('30')
+    })
+  })
+
+  test.describe.serial('text strategy settings', () => {
+    test.beforeAll(() => {
+      cloneProjectFixture(PROJECT, TEXT_MODE_PROJECT)
+      const projectDir = path.resolve(process.cwd(), '..', 'projects', TEXT_MODE_PROJECT)
+      const planPath = path.join(projectDir, 'plan.json')
+      const plan = JSON.parse(fs.readFileSync(planPath, 'utf8')) as Record<string, any>
+      plan.meta.brief = {
+        ...(plan.meta.brief || {}),
+        composition_mode: 'hybrid',
+        text_render_mode: 'visual_authored',
+      }
+      plan.meta.render_profile = {
+        ...(plan.meta.render_profile || {}),
+        render_backend: 'remotion',
+        text_render_mode: 'visual_authored',
+      }
+      fs.writeFileSync(planPath, JSON.stringify(plan, null, 2))
+    })
+
+    test.afterAll(() => {
+      cleanupProjectFixture(TEXT_MODE_PROJECT)
+    })
+
+    test('render settings persist text strategy into the project plan', async ({ page }) => {
+      await page.goto(`/projects/${TEXT_MODE_PROJECT}/render`)
+      await expect(page.getByRole('heading', { name: 'Render', exact: true })).toBeVisible()
+      await expect(page.getByText('Backend: remotion')).toBeVisible()
+      await expect(page.locator('#text-render-mode-select')).toBeEnabled()
+      await expect(page.locator('#text-render-mode-select')).toHaveValue('visual_authored')
+
+      await page.locator('#text-render-mode-select').selectOption('deterministic_overlay')
+      await expect(page.locator('#text-render-mode-select')).toHaveValue('deterministic_overlay')
+
+      await expect.poll(() => {
+        const plan = readProjectPlan(TEXT_MODE_PROJECT) as Record<string, any>
+        return `${plan.meta?.brief?.text_render_mode ?? ''}|${plan.meta?.render_profile?.text_render_mode ?? ''}`
+      }).toBe('deterministic_overlay|deterministic_overlay')
+
+      await page.reload()
+      await expect(page.locator('#text-render-mode-select')).toHaveValue('deterministic_overlay')
     })
   })
 
@@ -368,6 +467,7 @@ test.describe('Render Control', () => {
       await expect(page.getByText('1/1 with visuals')).toBeVisible()
       await expect(page.getByText('1/1 with audio')).toBeVisible()
       await expect(page.getByRole('button', { name: 'Render Video' })).toBeEnabled()
+      await expect(page.getByTestId('remotion-player-surface')).toBeVisible()
     })
   })
 })

@@ -40,6 +40,35 @@ def _write_color_video(path: Path, duration_seconds: float, size: tuple[int, int
     )
 
 
+def _write_color_video_with_audio(path: Path, duration_seconds: float, size: tuple[int, int] = (640, 360)) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    subprocess.run(
+        [
+            "ffmpeg",
+            "-y",
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-f",
+            "lavfi",
+            "-i",
+            f"color=c=0C2040:s={size[0]}x{size[1]}:d={duration_seconds}:r=24",
+            "-f",
+            "lavfi",
+            "-i",
+            f"sine=frequency=440:duration={duration_seconds}",
+            "-c:v",
+            "libx264",
+            "-c:a",
+            "aac",
+            "-pix_fmt",
+            "yuv420p",
+            str(path),
+        ],
+        check=True,
+    )
+
+
 def test_get_video_scene_timing_reports_effective_and_freeze_duration():
     scene = {
         "video_trim_start": 2.0,
@@ -88,3 +117,37 @@ def test_assemble_video_supports_video_scene_with_last_frame_hold(tmp_path):
     assert output_path.exists()
     assert output_duration is not None
     assert 1.45 <= output_duration <= 1.85
+
+
+def test_assemble_video_prefers_clip_audio_when_requested(tmp_path):
+    project_dir = tmp_path / "clip_audio_project"
+    video_path = project_dir / "clips" / "scene_000.mp4"
+    audio_path = project_dir / "audio" / "scene_000.wav"
+
+    _write_color_video_with_audio(video_path, duration_seconds=1.0)
+    _write_silent_wav(audio_path, duration_seconds=1.8)
+
+    output_path = assemble_video(
+        [
+            {
+                "id": 0,
+                "scene_type": "video",
+                "video_path": str(video_path),
+                "video_audio_source": "clip",
+                "video_trim_start": 0.0,
+                "video_trim_end": None,
+                "video_playback_speed": 1.0,
+                "video_hold_last_frame": True,
+                "audio_path": str(audio_path),
+            }
+        ],
+        project_dir,
+        output_filename="clip-audio.mp4",
+        fps=24,
+    )
+
+    output_duration = get_media_duration(output_path)
+
+    assert output_path.exists()
+    assert output_duration is not None
+    assert 0.85 <= output_duration <= 1.15

@@ -2,11 +2,13 @@ import { GlassPanel } from '../../components/primitives/GlassPanel.tsx'
 import { Select } from '../../components/primitives/Select.tsx'
 import { Slider } from '../../components/primitives/Slider.tsx'
 import { TextInput } from '../../components/primitives/TextInput.tsx'
+import { entryDisplayPrice, findCostEntry, type CostCatalog } from '../../lib/costs.ts'
 
 interface ImageProfilePanelProps {
   profile: Record<string, unknown> | null
   imageProviders: string[]
   editModels: string[]
+  costCatalog?: CostCatalog | null
   saving?: boolean
   disabled?: boolean
   onProfileChange: (patch: Record<string, unknown>) => void
@@ -70,6 +72,7 @@ export function ImageProfilePanel({
   profile,
   imageProviders,
   editModels,
+  costCatalog,
   saving,
   disabled,
   onProfileChange,
@@ -83,6 +86,23 @@ export function ImageProfilePanel({
   const dashscopeNegativePrompt = asString(currentProfile.dashscope_edit_negative_prompt)
   const dashscopePromptExtend = asBool(currentProfile.dashscope_edit_prompt_extend, true)
   const isDashscopeModel = editModel.startsWith('qwen-image-edit')
+  const generationCost = entryDisplayPrice(findCostEntry(costCatalog ?? null, {
+    kind: 'image_generation',
+    provider,
+    model: generationModel,
+  }))
+  const editModelOptions = editModels.map((item) => {
+    const entry = findCostEntry(costCatalog ?? null, {
+      kind: 'image_edit',
+      provider: item.startsWith('qwen-image-edit') ? 'dashscope' : 'replicate',
+      model: item,
+    })
+    const price = entryDisplayPrice(entry)
+    return {
+      value: item,
+      label: price ? `${editorLabel(item)} · ${price}` : editorLabel(item),
+    }
+  })
   const effectiveGenerateRequest = {
     provider,
     model: generationModel || null,
@@ -151,7 +171,7 @@ export function ImageProfilePanel({
                 value={generationModel}
                 onChange={(event) => onProfileChange({ generation_model: event.target.value })}
                 disabled={disabled}
-                hint="Used by Generate and Regenerate Image."
+                hint={generationCost ? `Used by Generate and Regenerate Image. Current catalog rate: ${generationCost}.` : 'Used by Generate and Regenerate Image.'}
               />
             </div>
           </GlassPanel>
@@ -168,7 +188,7 @@ export function ImageProfilePanel({
                 label="Image editor"
                 value={editModel}
                 onChange={(event) => onProfileChange({ edit_model: event.target.value })}
-                options={editModels.map((item) => ({ value: item, label: editorLabel(item) }))}
+                options={editModelOptions}
                 disabled={disabled || editModels.length === 0}
                 hint={editModels.length === 0 ? 'No AI image editor is configured for this machine.' : 'Used by the per-scene Edit Image action.'}
               />

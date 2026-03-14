@@ -1,6 +1,90 @@
 import { test, expect } from '@playwright/test'
 
 const EXISTING_PROJECT = 'bet365_feature_act_01'
+const MOCK_BOOTSTRAP = {
+  providers: {
+    api_keys: {
+      openai: true,
+      anthropic: true,
+      replicate: true,
+      dashscope: false,
+      elevenlabs: false,
+    },
+    llm_provider: 'anthropic',
+    image_providers: ['replicate', 'manual'],
+    video_providers: ['replicate', 'manual'],
+    render_backends: ['ffmpeg', 'remotion'],
+    remotion_available: true,
+    remotion_capabilities: {
+      render_available: true,
+      player_available: true,
+      transitions_available: true,
+      three_available: true,
+    },
+    tts_providers: {
+      kokoro: 'Kokoro (Local)',
+    },
+    tts_voice_options: {
+      kokoro: [],
+      elevenlabs: [],
+      openai: [],
+      chatterbox: [],
+    },
+    image_edit_models: ['qwen/qwen-image-edit-2511'],
+  },
+  defaults: {
+    brief: {
+      project_name: 'my_video',
+      source_mode: 'source_text',
+      video_goal: '',
+      audience: '',
+      source_material: '',
+      target_length_minutes: 3,
+      tone: '',
+      visual_style: '',
+      must_include: '',
+      must_avoid: '',
+      ending_cta: '',
+      paid_media_budget_usd: '',
+      composition_mode: 'auto',
+      visual_source_strategy: 'images_only',
+      video_scene_style: 'auto',
+      text_render_mode: 'visual_authored',
+      available_footage: '',
+      footage_manifest: [],
+      style_reference_summary: '',
+      style_reference_paths: [],
+      raw_brief: '',
+    },
+    render_profile: {
+      aspect_ratio: '16:9',
+      width: 1664,
+      height: 928,
+      fps: 24,
+      scene_types: ['image', 'video', 'motion'],
+      render_strategy: 'auto',
+      render_backend: 'ffmpeg',
+      text_render_mode: 'visual_authored',
+    },
+    image_profile: {
+      provider: 'replicate',
+      generation_model: 'qwen/qwen-image-2512',
+      edit_model: 'qwen/qwen-image-edit-2511',
+    },
+    video_profile: {
+      provider: 'manual',
+      generation_model: '',
+      model_selection_mode: 'automatic',
+      quality_mode: 'standard',
+      generate_audio: true,
+    },
+    tts_profile: {
+      provider: 'kokoro',
+      voice: 'af_bella',
+    },
+  },
+  projects: [],
+} as const
 
 test.describe('Brief Studio', () => {
   test.describe('New project', () => {
@@ -28,7 +112,8 @@ test.describe('Brief Studio', () => {
 
       const sourceMode = page.getByLabel('Source Mode')
       await expect(sourceMode).toBeVisible()
-      await expect(page.getByLabel('Composition Mode')).toBeVisible()
+      await expect(page.getByLabel('Scene Engine')).toBeVisible()
+      await expect(page.getByLabel('Text Strategy')).toBeVisible()
     })
 
     test('Content fieldset renders with all fields', async ({ page }) => {
@@ -45,6 +130,7 @@ test.describe('Brief Studio', () => {
       await expect(page.getByLabel('Tone')).toBeVisible()
       await expect(page.getByLabel('Visual Style')).toBeVisible()
       await expect(page.getByLabel('Visual Source Strategy')).toBeVisible()
+      await expect(page.getByLabel('Generated Video Scene Style')).toBeVisible()
     })
 
     test('Constraints fieldset renders', async ({ page }) => {
@@ -114,10 +200,37 @@ test.describe('Brief Studio', () => {
       await expect(select).toHaveValue('video_preferred')
     })
 
-    test('Composition Mode select has all options', async ({ page }) => {
-      const select = page.getByLabel('Composition Mode')
+    test('Generated Video Scene Style select steers clip planning', async ({ page }) => {
+      const select = page.getByLabel('Generated Video Scene Style')
+      await select.selectOption('speaking')
+      await expect(select).toHaveValue('speaking')
+
+      await select.selectOption('mixed')
+      await expect(select).toHaveValue('mixed')
+
+      await select.selectOption('auto')
+      await expect(select).toHaveValue('auto')
+    })
+
+    test('Text Strategy select has both modes', async ({ page }) => {
+      const select = page.getByLabel('Text Strategy')
       const options = select.locator('option')
-      await expect(options).toHaveCount(3)
+      await expect(options).toHaveCount(2)
+
+      await select.selectOption('deterministic_overlay')
+      await expect(select).toHaveValue('deterministic_overlay')
+
+      await select.selectOption('visual_authored')
+      await expect(select).toHaveValue('visual_authored')
+    })
+
+    test('Scene Engine select has all options, including trust-claude auto', async ({ page }) => {
+      const select = page.getByLabel('Scene Engine')
+      const options = select.locator('option')
+      await expect(options).toHaveCount(4)
+
+      await select.selectOption('auto')
+      await expect(select).toHaveValue('auto')
 
       await select.selectOption('hybrid')
       await expect(select).toHaveValue('hybrid')
@@ -127,6 +240,44 @@ test.describe('Brief Studio', () => {
 
       await select.selectOption('classic')
       await expect(select).toHaveValue('classic')
+    })
+
+    test('Scene Engine choices stay visible even if bootstrap is unavailable', async ({ page }) => {
+      await page.route('**/api/bootstrap', async (route) => {
+        await route.abort()
+      })
+
+      await page.reload()
+      await expect(page.getByRole('heading', { name: 'Brief Studio' })).toBeVisible()
+
+      const select = page.getByLabel('Scene Engine')
+      await expect(select.locator('option')).toHaveCount(4)
+      await expect(select.locator('option[value="auto"]')).toHaveText('I Trust Claude to Decide')
+    })
+
+    test('Scene Engine shows disabled Remotion-only modes when bootstrap says Remotion is unavailable', async ({ page }) => {
+      await page.route('**/api/bootstrap', async (route) => {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            ...MOCK_BOOTSTRAP,
+            providers: {
+              ...MOCK_BOOTSTRAP.providers,
+              remotion_available: false,
+              render_backends: ['ffmpeg'],
+            },
+          }),
+        })
+      })
+
+      await page.reload()
+      await expect(page.getByRole('heading', { name: 'Brief Studio' })).toBeVisible()
+
+      const hybridOption = page.locator('option[value="hybrid"]')
+      const motionOnlyOption = page.locator('option[value="motion_only"]')
+      await expect(hybridOption).toBeDisabled()
+      await expect(motionOnlyOption).toBeDisabled()
     })
 
     // ── Slider interaction ───────────────────────────────────────
@@ -152,6 +303,24 @@ test.describe('Brief Studio', () => {
       const style = page.getByLabel('Visual Style')
       await style.fill('Cinematic')
       await expect(style).toHaveValue('Cinematic')
+    })
+
+    test('paid media budget appears when paid image/video generation is available', async ({ page }) => {
+      await page.route('**/api/bootstrap', async (route) => {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify(MOCK_BOOTSTRAP),
+        })
+      })
+
+      await page.reload()
+      await expect(page.getByRole('heading', { name: 'Brief Studio' })).toBeVisible()
+
+      const budgetInput = page.getByLabel('Paid Media Budget (USD)')
+      await expect(budgetInput).toBeVisible()
+      await budgetInput.fill('45')
+      await expect(budgetInput).toHaveValue('45')
     })
 
     // ── Constraints textareas ────────────────────────────────────
@@ -191,7 +360,7 @@ test.describe('Brief Studio', () => {
         const payload = route.request().postDataJSON() as Record<string, unknown>
         expect(payload.project_name).toBe('brief_live_demo')
         expect((payload.brief as Record<string, unknown>).video_goal).toBe('Show the one prompt to final render path.')
-        expect((payload.brief as Record<string, unknown>).composition_mode).toBe('hybrid')
+        expect((payload.brief as Record<string, unknown>).composition_mode).toBe('auto')
         expect((payload.agent_demo_profile as Record<string, unknown>).workspace_path).toBe('/Users/davidmontgomery/cathode')
         await route.fulfill({
           status: 200,

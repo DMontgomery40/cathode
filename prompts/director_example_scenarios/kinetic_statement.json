@@ -1,0 +1,14 @@
+{
+  "project_name": "kinetic_statement",
+  "source_mode": "ideas_notes",
+  "video_goal": "Land one bold claim with premium motion rather than a fake slide.",
+  "audience": "Founders deciding whether a creative tool is ready for real business use.",
+  "source_material": "Drive home one idea: the hard work was getting the system tuned, and now the output can be fast, repeatable, and saleable. This should feel like a high-end statement beat, not a boring deck slide.",
+  "target_length_minutes": 0.75,
+  "tone": "bold, elegant, persuasive",
+  "visual_style": "luxury title-card motion",
+  "composition_mode": "motion_only",
+  "visual_source_strategy": "images_only",
+  "video_scene_style": "auto",
+  "text_render_mode": "deterministic_overlay"
+}

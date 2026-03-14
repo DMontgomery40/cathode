@@ -1,0 +1,51 @@
+[
+  {
+    "id": "roadmap_bullet_stack__v1",
+    "title": "Roadmap Bullet Stack",
+    "intents": [
+      "bullet_stack"
+    ]
+  },
+  {
+    "id": "multi_voice_pitch__v1",
+    "title": "Multi Voice Pitch",
+    "intents": [
+      "multi_voice_pitch"
+    ]
+  },
+  {
+    "id": "static_image_control__v1",
+    "title": "Static Image Control",
+    "intents": [
+      "static_image_control"
+    ]
+  },
+  {
+    "id": "software_demo_overlay__v1",
+    "title": "Software Demo Overlay",
+    "intents": [
+      "software_demo_overlay"
+    ]
+  },
+  {
+    "id": "ranked_data_stage__v1",
+    "title": "Ranked Data Stage",
+    "intents": [
+      "ranked_data_stage"
+    ]
+  },
+  {
+    "id": "quote_focus__v1",
+    "title": "Quote Focus",
+    "intents": [
+      "quote_focus"
+    ]
+  },
+  {
+    "id": "kinetic_statement__v1",
+    "title": "Kinetic Statement",
+    "intents": [
+      "kinetic_statement"
+    ]
+  }
+]

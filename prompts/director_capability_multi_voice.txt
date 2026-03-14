@@ -1,0 +1,5 @@
+Capability mode: multi-voice storytelling.
+
+- Use `speaker_name` consistently whenever the brief implies multiple recurring voices, spokespersons, characters, or commercial examples.
+- Keep each recurring speaker logically stable across scenes so Cathode can preserve voice continuity.
+- The narrator should still feel like the spine of the piece unless the brief clearly wants a distributed ensemble.
