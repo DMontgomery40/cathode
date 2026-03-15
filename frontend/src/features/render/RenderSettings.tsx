@@ -5,6 +5,8 @@ interface RenderSettingsProps {
   onOutputFilenameChange: (v: string) => void
   fps: number
   onFpsChange: (v: number) => void
+  renderBackend: string
+  renderBackendReason?: string | null
   textRenderMode: string
   onTextRenderModeChange: (v: string) => void
   textRenderModeDisabled?: boolean
@@ -16,6 +18,8 @@ export function RenderSettings({
   onOutputFilenameChange,
   fps,
   onFpsChange,
+  renderBackend,
+  renderBackendReason,
   textRenderMode,
   onTextRenderModeChange,
   textRenderModeDisabled = false,
@@ -150,6 +154,23 @@ export function RenderSettings({
             )}
           </div>
         )}
+
+        <div className="flex flex-col gap-[var(--space-1)]" style={{ marginTop: 'var(--space-2)' }}>
+          <span className="text-[var(--text-tertiary)]" style={{ fontSize: 'var(--text-xs)' }}>
+            Resolved render backend
+          </span>
+          <span
+            className="text-[var(--text-secondary)] font-[family-name:var(--font-mono)]"
+            style={{ fontSize: 'var(--text-sm)' }}
+          >
+            {renderBackend}
+          </span>
+          {renderBackendReason ? (
+            <p className="m-0 text-[var(--text-tertiary)]" style={{ fontSize: 'var(--text-xs)' }}>
+              {renderBackendReason}
+            </p>
+          ) : null}
+        </div>
       </div>
     </GlassPanel>
   )

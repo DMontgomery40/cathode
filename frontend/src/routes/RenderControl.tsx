@@ -66,6 +66,9 @@ export function RenderControl() {
   const renderBackend = typeof renderProfile === 'object' && renderProfile
     ? String((renderProfile as Record<string, unknown>).render_backend || 'ffmpeg')
     : 'ffmpeg'
+  const renderBackendReason = typeof renderProfile === 'object' && renderProfile
+    ? String((renderProfile as Record<string, unknown>).render_backend_reason || '').trim() || null
+    : null
   const planTextRenderMode = resolveTextRenderMode(
     typeof renderProfile === 'object' && renderProfile
       ? renderProfile as Record<string, unknown>
@@ -282,9 +285,11 @@ export function RenderControl() {
                 onOutputFilenameChange={handleOutputFilenameChange}
                 fps={fps}
                 onFpsChange={handleFpsChange}
+                renderBackend={renderBackend}
+                renderBackendReason={renderBackendReason}
                 textRenderMode={textRenderMode}
                 onTextRenderModeChange={handleTextRenderModeChange}
-                textRenderModeDisabled={!plan || savePlan.isPending}
+                textRenderModeDisabled={savePlan.isPending}
                 renderProfile={renderProfile as Record<string, unknown> | null}
               />
 

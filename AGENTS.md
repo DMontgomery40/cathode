@@ -73,7 +73,10 @@ Both rely on the same underlying pipeline services and project store.
 - Claude gets the full normalized brief plus the full raw user input.
 - Brief options select capability blocks and examples for the director prompt; they do not replace the core prompt or the raw user dump.
 - Remotion is not “extra UI stuff.” It is Cathode’s deterministic manifestation layer for scenes that Claude dreams up.
+- Pure creative briefs should remain image-first by default. Do not silently drag whimsical, editorial, surreal, or storybook briefs into generic motion treatment unless the brief clearly asks for motion/data/demo structure or a downstream treatment planner has an explicit product reason to do so.
 - Keep the model-facing scene contract thin. Avoid forcing Claude to emit brittle nested renderer schemas when Cathode can map creative signals into deterministic composition internally.
+- The director owns narrative and art direction. If Cathode needs Remotion-aware staging, transitions, timing, or 3D treatment selection, add a second planner stage after storyboard generation rather than bloating the director prompt with renderer mechanics.
+- Do not ask the director to generate arbitrary Remotion TSX or freeform component code. Cathode remains registry-based.
 - Preserve backward compatibility for stored plans that still carry older composition-hint fields.
 
 ## Prompt Example Rules
@@ -82,6 +85,7 @@ Both rely on the same underlying pipeline services and project store.
 - Promoted examples belong under tracked `prompts/director_examples/`.
 - Do not move raw Anthropic transcripts into `prompts/`.
 - A promoted example is not valid unless it parsed, normalized through Cathode’s planner, produced a valid Remotion manifest, and yielded at least a preview/frame.
+- Match promoted examples to the brief intent. Do not let one abstract or product-oriented example shelf become the implicit default for unrelated whimsical/storybook briefs.
 
 ## Memory Rules
 

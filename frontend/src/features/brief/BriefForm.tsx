@@ -134,24 +134,6 @@ export function BriefForm({
                 error={errors.source_mode?.message}
                 {...register('source_mode')}
               />
-              <div className="grid gap-[var(--space-4)] md:grid-cols-2">
-                <Select
-                  label="Scene Engine"
-                  options={sceneEngineOptions}
-                  hint={remotionAvailable === false
-                    ? 'Auto and Classic stay available. Hybrid and Motion Only need the local Remotion toolchain.'
-                    : 'Auto lets Claude choose the right split between classic stills, hybrid scenes, and motion-first beats.'}
-                  error={errors.composition_mode?.message}
-                  {...register('composition_mode')}
-                />
-                <Select
-                  label="Text Strategy"
-                  options={TEXT_RENDER_MODE_OPTIONS}
-                  hint="Visual-authored text bakes copy into generated visuals. Deterministic overlay keeps text in Cathode's renderer instead."
-                  error={errors.text_render_mode?.message}
-                  {...register('text_render_mode')}
-                />
-              </div>
             </div>
           </fieldset>
         </GlassPanel>
@@ -311,6 +293,47 @@ export function BriefForm({
                 {...register('ending_cta')}
               />
             </div>
+          </fieldset>
+        </GlassPanel>
+
+        <GlassPanel variant="inset" padding="lg" rounded="lg">
+          <fieldset className="border-none p-0 m-0">
+            <legend
+              className="font-[family-name:var(--font-display)] text-[var(--text-primary)] m-0 p-0"
+              style={{
+                fontSize: 'var(--text-lg)',
+                fontWeight: 'var(--weight-semibold)',
+                marginBottom: 'var(--space-4)',
+              }}
+            >
+              Advanced Creative Controls
+            </legend>
+            <details>
+              <summary
+                className="cursor-pointer text-[var(--text-secondary)]"
+                style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--weight-medium)' }}
+              >
+                Override scene engine and text strategy
+              </summary>
+              <div className="mt-[var(--space-4)] grid gap-[var(--space-4)] md:grid-cols-2">
+                <Select
+                  label="Scene Engine"
+                  options={sceneEngineOptions}
+                  hint={remotionAvailable === false
+                    ? 'Auto and Classic stay available. Hybrid and Motion Only need the local Remotion toolchain.'
+                    : 'Auto lets Cathode stay image-first by default, while still allowing hybrid or motion-first overrides when you really want them.'}
+                  error={errors.composition_mode?.message}
+                  {...register('composition_mode')}
+                />
+                <Select
+                  label="Text Strategy"
+                  options={TEXT_RENDER_MODE_OPTIONS}
+                  hint="Visual-authored text keeps the director image-first. Deterministic overlay is the advanced path when exact renderer-owned copy matters."
+                  error={errors.text_render_mode?.message}
+                  {...register('text_render_mode')}
+                />
+              </div>
+            </details>
           </fieldset>
         </GlassPanel>
 

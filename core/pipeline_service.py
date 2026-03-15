@@ -28,6 +28,7 @@ from .project_schema import (
     infer_composition_mode,
     normalize_agent_demo_profile,
     normalize_brief,
+    resolve_render_backend_details,
     resolve_render_strategy,
     resolve_render_backend,
 )
@@ -74,11 +75,14 @@ def prepare_project_execution_profiles(
     )
     if resolved_render_profile["render_strategy"] == "auto":
         resolved_render_profile.pop("render_backend", None)
+        resolved_render_profile.pop("render_backend_reason", None)
     else:
-        resolved_render_profile["render_backend"] = resolve_render_backend(
+        backend, reason = resolve_render_backend_details(
             resolved_render_profile,
             composition_mode=str(normalized_brief.get("composition_mode") or "classic"),
         )
+        resolved_render_profile["render_backend"] = backend
+        resolved_render_profile["render_backend_reason"] = reason
     resolved_render_profile["text_render_mode"] = str(normalized_brief.get("text_render_mode") or "visual_authored")
 
     return normalized_brief, resolve_video_profile(next_video_profile or None), resolved_render_profile

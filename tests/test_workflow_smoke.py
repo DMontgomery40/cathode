@@ -16,9 +16,10 @@ def test_smoke_wizard_created_brief(monkeypatch):
     def fake_generate(source, provider="openai"):
         captured["source"] = source
         captured["provider"] = provider
-        return [_sample_scene()]
+        return [_sample_scene()], {}
 
-    monkeypatch.setattr("core.workflow.generate_storyboard", fake_generate)
+    monkeypatch.setattr("core.workflow.generate_storyboard_with_metadata", fake_generate)
+    monkeypatch.setattr("core.workflow.plan_scene_treatments_with_metadata", lambda scenes, brief, provider: (scenes, {}))
 
     plan = create_plan_from_brief(
         project_name="wizard_demo",
@@ -51,9 +52,10 @@ def test_smoke_raw_script_path(monkeypatch):
 
     def fake_generate(source, provider="openai"):
         captured["source"] = source
-        return [_sample_scene()]
+        return [_sample_scene()], {}
 
-    monkeypatch.setattr("core.workflow.generate_storyboard", fake_generate)
+    monkeypatch.setattr("core.workflow.generate_storyboard_with_metadata", fake_generate)
+    monkeypatch.setattr("core.workflow.plan_scene_treatments_with_metadata", lambda scenes, brief, provider: (scenes, {}))
 
     plan = create_plan_from_brief(
         project_name="script_demo",
@@ -77,9 +79,10 @@ def test_smoke_legacy_plan_rebuild(monkeypatch):
     def fake_generate(source, provider="openai"):
         captured["source"] = source
         captured["provider"] = provider
-        return [_sample_scene()]
+        return [_sample_scene()], {}
 
-    monkeypatch.setattr("core.workflow.generate_storyboard", fake_generate)
+    monkeypatch.setattr("core.workflow.generate_storyboard_with_metadata", fake_generate)
+    monkeypatch.setattr("core.workflow.plan_scene_treatments_with_metadata", lambda scenes, brief, provider: (scenes, {}))
 
     legacy_plan = {
         "meta": {
@@ -102,9 +105,10 @@ def test_smoke_legacy_plan_rebuild(monkeypatch):
 
 def test_motion_only_brief_converts_storyboard_to_motion_scenes(monkeypatch):
     def fake_generate(_source, provider="openai"):
-        return [_sample_scene()]
+        return [_sample_scene()], {}
 
-    monkeypatch.setattr("core.workflow.generate_storyboard", fake_generate)
+    monkeypatch.setattr("core.workflow.generate_storyboard_with_metadata", fake_generate)
+    monkeypatch.setattr("core.workflow.plan_scene_treatments_with_metadata", lambda scenes, brief, provider: (scenes, {}))
 
     plan = create_plan_from_brief(
         project_name="motion_only_demo",
@@ -142,9 +146,10 @@ def test_create_plan_from_brief_assigns_scene_voice_overrides_for_multiple_speak
                 "visual_prompt": "House frame.",
                 "speaker_name": "Real Estate Agent",
             },
-        ]
+        ], {}
 
-    monkeypatch.setattr("core.workflow.generate_storyboard", fake_generate)
+    monkeypatch.setattr("core.workflow.generate_storyboard_with_metadata", fake_generate)
+    monkeypatch.setattr("core.workflow.plan_scene_treatments_with_metadata", lambda scenes, brief, provider: (scenes, {}))
     monkeypatch.setattr(
         "core.workflow.available_tts_providers",
         lambda keys=None: {
@@ -190,9 +195,10 @@ def test_create_plan_from_brief_prefers_explicit_composition_intent_over_heurist
                     "data_points": ["#3 Services", "#2 Licensing", "#1 Production"],
                 },
             }
-        ]
+        ], {}
 
-    monkeypatch.setattr("core.workflow.generate_storyboard", fake_generate)
+    monkeypatch.setattr("core.workflow.generate_storyboard_with_metadata", fake_generate)
+    monkeypatch.setattr("core.workflow.plan_scene_treatments_with_metadata", lambda scenes, brief, provider: (scenes, {}))
 
     plan = create_plan_from_brief(
         project_name="composition_intent_demo",
@@ -224,9 +230,10 @@ def test_create_plan_from_brief_maps_thin_motion_fields_into_deterministic_compo
                 "staging_notes": "clean dark roadmap with staggered card reveals",
                 "transition_hint": "wipe",
             }
-        ]
+        ], {}
 
-    monkeypatch.setattr("core.workflow.generate_storyboard", fake_generate)
+    monkeypatch.setattr("core.workflow.generate_storyboard_with_metadata", fake_generate)
+    monkeypatch.setattr("core.workflow.plan_scene_treatments_with_metadata", lambda scenes, brief, provider: (scenes, {}))
 
     plan = create_plan_from_brief(
         project_name="thin_motion_contract_demo",
@@ -242,6 +249,39 @@ def test_create_plan_from_brief_maps_thin_motion_fields_into_deterministic_compo
     assert scene["composition"]["mode"] == "native"
     assert scene["composition"]["family"] == "bullet_stack"
     assert scene["composition"]["transition_after"]["kind"] == "wipe"
+
+
+def test_create_plan_from_brief_keeps_whimsical_creative_brief_image_first(monkeypatch):
+    def fake_generate(_source, provider="openai"):
+        return [
+            {
+                "id": 0,
+                "title": "Impossible hello",
+                "narration": "A strange meeting unfolds under storybook moonlight.",
+                "visual_prompt": "Warm illustrated meeting on a bridge.",
+                "scene_type": "image",
+            }
+        ], {}
+
+    monkeypatch.setattr("core.workflow.generate_storyboard_with_metadata", fake_generate)
+    monkeypatch.setattr("core.workflow.plan_scene_treatments_with_metadata", lambda scenes, brief, provider: (scenes, {}))
+
+    plan = create_plan_from_brief(
+        project_name="whimsical_demo",
+        brief={
+            "project_name": "whimsical_demo",
+            "source_mode": "ideas_notes",
+            "source_material": "Tell a whimsical story about an impossible encounter, but it must not contain the obvious thing.",
+            "visual_style": "storybook illustration",
+            "tone": "playful and magical",
+        },
+        provider="anthropic",
+    )
+
+    scene = plan["scenes"][0]
+    assert scene["scene_type"] == "image"
+    assert scene["composition"]["family"] == "media_pan"
+    assert plan["meta"]["render_profile"]["render_backend"] == "ffmpeg"
 
 
 def test_pitch_style_raw_brief_stays_intact_and_yields_multi_voice_motion_capable_plan(monkeypatch):
@@ -273,9 +313,10 @@ def test_pitch_style_raw_brief_stays_intact_and_yields_multi_voice_motion_capabl
                 "visual_prompt": "Luxury listing commercial frame.",
                 "speaker_name": "Real Estate Agent",
             },
-        ]
+        ], {}
 
-    monkeypatch.setattr("core.workflow.generate_storyboard", fake_generate)
+    monkeypatch.setattr("core.workflow.generate_storyboard_with_metadata", fake_generate)
+    monkeypatch.setattr("core.workflow.plan_scene_treatments_with_metadata", lambda scenes, brief, provider: (scenes, {}))
     monkeypatch.setattr(
         "core.workflow.available_tts_providers",
         lambda keys=None: {

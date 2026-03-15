@@ -12,6 +12,7 @@ from core.project_schema import (
     infer_composition_mode,
     normalize_agent_demo_profile,
     normalize_brief,
+    resolve_render_backend_details,
     resolve_render_backend,
     resolve_render_strategy,
 )
@@ -72,11 +73,14 @@ async def rebuild_storyboard(
         )
         if render_profile["render_strategy"] == "auto":
             render_profile.pop("render_backend", None)
+            render_profile.pop("render_backend_reason", None)
         else:
-            render_profile["render_backend"] = resolve_render_backend(
+            backend, reason = resolve_render_backend_details(
                 render_profile,
                 composition_mode=composition_mode,
             )
+            render_profile["render_backend"] = backend
+            render_profile["render_backend_reason"] = reason
         meta["render_profile"] = {**render_profile}
         save_plan(project_dir, plan)
     provider = body.provider if body else None

@@ -81,6 +81,7 @@ def test_render_profile_defaulting_preserves_partial_override():
     assert render_profile["width"] == 1664
     assert render_profile["height"] == 928
     assert render_profile["render_backend"] == "ffmpeg"
+    assert "Classic image/video assembly" in render_profile["render_backend_reason"]
 
 
 def test_backfill_plan_preserves_video_scene_metadata():
@@ -634,6 +635,7 @@ def test_backfill_plan_auto_switches_render_backend_when_scene_requires_remotion
     )
 
     assert plan["meta"]["render_profile"]["render_backend"] == "remotion"
+    assert "deterministic overlay treatment" in plan["meta"]["render_profile"]["render_backend_reason"]
 
 
 def test_normalize_brief_preserves_visual_source_strategy_and_footage_notes():

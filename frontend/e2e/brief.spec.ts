@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test'
+import { test, expect, type Page } from '@playwright/test'
 
 const EXISTING_PROJECT = 'bet365_feature_act_01'
 const MOCK_BOOTSTRAP = {
@@ -86,6 +86,13 @@ const MOCK_BOOTSTRAP = {
   projects: [],
 } as const
 
+async function openAdvancedCreativeControls(page: Page) {
+  const summary = page.getByText('Override scene engine and text strategy')
+  await expect(summary).toBeVisible()
+  await summary.click()
+  await expect(page.getByLabel('Scene Engine')).toBeVisible()
+}
+
 test.describe('Brief Studio', () => {
   test.describe('New project', () => {
     test.beforeEach(async ({ page }) => {
@@ -112,8 +119,7 @@ test.describe('Brief Studio', () => {
 
       const sourceMode = page.getByLabel('Source Mode')
       await expect(sourceMode).toBeVisible()
-      await expect(page.getByLabel('Scene Engine')).toBeVisible()
-      await expect(page.getByLabel('Text Strategy')).toBeVisible()
+      await expect(page.locator('legend:has-text("Advanced Creative Controls")')).toBeVisible()
     })
 
     test('Content fieldset renders with all fields', async ({ page }) => {
@@ -213,6 +219,7 @@ test.describe('Brief Studio', () => {
     })
 
     test('Text Strategy select has both modes', async ({ page }) => {
+      await openAdvancedCreativeControls(page)
       const select = page.getByLabel('Text Strategy')
       const options = select.locator('option')
       await expect(options).toHaveCount(2)
@@ -225,6 +232,7 @@ test.describe('Brief Studio', () => {
     })
 
     test('Scene Engine select has all options, including trust-claude auto', async ({ page }) => {
+      await openAdvancedCreativeControls(page)
       const select = page.getByLabel('Scene Engine')
       const options = select.locator('option')
       await expect(options).toHaveCount(4)
@@ -250,6 +258,7 @@ test.describe('Brief Studio', () => {
       await page.reload()
       await expect(page.getByRole('heading', { name: 'Brief Studio' })).toBeVisible()
 
+      await openAdvancedCreativeControls(page)
       const select = page.getByLabel('Scene Engine')
       await expect(select.locator('option')).toHaveCount(4)
       await expect(select.locator('option[value="auto"]')).toHaveText('I Trust Claude to Decide')
@@ -274,6 +283,7 @@ test.describe('Brief Studio', () => {
       await page.reload()
       await expect(page.getByRole('heading', { name: 'Brief Studio' })).toBeVisible()
 
+      await openAdvancedCreativeControls(page)
       const hybridOption = page.locator('option[value="hybrid"]')
       const motionOnlyOption = page.locator('option[value="motion_only"]')
       await expect(hybridOption).toBeDisabled()

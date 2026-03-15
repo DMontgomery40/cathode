@@ -10,6 +10,7 @@ from .costs import append_actual_cost_entry
 from .director import generate_storyboard_with_metadata
 from .remotion_render import infer_motion_template
 from .runtime import available_tts_providers
+from .treatment_planner import plan_scene_treatments_with_metadata
 from .project_schema import (
     backfill_plan,
     default_image_profile,
@@ -238,6 +239,11 @@ def create_plan_from_brief(
     scenes = [normalize_scene(scene, i) for i, scene in enumerate(scenes)]
     scenes = _apply_composition_mode_to_scenes(scenes, brief=normalized_brief)
     scenes = plan_scene_compositions(scenes, brief=normalized_brief)
+    scenes, treatment_meta = plan_scene_treatments_with_metadata(
+        scenes,
+        brief=normalized_brief,
+        provider=provider,
+    )
     scenes, resolved_tts_profile = _pick_scene_voice_plan(
         scenes,
         brief=normalized_brief,
@@ -266,6 +272,10 @@ def create_plan_from_brief(
         append_actual_cost_entry(plan, storyboard_meta["actual"])
     if isinstance(storyboard_meta.get("preflight"), dict):
         plan.setdefault("meta", {}).setdefault("cost_actual", {})["llm_preflight"] = storyboard_meta["preflight"]
+    if isinstance(treatment_meta.get("actual"), dict):
+        append_actual_cost_entry(plan, treatment_meta["actual"])
+    if isinstance(treatment_meta.get("preflight"), dict):
+        plan.setdefault("meta", {}).setdefault("cost_actual", {})["llm_preflight_treatment"] = treatment_meta["preflight"]
     return backfill_plan(plan)
 
 
@@ -307,6 +317,11 @@ def rebuild_plan_from_meta(
         normalized_scenes.append(item)
     normalized_scenes = _apply_composition_mode_to_scenes(normalized_scenes, brief=meta.get("brief") or {})
     normalized_scenes = plan_scene_compositions(normalized_scenes, brief=meta.get("brief") or {})
+    normalized_scenes, treatment_meta = plan_scene_treatments_with_metadata(
+        normalized_scenes,
+        brief=meta.get("brief") or {},
+        provider=chosen_provider,
+    )
     normalized_scenes, next_tts_profile = _pick_scene_voice_plan(
         normalized_scenes,
         brief=meta.get("brief") or {},
@@ -322,6 +337,13 @@ def rebuild_plan_from_meta(
         actual["entries"] = [*entries, storyboard_meta["actual"]]
         if isinstance(storyboard_meta.get("preflight"), dict):
             actual["llm_preflight"] = storyboard_meta["preflight"]
+        meta["cost_actual"] = actual
+    if isinstance(treatment_meta.get("actual"), dict):
+        actual = meta.get("cost_actual") if isinstance(meta.get("cost_actual"), dict) else {}
+        entries = actual.get("entries") if isinstance(actual.get("entries"), list) else []
+        actual["entries"] = [*entries, treatment_meta["actual"]]
+        if isinstance(treatment_meta.get("preflight"), dict):
+            actual["llm_preflight_treatment"] = treatment_meta["preflight"]
         meta["cost_actual"] = actual
     normalized["meta"] = meta
     normalized["scenes"] = normalized_scenes
