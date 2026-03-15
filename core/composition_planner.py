@@ -25,7 +25,14 @@ _SOFTWARE_DEMO_HINTS = (
     "right panel",
 )
 
-_FAMILY_HINTS = {"static_media", "media_pan", "software_demo_focus", "kinetic_statements", "three_data_stage"}
+_FAMILY_HINTS = {
+    "static_media",
+    "media_pan",
+    "software_demo_focus",
+    "kinetic_statements",
+    "three_data_stage",
+    "surreal_tableau_3d",
+}
 _MODE_HINTS = {"none", "overlay", "native"}
 _TRANSITION_HINTS = {"fade", "wipe"}
 _NATIVE_MOTION_HINTS = (
@@ -161,7 +168,7 @@ def _composition_props_from_scene(scene: dict[str, Any], intent: dict[str, Any],
     headline = lines[0] if lines else title
     body = " ".join(lines[1:3]).strip() if len(lines) > 1 else narration[:180].strip()
     props: dict[str, Any] = {}
-    if family in {"media_pan", "software_demo_focus", "kinetic_statements", "bullet_stack", "quote_focus"}:
+    if family in {"media_pan", "software_demo_focus", "kinetic_statements", "bullet_stack", "quote_focus", "surreal_tableau_3d"}:
         props["headline"] = headline
         if body:
             props["body"] = body
@@ -173,6 +180,10 @@ def _composition_props_from_scene(scene: dict[str, Any], intent: dict[str, Any],
             props["bullets"] = [title]
     if family == "quote_focus":
         props["kicker"] = title or "Cathode"
+    if family == "surreal_tableau_3d":
+        props["leftSubject"] = lines[0] if lines else title or "Hero form"
+        props["rightSubject"] = lines[1] if len(lines) > 1 else "Counterpoint"
+        props["environment"] = staging_notes or "dreamlike cinematic void"
     if staging_notes:
         props["layout"] = staging_notes
         props["motion_notes"] = staging_notes
@@ -183,7 +194,7 @@ def _default_mode_for_family(scene: dict[str, Any], family: str, current_mode: s
     scene_type = str(scene.get("scene_type") or "").strip().lower()
     if scene_type == "motion":
         return "native"
-    if family in {"kinetic_statements", "bullet_stack", "quote_focus", "three_data_stage"}:
+    if family in {"kinetic_statements", "bullet_stack", "quote_focus", "three_data_stage", "surreal_tableau_3d"}:
         return "native"
     if family == "software_demo_focus":
         return "overlay"

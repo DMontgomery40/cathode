@@ -1,4 +1,5 @@
 import base64
+import json
 
 from core.director import (
     _build_storyboard_user_prompt_from_brief,
@@ -96,6 +97,76 @@ def test_director_system_prompt_selects_promoted_examples(tmp_path, monkeypatch)
     assert "Promoted Cathode examples:" in prompt
     assert 'Example "Pitch Example"' in prompt
     assert "Great multi-voice pacing." in prompt
+
+
+def test_director_system_prompt_selects_whimsical_example_over_abstract_default(tmp_path, monkeypatch):
+    examples_dir = tmp_path / "director_examples"
+    whimsical_dir = examples_dir / "whimsical_storybook__v1"
+    abstract_dir = examples_dir / "static_image_control__v1"
+    whimsical_dir.mkdir(parents=True)
+    abstract_dir.mkdir(parents=True)
+    for example_dir, brief_text, title in (
+        (whimsical_dir, '{"project_name":"whimsy"}', "Whimsical Example"),
+        (abstract_dir, '{"project_name":"abstract"}', "Abstract Example"),
+    ):
+        (example_dir / "input_brief.json").write_text(brief_text, encoding="utf-8")
+        (example_dir / "expected_storyboard.json").write_text('{"scenes":[{"title":"Scene"}]}', encoding="utf-8")
+        (example_dir / "why_it_is_good.md").write_text(title, encoding="utf-8")
+    index_path = examples_dir / "index.json"
+    index_path.write_text(
+        json.dumps(
+            [
+                {"id": "whimsical_storybook__v1", "title": "Whimsical Example", "intents": ["whimsical_storybook"]},
+                {"id": "static_image_control__v1", "title": "Abstract Example", "intents": ["static_image_control"]},
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    monkeypatch.setattr("core.director._DIRECTOR_EXAMPLES_INDEX", index_path)
+
+    prompt = build_director_system_prompt(
+        normalize_brief(
+            {
+                "source_mode": "ideas_notes",
+                "source_material": "Tell a story about an impossible encounter, but it must not contain the obvious thing.",
+                "visual_style": "whimsical storybook cinema",
+                "tone": "playful and magical",
+            }
+        )
+    )
+
+    assert "Whimsical Example" in prompt
+    assert "Abstract Example" not in prompt
+
+
+def test_director_system_prompt_does_not_force_static_example_for_unclassified_brief(tmp_path, monkeypatch):
+    examples_dir = tmp_path / "director_examples"
+    example_dir = examples_dir / "static_image_control__v1"
+    example_dir.mkdir(parents=True)
+    (example_dir / "input_brief.json").write_text('{"project_name":"abstract"}', encoding="utf-8")
+    (example_dir / "expected_storyboard.json").write_text('{"scenes":[{"title":"Scene"}]}', encoding="utf-8")
+    (example_dir / "why_it_is_good.md").write_text("Abstract Example", encoding="utf-8")
+    index_path = examples_dir / "index.json"
+    index_path.write_text(
+        '[{"id":"static_image_control__v1","title":"Abstract Example","intents":["static_image_control"]}]',
+        encoding="utf-8",
+    )
+
+    monkeypatch.setattr("core.director._DIRECTOR_EXAMPLES_INDEX", index_path)
+
+    prompt = build_director_system_prompt(
+        normalize_brief(
+            {
+                "source_mode": "ideas_notes",
+                "source_material": "Explain the quarterly rollout plan clearly.",
+                "video_goal": "Orient the team to the plan.",
+                "audience": "Internal team",
+            }
+        )
+    )
+
+    assert "Promoted Cathode examples:" not in prompt
 
 
 def test_director_prompt_mentions_reviewed_footage_assets():

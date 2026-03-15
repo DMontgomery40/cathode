@@ -305,6 +305,17 @@ function InlineProgress({
   )
 }
 
+function defaultCompositionModeForFamily(family: string): 'none' | 'overlay' | 'native' {
+  const normalized = String(family || '').trim()
+  if (normalized === 'software_demo_focus') {
+    return 'overlay'
+  }
+  if (['kinetic_statements', 'bullet_stack', 'quote_focus', 'three_data_stage', 'surreal_tableau_3d'].includes(normalized)) {
+    return 'native'
+  }
+  return 'none'
+}
+
 export function SceneInspector({
   scene,
   project,
@@ -392,6 +403,10 @@ export function SceneInspector({
     setReplicateCustomModelOpen(replicateModelPreset === CUSTOM_REPLICATE_VIDEO_MODEL)
   }, [replicateModelPreset, videoGenerationProvider])
 
+  useEffect(() => {
+    sceneDraftRef.current = scene
+  }, [scene])
+
   if (!scene) {
     return (
       <GlassPanel
@@ -405,10 +420,6 @@ export function SceneInspector({
       </GlassPanel>
     )
   }
-
-  useEffect(() => {
-    sceneDraftRef.current = scene
-  }, [scene])
 
   const update = (patch: Partial<Scene>) => {
     const nextScene = { ...(sceneDraftRef.current ?? scene), ...patch }
@@ -891,7 +902,10 @@ export function SceneInspector({
                   <span>Composition family</span>
                   <select
                     value={compositionState.family}
-                    onChange={(event) => updateComposition({ family: event.target.value })}
+                    onChange={(event) => updateComposition({
+                      family: event.target.value,
+                      mode: defaultCompositionModeForFamily(event.target.value),
+                    })}
                     className="rounded-[var(--radius-md)] border border-[var(--border-subtle)] bg-[var(--surface-stage)] px-[var(--space-2)] py-[var(--space-2)] text-[var(--text-primary)] outline-none focus-visible:shadow-[var(--focus-ring)]"
                     aria-label="Composition family"
                   >
@@ -900,6 +914,7 @@ export function SceneInspector({
                     <option value="media_pan">Media pan</option>
                     <option value="kinetic_statements">Kinetic statements</option>
                     <option value="three_data_stage">Three data stage</option>
+                    <option value="surreal_tableau_3d">Surreal tableau 3D</option>
                   </select>
                 </label>
                 <label className="flex flex-col gap-[var(--space-1)] text-[var(--text-secondary)]" style={{ fontSize: 'var(--text-xs)' }}>
@@ -933,6 +948,16 @@ export function SceneInspector({
                   </select>
                 </label>
               </div>
+              <label className="flex flex-col gap-[var(--space-1)] text-[var(--text-secondary)]" style={{ fontSize: 'var(--text-xs)' }}>
+                <span>Composition rationale</span>
+                <textarea
+                  value={compositionState.rationale}
+                  onChange={(event) => updateComposition({ rationale: event.target.value })}
+                  rows={2}
+                  className="rounded-[var(--radius-md)] border border-[var(--border-subtle)] bg-[var(--surface-stage)] px-[var(--space-2)] py-[var(--space-2)] text-[var(--text-primary)] outline-none focus-visible:shadow-[var(--focus-ring)]"
+                  aria-label="Composition rationale"
+                />
+              </label>
 
               <div className="grid gap-[var(--space-3)] xl:grid-cols-2">
                 <label className="flex flex-col gap-[var(--space-1)] text-[var(--text-secondary)]" style={{ fontSize: 'var(--text-xs)' }}>
@@ -1192,7 +1217,10 @@ export function SceneInspector({
                   <span>Composition family</span>
                   <select
                     value={compositionState.family}
-                    onChange={(event) => updateComposition({ family: event.target.value })}
+                    onChange={(event) => updateComposition({
+                      family: event.target.value,
+                      mode: defaultCompositionModeForFamily(event.target.value),
+                    })}
                     className="rounded-[var(--radius-md)] border border-[var(--border-subtle)] bg-[var(--surface-stage)] px-[var(--space-2)] py-[var(--space-2)] text-[var(--text-primary)] outline-none focus-visible:shadow-[var(--focus-ring)]"
                     aria-label="Composition family"
                   >
@@ -1201,6 +1229,7 @@ export function SceneInspector({
                     <option value="software_demo_focus">Software demo focus</option>
                     <option value="kinetic_statements">Kinetic statements</option>
                     <option value="three_data_stage">Three data stage</option>
+                    <option value="surreal_tableau_3d">Surreal tableau 3D</option>
                   </select>
                 </label>
                 <label className="flex flex-col gap-[var(--space-1)] text-[var(--text-secondary)]" style={{ fontSize: 'var(--text-xs)' }}>
@@ -1234,6 +1263,16 @@ export function SceneInspector({
                   </select>
                 </label>
               </div>
+              <label className="flex flex-col gap-[var(--space-1)] text-[var(--text-secondary)]" style={{ fontSize: 'var(--text-xs)' }}>
+                <span>Composition rationale</span>
+                <textarea
+                  value={compositionState.rationale}
+                  onChange={(event) => updateComposition({ rationale: event.target.value })}
+                  rows={2}
+                  className="rounded-[var(--radius-md)] border border-[var(--border-subtle)] bg-[var(--surface-stage)] px-[var(--space-2)] py-[var(--space-2)] text-[var(--text-primary)] outline-none focus-visible:shadow-[var(--focus-ring)]"
+                  aria-label="Composition rationale"
+                />
+              </label>
               {imageGenerationProvider === 'manual' && (
                 <p className="m-0 text-[var(--text-tertiary)]" style={{ fontSize: 'var(--text-xs)', marginTop: 'var(--space-2)' }}>
                   Manual image mode is upload-first. Upload a still here or switch the project image provider in Settings before generating.

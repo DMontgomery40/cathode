@@ -227,6 +227,68 @@ def _brief_wants_data_stage(brief: dict[str, Any]) -> bool:
     )
 
 
+def _brief_wants_software_demo_example(brief: dict[str, Any]) -> bool:
+    text = _brief_intent_text(brief)
+    return any(
+        phrase in text
+        for phrase in (
+            "demo",
+            "walkthrough",
+            "dashboard",
+            "screen",
+            "screenshot",
+            "ui",
+            "interface",
+            "browser",
+            "workspace",
+            "product demo",
+            "software",
+        )
+    )
+
+
+def _brief_wants_whimsical_storybook_example(brief: dict[str, Any]) -> bool:
+    text = _brief_intent_text(brief)
+    return any(
+        phrase in text
+        for phrase in (
+            "storybook",
+            "whimsical",
+            "surreal",
+            "dreamlike",
+            "fairy tale",
+            "fairytale",
+            "fable",
+            "magical",
+            "playful",
+            "poetic",
+            "absurd",
+            "impossible",
+            "unexpected",
+            "must not contain",
+            "but it must not",
+        )
+    )
+
+
+def _brief_wants_abstract_concept_example(brief: dict[str, Any]) -> bool:
+    text = _brief_intent_text(brief)
+    return any(
+        phrase in text
+        for phrase in (
+            "abstract",
+            "invisible machine",
+            "orchestration",
+            "specialist agents",
+            "coordinated agents",
+            "system design",
+            "concept diagram",
+            "visual metaphor",
+            "editorial science fiction",
+        )
+    )
+
+
 def _director_capability_prompt_names(brief: dict[str, Any]) -> list[str]:
     normalized = normalize_brief(brief)
     names: list[str] = []
@@ -276,8 +338,12 @@ def _load_director_example_index() -> list[dict[str, Any]]:
 
 def _director_example_intents(brief: dict[str, Any]) -> list[str]:
     normalized = normalize_brief(brief)
-    intents = ["static_image_control"]
-    if normalized.get("visual_source_strategy") != "images_only":
+    intents: list[str] = []
+    if _brief_wants_whimsical_storybook_example(normalized):
+        intents.append("whimsical_storybook")
+    elif _brief_wants_abstract_concept_example(normalized):
+        intents.append("static_image_control")
+    if normalized.get("visual_source_strategy") != "images_only" and _brief_wants_software_demo_example(normalized):
         intents.append("software_demo_overlay")
     if normalized.get("composition_mode") in {"hybrid", "motion_only"} or normalized.get("text_render_mode") == "deterministic_overlay":
         intents.extend(["kinetic_statement", "bullet_stack"])

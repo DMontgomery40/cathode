@@ -65,7 +65,15 @@ def project_media_url(project_name: str, project_dir: Path, raw_path: Any) -> st
 
 def motion_template_options() -> list[str]:
     """Return the supported motion template ids used in the Remotion layer."""
-    return ["kinetic_title", "bullet_stack", "quote_focus", "kinetic_statements", "media_pan", "software_demo_focus"]
+    return [
+        "kinetic_title",
+        "bullet_stack",
+        "quote_focus",
+        "kinetic_statements",
+        "media_pan",
+        "software_demo_focus",
+        "surreal_tableau_3d",
+    ]
 
 
 def infer_motion_template(scene: dict[str, Any]) -> str:

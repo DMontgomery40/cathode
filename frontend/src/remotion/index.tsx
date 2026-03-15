@@ -20,7 +20,7 @@ import { wipe } from '@remotion/transitions/wipe'
 import { Canvas } from '@react-three/fiber'
 import { Float } from '@react-three/drei'
 
-type MotionTemplateId = 'kinetic_title' | 'bullet_stack' | 'quote_focus' | 'three_data_stage'
+type MotionTemplateId = 'kinetic_title' | 'bullet_stack' | 'quote_focus' | 'three_data_stage' | 'surreal_tableau_3d'
 
 type RemotionScene = {
   uid: string
@@ -641,6 +641,123 @@ function ThreeDataStage({ scene }: { scene: RemotionScene }) {
   )
 }
 
+function SurrealTableau3D({ scene }: { scene: RemotionScene }) {
+  const frame = useCurrentFrame()
+  const { fps } = useVideoConfig()
+  const reveal = spring({
+    frame,
+    fps,
+    config: {
+      damping: 18,
+      stiffness: 88,
+      mass: 1,
+    },
+  })
+  const props = (scene.composition?.props ?? {}) as Record<string, unknown>
+  const headline = String(props.headline || scene.title || 'Dream tableau')
+  const body = String(props.body || scene.narration || '')
+  const leftSubject = String(props.leftSubject || scene.onScreenText[0] || scene.title || 'Hero form')
+  const rightSubject = String(props.rightSubject || scene.onScreenText[1] || 'Counterpoint')
+  const environment = String(props.environment || 'surreal cinematic void')
+  const orbit = interpolate(frame, [0, Math.max(scene.durationInFrames - 1, 1)], [-0.28, 0.3])
+  const cameraZ = interpolate(reveal, [0, 1], [10.5, 8.2])
+
+  return (
+    <AbsoluteFill style={{ background: 'radial-gradient(circle at 50% 18%, rgba(255,190,120,0.16), transparent 30%), linear-gradient(180deg, #04060c 0%, #0b1020 56%, #09070f 100%)' }}>
+      <div style={{ position: 'absolute', inset: 0 }}>
+        <Canvas camera={{ position: [0, 1.2, cameraZ], fov: 40 }}>
+          <color attach="background" args={['#05070d']} />
+          <ambientLight intensity={1.4} />
+          <directionalLight position={[4, 7, 6]} intensity={2} color="#ffd6aa" />
+          <directionalLight position={[-6, 3, 2]} intensity={1.1} color="#7aa6ff" />
+          <group rotation={[0.08, orbit, 0]} position={[0, -0.5, 0]}>
+            <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -1.9, 0]}>
+              <planeGeometry args={[18, 18]} />
+              <meshStandardMaterial color="#0d1320" />
+            </mesh>
+            <Float speed={1.1} rotationIntensity={0.08} floatIntensity={0.35}>
+              <mesh position={[-2.2, 0.3, -0.4]} scale={1.25}>
+                <sphereGeometry args={[1.15, 48, 48]} />
+                <meshStandardMaterial color="#ff9c72" emissive="#532117" emissiveIntensity={0.45} metalness={0.4} roughness={0.18} />
+              </mesh>
+            </Float>
+            <Float speed={1.35} rotationIntensity={0.12} floatIntensity={0.28}>
+              <mesh position={[2.4, 0.55, 0.3]} rotation={[0.9, 0.2, 0]}>
+                <torusKnotGeometry args={[0.92, 0.28, 160, 24]} />
+                <meshStandardMaterial color="#86a7ff" emissive="#182347" emissiveIntensity={0.5} metalness={0.52} roughness={0.22} />
+              </mesh>
+            </Float>
+            <mesh position={[0, 0.25, -1.9]} scale={[4.8, 2.2, 0.2]}>
+              <boxGeometry args={[1, 1, 1]} />
+              <meshStandardMaterial color="#1a1730" emissive="#221d3f" emissiveIntensity={0.22} transparent opacity={0.72} />
+            </mesh>
+          </group>
+        </Canvas>
+      </div>
+      <AbsoluteFill style={{ padding: 72, justifyContent: 'space-between', pointerEvents: 'none' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 18, maxWidth: '58%', opacity: reveal }}>
+          <div
+            style={{
+              color: '#fff6ee',
+              fontFamily: 'Georgia, Times, serif',
+              fontSize: 92,
+              lineHeight: 0.92,
+            }}
+          >
+            {headline}
+          </div>
+          {body ? (
+            <div
+              style={{
+                color: 'rgba(255,245,236,0.82)',
+                fontFamily: '"Helvetica Neue", Helvetica, Arial, sans-serif',
+                fontSize: 30,
+                lineHeight: 1.2,
+                maxWidth: '82%',
+              }}
+            >
+              {body}
+            </div>
+          ) : null}
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18 }}>
+          {[leftSubject, rightSubject].map((label, index) => (
+            <div
+              key={`${label}-${index}`}
+              style={{
+                padding: '18px 20px',
+                borderRadius: 22,
+                background: 'rgba(7, 10, 18, 0.82)',
+                border: '1px solid rgba(255,255,255,0.08)',
+                color: '#f6efe6',
+                fontFamily: '"Helvetica Neue", Helvetica, Arial, sans-serif',
+                fontSize: 24,
+                lineHeight: 1.14,
+              }}
+            >
+              {label}
+            </div>
+          ))}
+        </div>
+        <div
+          style={{
+            position: 'absolute',
+            right: 72,
+            top: 78,
+            color: '#f4d8b1',
+            fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+            fontSize: 20,
+            letterSpacing: '0.08em',
+            textTransform: 'uppercase',
+          }}
+        >
+          {environment}
+        </div>
+      </AbsoluteFill>
+    </AbsoluteFill>
+  )
+}
+
 function MotionTemplateRenderer({ scene }: { scene: RemotionScene }) {
   const templateId = (
     scene.composition?.family
@@ -660,6 +777,8 @@ function MotionTemplateRenderer({ scene }: { scene: RemotionScene }) {
       return <QuoteFocusTemplate headline={headline} body={body} kicker={kicker} />
     case 'three_data_stage':
       return <ThreeDataStage scene={scene} />
+    case 'surreal_tableau_3d':
+      return <SurrealTableau3D scene={scene} />
     case 'kinetic_statements':
     case 'kinetic_title':
     default:

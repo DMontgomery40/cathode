@@ -126,6 +126,7 @@ def default_render_profile() -> dict[str, Any]:
         "scene_types": ["image", "video", "motion"],
         "render_strategy": "auto",
         "render_backend": "ffmpeg",
+        "render_backend_reason": "Classic image/video assembly has no Remotion-only requirements.",
         "text_render_mode": "visual_authored",
     }
 
@@ -222,6 +223,52 @@ def infer_composition_mode(
     return "classic"
 
 
+def _render_backend_reason_from_scenes(scenes: list[dict[str, Any]] | None) -> str | None:
+    if not scenes:
+        return None
+    for scene in scenes:
+        payload = scene_composition_payload(scene)
+        title = str(scene.get("title") or "Untitled scene").strip() or "Untitled scene"
+        if str(scene.get("scene_type") or "").strip().lower() == "motion":
+            return f'Remotion selected because scene "{title}" is a motion scene.'
+        if str(payload.get("mode") or "").strip().lower() == "native":
+            return f'Remotion selected because scene "{title}" uses a native composition treatment.'
+        if str(payload.get("mode") or "").strip().lower() == "overlay":
+            return f'Remotion selected because scene "{title}" uses a deterministic overlay treatment.'
+        if payload.get("transition_after"):
+            return f'Remotion selected because scene "{title}" adds a transition treatment.'
+    return None
+
+
+def resolve_render_backend_details(
+    render_profile: Any,
+    *,
+    composition_mode: str,
+    scenes: list[dict[str, Any]] | None = None,
+) -> tuple[str, str]:
+    raw = render_profile if isinstance(render_profile, dict) else {}
+    requested_strategy = str(raw.get("render_strategy") or "").strip().lower()
+    if requested_strategy == "force_ffmpeg":
+        return "ffmpeg", "Classic assembly forced by render_strategy=force_ffmpeg."
+    if requested_strategy == "force_remotion":
+        return "remotion", "Remotion forced by render_strategy=force_remotion."
+
+    scene_reason = _render_backend_reason_from_scenes(scenes)
+    if scene_reason:
+        return "remotion", scene_reason
+
+    if composition_mode in {"motion_only", "hybrid"}:
+        return "remotion", f"Remotion selected because composition_mode={composition_mode}."
+
+    requested = str(raw.get("render_backend") or "").strip().lower()
+    if requested in RENDER_BACKENDS:
+        if requested == "remotion":
+            return "remotion", "Remotion selected by explicit render_backend preference."
+        return "ffmpeg", "Classic image/video assembly selected by explicit render_backend preference."
+
+    return "ffmpeg", "Classic image/video assembly has no Remotion-only requirements."
+
+
 def resolve_render_backend(
     render_profile: Any,
     *,
@@ -229,20 +276,11 @@ def resolve_render_backend(
     scenes: list[dict[str, Any]] | None = None,
 ) -> str:
     """Choose the effective render backend for the current composition mode."""
-    raw = render_profile if isinstance(render_profile, dict) else {}
-    requested_strategy = str(raw.get("render_strategy") or "").strip().lower()
-    if requested_strategy == "force_ffmpeg":
-        return "ffmpeg"
-    if requested_strategy == "force_remotion":
-        return "remotion"
-    if scenes and any(scene_requires_remotion(scene) for scene in scenes):
-        return "remotion"
-    requested = str(raw.get("render_backend") or "").strip().lower()
-    if composition_mode in {"motion_only", "hybrid"}:
-        return "remotion"
-    if requested in RENDER_BACKENDS:
-        return requested
-    return "ffmpeg"
+    return resolve_render_backend_details(
+        render_profile,
+        composition_mode=composition_mode,
+        scenes=scenes,
+    )[0]
 
 
 def sanitize_project_name(value: Any, fallback: str = "my_video") -> str:
@@ -838,6 +876,11 @@ def backfill_plan(
         composition_mode=str(brief.get("composition_mode") or "classic"),
         scenes=scenes,
     )
+    render_profile["render_backend_reason"] = resolve_render_backend_details(
+        raw_render_profile,
+        composition_mode=str(brief.get("composition_mode") or "classic"),
+        scenes=scenes,
+    )[1]
     render_profile["text_render_mode"] = resolve_text_render_mode(
         raw_render_profile.get("text_render_mode") or brief.get("text_render_mode")
     )

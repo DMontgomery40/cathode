@@ -1,0 +1,17 @@
+{
+  "project_name": "whimsical_storybook",
+  "source_mode": "ideas_notes",
+  "video_goal": "Tell a visually memorable whimsical micro-story that feels emotionally complete rather than explanatory.",
+  "audience": "Curious viewers who like imaginative short-form visual storytelling.",
+  "source_material": "Make a short narrated video about an impossible, charming encounter between unlikely characters. The brief may contain contradictory constraints, and the result should treat those contradictions as creative fuel rather than as a reason to flatten the visuals. Keep it image-first, cinematic, warm, and a little magical.",
+  "target_length_minutes": 1.5,
+  "tone": "playful, tender, storybook, premium",
+  "visual_style": "whimsical illustrated storybook cinema with rich lighting and tactile detail",
+  "must_include": "A clear emotional arc, one memorable visual metaphor, and a closing invitation that feels delightfully specific.",
+  "must_avoid": "Corporate explainer framing, fake product UI, generic bullet slides, or sterile diagram language.",
+  "ending_cta": "Offer a specific, slightly absurd invitation that still feels emotionally earned.",
+  "composition_mode": "classic",
+  "visual_source_strategy": "images_only",
+  "video_scene_style": "auto",
+  "text_render_mode": "visual_authored"
+}

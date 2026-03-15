@@ -47,5 +47,12 @@
     "intents": [
       "kinetic_statement"
     ]
+  },
+  {
+    "id": "whimsical_storybook__v1",
+    "title": "Whimsical Storybook",
+    "intents": [
+      "whimsical_storybook"
+    ]
   }
 ]
