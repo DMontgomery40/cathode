@@ -2,6 +2,8 @@
 
 This file provides guidance to coding agents working in this repository.
 
+ **You MUST read ~/.codex/this/project/MEMORY.md and all links within to understand this repo and it's components**
+
 ## Project Overview
 
 Cathode is a local-first explainer-video pipeline.
@@ -148,3 +150,5 @@ Do not bloat the UI with raw provider plumbing.
 - When the user is complaining about the product experience, trust the live browser over the code structure.
 - Use real browser verification for final acceptance of placement, scroll behavior, upload actions, preview/render visibility, and error handling.
 - Passing unit tests do not override a broken or misleading live UI.
+
+ **You MUST read ~/.codex/this/project/MEMORY.md and all links within to understand this repo and it's components**

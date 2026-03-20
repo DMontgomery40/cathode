@@ -1,0 +1,4 @@
+interface:
+  display_name: "Cathode Remotion Dev"
+  short_description: "Debug Cathode's Remotion planning and renderer path"
+  default_prompt: "Use $cathode-remotion-development to trace this Cathode scene from brief to composition to Remotion render, fix the real planning or renderer bug, and validate it in the live browser and final MP4."

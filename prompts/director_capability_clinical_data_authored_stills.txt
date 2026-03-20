@@ -1,0 +1,6 @@
+Capability mode: authored clinical data stills.
+
+- For patient-facing clinical or results explainers, prefer calm authored still images over camera-pan treatment unless the brief explicitly asks for motion.
+- Preserve exact chart labels, comparison copy, site markers, and range callouts when they materially help the patient understand the findings.
+- When a scene needs deterministic data staging, use an explicit native family such as `three_data_stage`; otherwise keep the slide as an authored still.
+- Avoid fade/wipe transition flourishes unless the brief explicitly asks for motion styling.

@@ -9,6 +9,7 @@ from typing import Any, Callable
 from .agent_demo import build_agent_demo_prompt, run_agent_demo_cli, choose_agent_cli
 from .costs import (
     append_actual_cost_entry,
+    image_edit_entry,
     image_generation_entry,
     resolve_video_cost_context,
     tts_entry,
@@ -20,8 +21,8 @@ from .demo_assets import (
     copy_footage_manifest_into_project,
     normalize_footage_manifest,
 )
-from .director import analyze_style_references_with_metadata
-from .image_gen import generate_scene_image
+from .director import analyze_style_references_with_metadata, rewrite_prompt_for_synonym_fallback_with_metadata
+from .image_gen import build_exact_text_edit_prompt, edit_image, generate_scene_image
 from .project_schema import (
     default_image_profile,
     has_agent_demo_context,
@@ -31,14 +32,19 @@ from .project_schema import (
     resolve_render_backend_details,
     resolve_render_strategy,
     resolve_render_backend,
+    scene_primary_manifestation,
 )
 from .project_store import copy_external_files, ensure_project_dir, load_plan, save_plan
 from .remotion_render import build_remotion_manifest, render_manifest_with_remotion, scene_has_renderable_visual
-from .runtime import choose_llm_provider, resolve_image_profile, resolve_tts_profile, resolve_video_profile
-from .video_assembly import assemble_video
+from .scene_review import default_scene_review_candidates, review_project_scenes
+from .runtime import resolve_workflow_llm_roles, resolve_image_profile, resolve_tts_profile, resolve_video_profile
+from .video_assembly import assemble_video, compress_video_if_oversized
 from .video_gen import generate_scene_video_result
 from .voice_gen import generate_scene_audio_result
 from .workflow import create_plan_from_brief, rebuild_plan_from_meta
+
+ReviewRunner = Callable[[str, list[str] | None], dict[str, Any]]
+_MAX_EXACT_TEXT_REPAIR_ATTEMPTS = 3
 
 
 def utc_now_iso() -> str:
@@ -156,7 +162,7 @@ def create_project_from_brief_service(
     project_dir: Path | None = None,
 ) -> tuple[Path, dict[str, Any]]:
     """Create a project directory, persist style refs, and generate the initial storyboard."""
-    chosen_provider = choose_llm_provider(provider)
+    creative_provider, treatment_provider = resolve_workflow_llm_roles(provider)
     resolved_image_profile = resolve_image_profile(image_profile)
     normalized_brief, resolved_video_profile, resolved_render_profile = prepare_project_execution_profiles(
         brief=brief,
@@ -178,7 +184,7 @@ def create_project_from_brief_service(
         style_reference_summary, style_ref_meta = analyze_style_references_with_metadata(
             [str(path) for path in saved_style_refs],
             normalized_brief,
-            provider=chosen_provider,
+            provider=creative_provider,
         )
         (project_dir / "style_refs" / "style_reference_summary.txt").write_text(
             style_reference_summary,
@@ -198,7 +204,9 @@ def create_project_from_brief_service(
     plan = create_plan_from_brief(
         project_name=project_dir.name,
         brief=normalized_brief,
-        provider=chosen_provider,
+        provider=creative_provider,
+        storyboard_provider=creative_provider,
+        treatment_provider=treatment_provider,
         image_profile=resolved_image_profile,
         video_profile=resolved_video_profile,
         tts_profile=resolved_tts_profile,
@@ -228,7 +236,13 @@ def rebuild_storyboard_service(
     plan = load_plan(project_dir)
     if not plan:
         raise ValueError(f"Missing plan.json for project: {project_dir}")
-    rebuilt = rebuild_plan_from_meta(plan, provider=provider)
+    creative_provider, treatment_provider = resolve_workflow_llm_roles(provider)
+    rebuilt = rebuild_plan_from_meta(
+        plan,
+        provider=creative_provider,
+        storyboard_provider=creative_provider,
+        treatment_provider=treatment_provider,
+    )
     footage_manifest = normalize_footage_manifest(
         rebuilt.get("meta", {}).get("footage_manifest")
         or rebuilt.get("meta", {}).get("brief", {}).get("footage_manifest")
@@ -258,6 +272,10 @@ def _scene_has_video(scene: dict[str, Any]) -> bool:
 def _scene_type(scene: dict[str, Any]) -> str:
     scene_type = str(scene.get("scene_type") or "image").strip().lower()
     return scene_type if scene_type in {"image", "video", "motion"} else "image"
+
+
+def _scene_manifestation(scene: dict[str, Any]) -> str:
+    return scene_primary_manifestation(scene)
 
 
 def _scene_has_primary_visual(scene: dict[str, Any], *, render_backend: str = "ffmpeg") -> bool:
@@ -323,7 +341,358 @@ def _emit_asset_progress(
             "progress_scene_uid": str(scene.get("uid") or "") or None,
             "progress_status": status,
         }
-    )
+        )
+
+
+def _primary_only_scene_review_candidates(
+    plan: dict[str, Any],
+    *,
+    scene_uids: list[str] | None = None,
+) -> dict[str, list[dict[str, Any]]]:
+    candidates: dict[str, list[dict[str, Any]]] = {}
+    scenes = plan.get("scenes", []) if isinstance(plan.get("scenes"), list) else []
+    allowed = {str(uid).strip() for uid in (scene_uids or []) if str(uid).strip()}
+    for scene in scenes:
+        if not isinstance(scene, dict):
+            continue
+        scene_uid = str(scene.get("uid") or "").strip()
+        if not scene_uid or (allowed and scene_uid not in allowed):
+            continue
+        try:
+            scene_candidates = default_scene_review_candidates(scene)
+        except Exception:
+            continue
+        if scene_candidates:
+            candidates[scene_uid] = scene_candidates
+    return candidates
+
+
+def _resolve_project_path(project_dir: Path, raw_path: Any) -> Path | None:
+    value = str(raw_path or "").strip()
+    if not value:
+        return None
+    path = Path(value).expanduser()
+    if not path.is_absolute():
+        path = Path(project_dir) / path
+    return path.resolve()
+
+
+def _path_is_within(path: Path, root: Path) -> bool:
+    try:
+        path.resolve().relative_to(root.resolve())
+        return True
+    except ValueError:
+        return False
+
+
+def _canonical_scene_image_path(project_dir: Path, scene: dict[str, Any]) -> Path | None:
+    if scene_primary_manifestation(scene) != "authored_image":
+        return None
+    try:
+        scene_id = int(scene.get("id"))
+    except (TypeError, ValueError):
+        return None
+    return (Path(project_dir) / "images" / f"scene_{scene_id:03d}.png").resolve()
+
+
+def clear_scene_review_metadata(scene: dict[str, Any]) -> bool:
+    changed = False
+    for key in ("judge_verdict", "candidate_outputs"):
+        if key in scene:
+            scene.pop(key, None)
+            changed = True
+    return changed
+
+
+def _review_metadata_uses_noncanonical_image(project_dir: Path, scene: dict[str, Any]) -> bool:
+    canonical_path = _canonical_scene_image_path(project_dir, scene)
+    if canonical_path is None:
+        return False
+
+    verdict = scene.get("judge_verdict") if isinstance(scene.get("judge_verdict"), dict) else {}
+    for frame_ref in verdict.get("frame_refs", []) if isinstance(verdict.get("frame_refs"), list) else []:
+        if not isinstance(frame_ref, dict):
+            continue
+        frame_path = _resolve_project_path(project_dir, frame_ref.get("path"))
+        if frame_path is not None and frame_path != canonical_path:
+            return True
+
+    candidate_outputs = scene.get("candidate_outputs") if isinstance(scene.get("candidate_outputs"), dict) else {}
+    for candidate_payload in candidate_outputs.values():
+        if not isinstance(candidate_payload, dict):
+            continue
+        candidate_path = _resolve_project_path(project_dir, candidate_payload.get("source_path"))
+        if candidate_path is not None and candidate_path != canonical_path:
+            return True
+        for frame_ref in candidate_payload.get("frame_refs", []) if isinstance(candidate_payload.get("frame_refs"), list) else []:
+            if not isinstance(frame_ref, dict):
+                continue
+            frame_path = _resolve_project_path(project_dir, frame_ref.get("path"))
+            if frame_path is not None and frame_path != canonical_path:
+                return True
+    return False
+
+
+def _cleanup_scene_derivative_images(project_dir: Path, scene: dict[str, Any], *, keep_paths: set[Path] | None = None) -> None:
+    scene_uid = str(scene.get("uid") or "").strip()
+    if not scene_uid:
+        return
+    images_dir = (Path(project_dir) / "images").resolve()
+    keep = {path.resolve() for path in (keep_paths or set())}
+    for suffix in ("edited", "textfix"):
+        candidate = images_dir / f"image_{scene_uid}_{suffix}.png"
+        if not candidate.exists() or candidate.resolve() in keep:
+            continue
+        try:
+            candidate.unlink()
+        except OSError:
+            continue
+
+
+def replace_scene_image_preserving_identity(
+    project_dir: Path,
+    scene: dict[str, Any],
+    source_path: str | Path | None = None,
+    *,
+    clear_review_metadata: bool = True,
+) -> Path | None:
+    project_dir = Path(project_dir).resolve()
+    images_dir = (project_dir / "images").resolve()
+    canonical_path = _canonical_scene_image_path(project_dir, scene)
+    if canonical_path is None:
+        resolved_path = _resolve_project_path(project_dir, source_path if source_path is not None else scene.get("image_path"))
+        if resolved_path is not None:
+            scene["image_path"] = str(resolved_path)
+        return resolved_path
+
+    canonical_path.parent.mkdir(parents=True, exist_ok=True)
+    resolved_source = _resolve_project_path(project_dir, source_path if source_path is not None else scene.get("image_path"))
+
+    if resolved_source is not None and resolved_source.exists():
+        if resolved_source != canonical_path:
+            resolved_source.replace(canonical_path)
+    elif not canonical_path.exists():
+        return None
+
+    scene["image_path"] = str(canonical_path)
+    if clear_review_metadata:
+        clear_scene_review_metadata(scene)
+    _cleanup_scene_derivative_images(project_dir, scene, keep_paths={canonical_path})
+    if resolved_source is not None and resolved_source != canonical_path and resolved_source.exists():
+        if _path_is_within(resolved_source, images_dir):
+            try:
+                resolved_source.unlink()
+            except OSError:
+                pass
+    return canonical_path
+
+
+def normalize_authored_image_scene_identities(
+    project_dir: Path,
+    current_plan: dict[str, Any],
+    *,
+    scene_uids: list[str] | None = None,
+) -> tuple[dict[str, Any], bool]:
+    changed = False
+    allowed = {str(uid).strip() for uid in (scene_uids or []) if str(uid).strip()}
+    scenes_local = current_plan.get("scenes", []) if isinstance(current_plan.get("scenes"), list) else []
+    for idx, scene in enumerate(scenes_local):
+        if not isinstance(scene, dict):
+            continue
+        scene_uid = str(scene.get("uid") or "").strip()
+        if allowed and scene_uid not in allowed:
+            continue
+        canonical_path = _canonical_scene_image_path(project_dir, scene)
+        if canonical_path is None:
+            continue
+        resolved_path = _resolve_project_path(project_dir, scene.get("image_path"))
+        review_reset_needed = _review_metadata_uses_noncanonical_image(project_dir, scene)
+        if resolved_path is not None and resolved_path.exists() and resolved_path != canonical_path:
+            replace_scene_image_preserving_identity(
+                project_dir,
+                scene,
+                resolved_path,
+                clear_review_metadata=True,
+            )
+            changed = True
+        else:
+            if canonical_path.exists() and str(scene.get("image_path") or "") != str(canonical_path):
+                scene["image_path"] = str(canonical_path)
+                changed = True
+            if review_reset_needed and clear_scene_review_metadata(scene):
+                changed = True
+            _cleanup_scene_derivative_images(project_dir, scene, keep_paths={canonical_path})
+        scenes_local[idx] = scene
+    return current_plan, changed
+
+
+def _scene_by_uid(current_plan: dict[str, Any], scene_uid: str) -> dict[str, Any] | None:
+    scenes_local = current_plan.get("scenes", []) if isinstance(current_plan.get("scenes"), list) else []
+    for scene in scenes_local:
+        if not isinstance(scene, dict):
+            continue
+        if str(scene.get("uid") or "").strip() == scene_uid:
+            return scene
+    return None
+
+
+def _upsert_scene(current_plan: dict[str, Any], updated_scene: dict[str, Any]) -> None:
+    scenes_local = current_plan.get("scenes", []) if isinstance(current_plan.get("scenes"), list) else []
+    scene_uid = str(updated_scene.get("uid") or "").strip()
+    for idx, scene in enumerate(scenes_local):
+        if not isinstance(scene, dict):
+            continue
+        if str(scene.get("uid") or "").strip() == scene_uid:
+            scenes_local[idx] = updated_scene
+            return
+
+
+def _winning_text_repairs(scene: dict[str, Any]) -> list[dict[str, str]]:
+    manifestation_plan = scene.get("manifestation_plan") if isinstance(scene.get("manifestation_plan"), dict) else {}
+    if not manifestation_plan.get("text_expected"):
+        return []
+    if scene_primary_manifestation(scene) != "authored_image":
+        return []
+    verdict = scene.get("judge_verdict") if isinstance(scene.get("judge_verdict"), dict) else {}
+    winner = str(verdict.get("winner") or "primary").strip() or "primary"
+    candidate_outputs = scene.get("candidate_outputs") if isinstance(scene.get("candidate_outputs"), dict) else {}
+    winner_payload = candidate_outputs.get(winner) if isinstance(candidate_outputs.get(winner), dict) else {}
+    if winner_payload and str(winner_payload.get("candidate_type") or "").strip() not in {"", "authored_image"}:
+        return []
+    repairs = verdict.get("text_repairs") if isinstance(verdict.get("text_repairs"), list) else []
+    return [
+        item
+        for item in repairs
+        if isinstance(item, dict)
+        and str(item.get("candidate_id") or "").strip() == winner
+        and str(item.get("wrong_text") or "").strip()
+        and str(item.get("correct_text") or "").strip()
+    ]
+
+
+def _image_edit_kwargs(image_profile: dict[str, Any]) -> tuple[str, dict[str, Any]]:
+    model = str(image_profile.get("edit_model") or "").strip()
+    kwargs: dict[str, Any] = {"model": model}
+    if model.startswith("qwen-image-edit"):
+        kwargs["n"] = 1
+        kwargs["prompt_extend"] = False
+        kwargs["negative_prompt"] = " "
+        seed_raw = str(image_profile.get("dashscope_edit_seed") or "").strip()
+        if seed_raw.isdigit():
+            kwargs["seed"] = int(seed_raw)
+    return model, kwargs
+
+
+def _attempt_text_repairs(
+    project_dir: Path,
+    current_plan: dict[str, Any],
+    *,
+    image_provider: str,
+    image_generation_model: str,
+    image_profile: dict[str, Any],
+    review_runner: ReviewRunner,
+    exact_review_trigger: str,
+    synonym_review_trigger: str,
+) -> tuple[dict[str, Any], bool]:
+    changed = False
+    scenes_local = current_plan.get("scenes", []) if isinstance(current_plan.get("scenes"), list) else []
+    edit_model, edit_kwargs = _image_edit_kwargs(image_profile)
+    for scene in scenes_local:
+        repairs = _winning_text_repairs(scene)
+        if not repairs or not scene.get("image_path"):
+            continue
+        scene_uid = str(scene.get("uid") or scene.get("id") or "scene").strip() or "scene"
+        seen_repairs: set[tuple[str, str]] = set()
+        exact_attempts = 0
+
+        while exact_attempts < _MAX_EXACT_TEXT_REPAIR_ATTEMPTS:
+            refreshed_scene = _scene_by_uid(current_plan, scene_uid) or scene
+            repairs = _winning_text_repairs(refreshed_scene)
+            if not repairs or not refreshed_scene.get("image_path"):
+                break
+            repair = repairs[0]
+            repair_key = (repair["wrong_text"], repair["correct_text"])
+            if repair_key in seen_repairs:
+                break
+            seen_repairs.add(repair_key)
+            exact_attempts += 1
+
+            exact_prompt = build_exact_text_edit_prompt(
+                repair["wrong_text"],
+                repair["correct_text"],
+            )
+            canonical_path = _canonical_scene_image_path(project_dir, refreshed_scene)
+            if canonical_path is None:
+                break
+            edited_path = canonical_path.with_name(f".{canonical_path.stem}_textfix{canonical_path.suffix}")
+            output_path = edit_image(
+                exact_prompt,
+                refreshed_scene["image_path"],
+                edited_path,
+                **edit_kwargs,
+            )
+            replace_scene_image_preserving_identity(project_dir, refreshed_scene, output_path)
+            append_actual_cost_entry(
+                current_plan,
+                image_edit_entry(
+                    scene=refreshed_scene,
+                    provider="dashscope" if edit_model.startswith("qwen-image-edit") else "replicate",
+                    model=edit_model,
+                    estimated=False,
+                    operation="render_text_repair",
+                ),
+            )
+            _upsert_scene(current_plan, refreshed_scene)
+            changed = True
+            save_plan(project_dir, current_plan)
+            review_runner(exact_review_trigger, [scene_uid])
+            current_plan = load_plan(project_dir) or current_plan
+
+        refreshed_scene = _scene_by_uid(current_plan, scene_uid) or scene
+        repairs_after_edit = _winning_text_repairs(refreshed_scene)
+        text_critical = bool(
+            isinstance(refreshed_scene.get("manifestation_plan"), dict)
+            and refreshed_scene["manifestation_plan"].get("text_critical")
+        )
+        if not repairs_after_edit or text_critical:
+            continue
+
+        synonym_payload, synonym_meta = rewrite_prompt_for_synonym_fallback_with_metadata(
+            original_prompt=str(refreshed_scene.get("visual_prompt") or ""),
+            on_screen_text=refreshed_scene.get("on_screen_text") if isinstance(refreshed_scene.get("on_screen_text"), list) else [],
+            wrong_text=repairs_after_edit[0]["wrong_text"],
+            correct_text=repairs_after_edit[0]["correct_text"],
+            narration=str(refreshed_scene.get("narration") or ""),
+            provider="anthropic",
+        )
+        refreshed_scene["visual_prompt"] = synonym_payload["rewritten_prompt"]
+        refreshed_scene["on_screen_text"] = synonym_payload["rewritten_on_screen_text"]
+        regenerated_path = generate_scene_image(
+            refreshed_scene,
+            Path(project_dir),
+            brief=current_plan.get("meta", {}).get("brief"),
+            provider=image_provider,
+            model=image_generation_model,
+        )
+        replace_scene_image_preserving_identity(project_dir, refreshed_scene, regenerated_path)
+        append_actual_cost_entry(
+            current_plan,
+            image_generation_entry(
+                scene=refreshed_scene,
+                provider=image_provider,
+                model=image_generation_model,
+                estimated=False,
+                operation="synonym_regenerate",
+            ),
+        )
+        if isinstance(synonym_meta.get("actual"), dict):
+            append_actual_cost_entry(current_plan, synonym_meta["actual"])
+        _upsert_scene(current_plan, refreshed_scene)
+        changed = True
+        save_plan(project_dir, current_plan)
+        review_runner(synonym_review_trigger, [scene_uid])
+        current_plan = load_plan(project_dir) or current_plan
+    return current_plan, changed
 
 
 def generate_project_assets_service(
@@ -377,13 +746,13 @@ def generate_project_assets_service(
     if generate_audio:
         total_work_items += total_scenes
     if generate_images:
-        total_work_items += sum(1 for scene in scenes if _scene_type(scene) == "image")
+        total_work_items += sum(1 for scene in scenes if _scene_manifestation(scene) == "authored_image")
     if generate_videos:
-        total_work_items += sum(1 for scene in scenes if _scene_type(scene) == "video")
+        total_work_items += sum(1 for scene in scenes if _scene_manifestation(scene) == "source_video")
     completed_work_items = 0
 
     for scene in scenes:
-        scene_type = _scene_type(scene)
+        manifestation = _scene_manifestation(scene)
         video_cost_context = (
             resolve_video_cost_context(
                 scene=scene,
@@ -393,7 +762,7 @@ def generate_project_assets_service(
                 quality_mode=video_quality_mode,
                 generate_audio=video_generate_audio,
             )
-            if scene_type == "video"
+            if manifestation == "source_video"
             else None
         )
         clip_audio_expected = bool(video_cost_context and video_cost_context.get("uses_clip_audio"))
@@ -473,7 +842,7 @@ def generate_project_assets_service(
             )
             completed_work_items += 1
 
-        if scene_type == "image" and generate_images:
+        if manifestation == "authored_image" and generate_images:
             has_image = _scene_has_image(scene)
             if image_provider == "manual":
                 if has_image:
@@ -570,7 +939,7 @@ def generate_project_assets_service(
                     )
                 completed_work_items += 1
 
-        if scene_type == "video" and generate_videos:
+        if manifestation == "source_video" and generate_videos:
             has_video = _scene_has_video(scene)
             if video_provider == "agent" and (regenerate_videos or not has_video):
                 _emit_asset_progress(
@@ -775,6 +1144,60 @@ def generate_project_assets_service(
 
         save_plan(project_dir, plan)
 
+    scene_review = None
+    plan, normalized_before_review = normalize_authored_image_scene_identities(project_dir, plan)
+    if normalized_before_review:
+        save_plan(project_dir, plan)
+        plan = load_plan(project_dir) or plan
+    primary_review_candidates = _primary_only_scene_review_candidates(plan)
+    if primary_review_candidates:
+        def _run_asset_review(trigger: str, scene_uids: list[str] | None = None) -> dict[str, Any]:
+            refreshed_plan = load_plan(project_dir) or plan
+            refreshed_plan, normalized = normalize_authored_image_scene_identities(
+                project_dir,
+                refreshed_plan,
+                scene_uids=scene_uids,
+            )
+            if normalized:
+                save_plan(project_dir, refreshed_plan)
+                refreshed_plan = load_plan(project_dir) or refreshed_plan
+            refreshed_candidates = _primary_only_scene_review_candidates(refreshed_plan, scene_uids=scene_uids)
+            if not refreshed_candidates:
+                raise ValueError("No reviewable primary-visual scenes were available for asset review.")
+            return review_project_scenes(
+                project_dir,
+                trigger=trigger,
+                scene_candidates=refreshed_candidates,
+                scene_uids=scene_uids,
+            )
+
+        try:
+            scene_review = _run_asset_review("post_asset_generation_review")
+            plan = load_plan(project_dir) or plan
+            plan, repairs_applied = _attempt_text_repairs(
+                project_dir,
+                plan,
+                image_provider=image_provider,
+                image_generation_model=image_generation_model,
+                image_profile=image_profile,
+                review_runner=_run_asset_review,
+                exact_review_trigger="post_asset_exact_text_edit_review",
+                synonym_review_trigger="post_asset_synonym_regenerate_review",
+            )
+            if repairs_applied:
+                scene_review = _run_asset_review("post_asset_review_after_repairs")
+                plan = load_plan(project_dir) or plan
+            result["scene_review"] = scene_review
+            unresolved_text_repairs = [
+                str(scene.get("uid") or scene.get("id") or "")
+                for scene in plan.get("scenes", [])
+                if isinstance(scene, dict) and _winning_text_repairs(scene)
+            ]
+            if unresolved_text_repairs:
+                result["text_review_failures"] = unresolved_text_repairs
+        except Exception as exc:
+            result["scene_review_error"] = str(exc)
+
     if progress_callback is not None:
         progress_callback(
             {
@@ -802,6 +1225,10 @@ def render_project_service(
     plan = load_plan(project_dir)
     if not plan:
         raise ValueError(f"Missing plan.json for project: {project_dir}")
+    plan, normalized_before_render = normalize_authored_image_scene_identities(project_dir, plan)
+    if normalized_before_render:
+        save_plan(project_dir, plan)
+        plan = load_plan(project_dir) or plan
 
     scenes = plan.get("scenes", [])
     render_profile = dict(plan.get("meta", {}).get("render_profile") or {})
@@ -841,30 +1268,216 @@ def render_project_service(
                 "progress_status": "preparing",
             }
         )
-    if render_backend == "remotion":
-        output_path = Path(project_dir) / resolved_name
-        manifest = build_remotion_manifest(
-            project_dir=Path(project_dir),
-            plan=plan,
-            output_path=output_path,
+    image_profile = resolve_image_profile(plan.get("meta", {}).get("image_profile"))
+    image_provider = str(image_profile.get("provider") or "manual")
+    image_generation_model = str(
+        image_profile.get("generation_model") or default_image_profile()["generation_model"]
+    )
+
+    def _render_video(current_plan: dict[str, Any]) -> tuple[Path, dict[str, Any]]:
+        if render_backend == "remotion":
+            output_path = Path(project_dir) / resolved_name
+            manifest = build_remotion_manifest(
+                project_dir=Path(project_dir),
+                plan=current_plan,
+                output_path=output_path,
+                render_profile=render_profile,
+            )
+            rendered_path = render_manifest_with_remotion(
+                manifest,
+                output_path=output_path,
+                progress_callback=progress_callback,
+            )
+        else:
+            rendered_path = assemble_video(
+                current_plan.get("scenes", []),
+                Path(project_dir),
+                output_filename=resolved_name,
+                fps=int(render_profile.get("fps") or 24),
+                render_profile=render_profile,
+            )
+        return rendered_path, compress_video_if_oversized(
+            rendered_path,
             render_profile=render_profile,
-        )
-        video_path = render_manifest_with_remotion(
-            manifest,
-            output_path=output_path,
             progress_callback=progress_callback,
         )
-    else:
-        video_path = assemble_video(
-            scenes,
-            Path(project_dir),
-            output_filename=resolved_name,
-            fps=int(render_profile.get("fps") or 24),
-            render_profile=render_profile,
+
+    def _run_review(trigger: str, scene_uids: list[str] | None = None) -> dict[str, Any]:
+        refreshed_plan = load_plan(project_dir) or plan
+        refreshed_plan, normalized = normalize_authored_image_scene_identities(
+            project_dir,
+            refreshed_plan,
+            scene_uids=scene_uids,
         )
+        if normalized:
+            save_plan(project_dir, refreshed_plan)
+            refreshed_plan = load_plan(project_dir) or refreshed_plan
+        return review_project_scenes(
+            project_dir,
+            trigger=trigger,
+            scene_uids=scene_uids,
+        )
+
+    def _run_review_for_scenes(trigger: str, scene_uids: list[str]) -> dict[str, Any]:
+        return _run_review(trigger, scene_uids)
+
+    def _scene_requests_fallback(scene: dict[str, Any]) -> bool:
+        manifestation_plan = scene.get("manifestation_plan") if isinstance(scene.get("manifestation_plan"), dict) else {}
+        fallback_path = str(manifestation_plan.get("fallback_path") or "").strip().lower()
+        if not fallback_path:
+            return False
+        primary = scene_primary_manifestation(scene)
+        if primary == "native_remotion":
+            return False
+        return fallback_path != primary
+
+    def _resolve_project_path(raw_path: Any) -> str | None:
+        value = str(raw_path or "").strip()
+        if not value:
+            return None
+        path = Path(value).expanduser()
+        if path.is_absolute():
+            return str(path.resolve())
+        return str((Path(project_dir) / value).resolve())
+
+    def _apply_pre_render_candidate_winners(current_plan: dict[str, Any]) -> tuple[dict[str, Any], bool]:
+        changed = False
+        for scene in current_plan.get("scenes", []):
+            if not isinstance(scene, dict):
+                continue
+            verdict = scene.get("judge_verdict") if isinstance(scene.get("judge_verdict"), dict) else {}
+            winner = str(verdict.get("winner") or "").strip()
+            candidate_outputs = scene.get("candidate_outputs") if isinstance(scene.get("candidate_outputs"), dict) else {}
+            winner_payload = candidate_outputs.get(winner) if winner and isinstance(candidate_outputs.get(winner), dict) else None
+            if not winner_payload:
+                continue
+            candidate_type = str(winner_payload.get("candidate_type") or "").strip().lower()
+            if not candidate_type or candidate_type == scene_primary_manifestation(scene):
+                continue
+
+            candidate_spec = winner_payload.get("candidate_spec") if isinstance(winner_payload.get("candidate_spec"), dict) else {}
+            if candidate_type == "native_remotion":
+                composition = candidate_spec.get("composition") if isinstance(candidate_spec.get("composition"), dict) else {}
+                motion = candidate_spec.get("motion") if isinstance(candidate_spec.get("motion"), dict) else {}
+                if not composition:
+                    continue
+                scene["scene_type"] = "motion"
+                scene["composition"] = composition
+                scene["motion"] = motion or {
+                    "template_id": str(composition.get("family") or "").strip(),
+                    "props": composition.get("props") if isinstance(composition.get("props"), dict) else {},
+                    "rationale": str(composition.get("rationale") or "").strip(),
+                    "render_path": composition.get("render_path"),
+                    "preview_path": composition.get("preview_path"),
+                }
+                scene["image_path"] = None
+                preview_source = _resolve_project_path(winner_payload.get("source_path"))
+                if preview_source:
+                    scene["preview_path"] = preview_source
+                    scene["composition"]["preview_path"] = preview_source
+                    if isinstance(scene.get("motion"), dict):
+                        scene["motion"]["preview_path"] = preview_source
+                changed = True
+                continue
+
+            if candidate_type == "authored_image":
+                scene["scene_type"] = "image"
+                scene["video_path"] = None
+                scene["preview_path"] = None
+                source_path = _resolve_project_path(winner_payload.get("source_path"))
+                if source_path:
+                    scene["image_path"] = source_path
+                composition = scene.get("composition") if isinstance(scene.get("composition"), dict) else {}
+                composition["family"] = "static_media"
+                composition["mode"] = "none"
+                composition["manifestation"] = "authored_image"
+                composition["transition_after"] = None
+                scene["composition"] = composition
+                changed = True
+                continue
+
+            if candidate_type == "source_video":
+                scene["scene_type"] = "video"
+                scene["image_path"] = None
+                source_path = _resolve_project_path(winner_payload.get("source_path"))
+                if source_path:
+                    scene["video_path"] = source_path
+                composition = scene.get("composition") if isinstance(scene.get("composition"), dict) else {}
+                composition["manifestation"] = "source_video"
+                scene["composition"] = composition
+                changed = True
+        return current_plan, changed
+
+    candidate_scene_uids = [
+        str(scene.get("uid") or "").strip()
+        for scene in plan.get("scenes", [])
+        if isinstance(scene, dict) and _scene_requests_fallback(scene)
+    ]
+    if candidate_scene_uids:
+        try:
+            _run_review_for_scenes("pre_render_candidate_selection", candidate_scene_uids)
+        except Exception as exc:
+            return {
+                "status": "partial_success",
+                "retryable": True,
+                "suggestion": "Mandatory pre-render candidate selection failed. Resolve the scene review runner or the fallback candidate generation error before publishing.",
+                "missing_visual_scenes": [],
+                "missing_audio_scenes": [],
+                "video_path": None,
+                "scene_review_error": str(exc),
+            }
+        plan = load_plan(project_dir) or plan
+        plan, winners_applied = _apply_pre_render_candidate_winners(plan)
+        if winners_applied:
+            save_plan(project_dir, plan)
+            plan = load_plan(project_dir) or plan
+
+    video_path, compression_result = _render_video(plan)
     plan.setdefault("meta", {})["video_path"] = str(video_path)
     plan.setdefault("meta", {})["rendered_utc"] = utc_now_iso()
+    plan.setdefault("meta", {})["video_compression"] = compression_result
     save_plan(project_dir, plan)
+    try:
+        scene_review = _run_review("post_render_review")
+    except Exception as exc:
+        if progress_callback is not None:
+            progress_callback(
+                {
+                    "progress": 1.0,
+                    "progress_kind": "render",
+                    "progress_label": "Render complete, scene review failed",
+                    "progress_detail": str(exc),
+                    "progress_status": "error",
+                }
+            )
+        return {
+            "status": "partial_success",
+            "retryable": True,
+            "suggestion": "Final render completed, but mandatory slide-by-slide scene review failed. Resolve the review runner and retry review before publishing.",
+            "missing_visual_scenes": [],
+            "missing_audio_scenes": [],
+            "video_path": str(video_path),
+            "compression": compression_result,
+            "scene_review_error": str(exc),
+        }
+    plan = load_plan(project_dir) or plan
+    plan, repairs_applied = _attempt_text_repairs(
+        project_dir,
+        plan,
+        image_provider=image_provider,
+        image_generation_model=image_generation_model,
+        image_profile=image_profile,
+        review_runner=_run_review,
+        exact_review_trigger="post_exact_text_edit_review",
+        synonym_review_trigger="post_synonym_regenerate_review",
+    )
+    if repairs_applied:
+        video_path, compression_result = _render_video(plan)
+        plan.setdefault("meta", {})["video_path"] = str(video_path)
+        plan.setdefault("meta", {})["rendered_utc"] = utc_now_iso()
+        plan.setdefault("meta", {})["video_compression"] = compression_result
+        save_plan(project_dir, plan)
+        scene_review = _run_review("post_render_review_after_repairs")
     if progress_callback is not None:
         progress_callback(
             {
@@ -875,6 +1488,24 @@ def render_project_service(
                 "progress_status": "done",
             }
         )
+    latest_plan = load_plan(project_dir) or plan
+    unresolved_text_repairs = [
+        str(scene.get("uid") or scene.get("id") or "")
+        for scene in latest_plan.get("scenes", [])
+        if isinstance(scene, dict) and _winning_text_repairs(scene)
+    ]
+    if unresolved_text_repairs:
+        return {
+            "status": "partial_success",
+            "retryable": True,
+            "suggestion": "Render completed, but some authored-image scenes still failed mandatory text review after exact edit and synonym regeneration.",
+            "missing_visual_scenes": [],
+            "missing_audio_scenes": [],
+            "video_path": str(video_path),
+            "compression": compression_result,
+            "scene_review": scene_review,
+            "text_review_failures": unresolved_text_repairs,
+        }
     return {
         "status": "succeeded",
         "retryable": False,
@@ -882,6 +1513,8 @@ def render_project_service(
         "missing_visual_scenes": [],
         "missing_audio_scenes": [],
         "video_path": str(video_path),
+        "compression": compression_result,
+        "scene_review": scene_review,
     }
 
 

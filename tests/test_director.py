@@ -6,6 +6,7 @@ from core.director import (
     _validate_scenes,
     analyze_style_references,
     build_director_system_prompt,
+    generate_storyboard_with_metadata,
 )
 from core.project_schema import normalize_brief
 
@@ -42,11 +43,18 @@ def test_director_prompt_includes_source_mode_behavior_and_brief_payload():
     assert '"style_reference_summary": "High-contrast editorial lighting, restrained teal-and-amber palette, premium product-demo polish, crisp typography, dense but organized composition."' in prompt
     assert '"composition_mode": "hybrid"' in prompt
     assert "target narration words" in prompt
-    assert 'reserve on_screen_text for Cathode\'s deterministic overlay' in prompt
+    assert 'for scenes Cathode explicitly renders as deterministic overlays or motion templates' in prompt
     assert '"staging_notes"' in prompt
     assert '"data_points"' in prompt
     assert '"transition_hint"' in prompt
-    assert '"composition_intent"' not in prompt
+    assert '"composition_intent"' in prompt
+    assert '"manifestation_plan"' in prompt
+    assert '"native_build_prompt"' in prompt
+    assert '"authored_image"' in prompt
+    assert '"native_remotion"' in prompt
+    assert '"source_video"' in prompt
+    assert "Do not expect code-side prompt mutation before Qwen." in prompt
+    assert "No OCR." in prompt
 
 
 def test_director_system_prompt_selects_capability_blocks():
@@ -68,6 +76,39 @@ def test_director_system_prompt_selects_capability_blocks():
     assert "Capability mode: deterministic overlay." in prompt
     assert "Capability mode: hybrid composition." in prompt
     assert "Capability mode: multi-voice storytelling." in prompt
+
+
+def test_director_system_prompt_includes_official_remotion_stack_for_anthropic_only():
+    brief = normalize_brief(
+        {
+            "source_mode": "ideas_notes",
+            "source_material": "Explain the workflow clearly.",
+        }
+    )
+
+    anthropic_prompt = build_director_system_prompt(brief, provider="anthropic")
+    openai_prompt = build_director_system_prompt(brief, provider="openai")
+
+    assert "# About Remotion" in anthropic_prompt
+    assert "Cathode manifestation-path contract." in anthropic_prompt
+    assert "Cathode supported-family registry constraints." in anthropic_prompt
+    assert "# About Remotion" not in openai_prompt
+    assert "Cathode manifestation-path contract." not in openai_prompt
+
+
+def test_director_system_prompt_selects_clinical_data_authored_stills_capability():
+    prompt = build_director_system_prompt(
+        normalize_brief(
+            {
+                "source_mode": "source_text",
+                "video_goal": "Educate the patient on their assessment data.",
+                "audience": "The patient whose report this is.",
+                "source_material": "Assessment results across sessions with reference ranges and follow-up recommendations.",
+            }
+        )
+    )
+
+    assert "Capability mode: authored clinical data stills." in prompt
 
 
 def test_director_system_prompt_selects_promoted_examples(tmp_path, monkeypatch):
@@ -197,6 +238,202 @@ def test_director_prompt_mentions_reviewed_footage_assets():
     assert '"footage_asset_id"' in prompt
 
 
+def test_director_prompt_warns_clinical_results_explainers_away_from_camera_pan():
+    prompt = _build_storyboard_user_prompt_from_brief(
+        normalize_brief(
+            {
+                "project_name": "clinical_results_demo",
+                "source_mode": "source_text",
+                "video_goal": "Explain the patient assessment results clearly.",
+                "audience": "The patient whose report this is.",
+                "source_material": "Assessment results across sessions with reference ranges and test scores.",
+            }
+        )
+    )
+
+    assert "prefer calm authored stills with exact labels, charts, and comparison layouts rather than camera-pan treatment" in prompt
+
+
+def test_director_prompt_uses_tighter_runtime_budget_for_longer_videos():
+    prompt = _build_storyboard_user_prompt_from_brief(
+        normalize_brief(
+            {
+                "project_name": "runtime_budget_demo",
+                "source_mode": "ideas_notes",
+                "video_goal": "Explain the progression clearly.",
+                "audience": "General audience",
+                "source_material": "Walk through the baseline, shifts, and conclusion.",
+                "target_length_minutes": 6.0,
+            }
+        )
+    )
+
+    assert "target narration words: 702-858 total across all scenes" in prompt
+    assert "Produce 12-20 scenes." in prompt
+    assert "landing below 85% of the target is a failure" in prompt
+    assert "most scene narrations should be 1-3 sentences" in prompt
+    assert "Aim for the finished storyboard to land roughly within 85%-115% of the requested runtime" in prompt
+
+
+def test_director_clinical_template_prompt_forbids_transitions():
+    """Clinical template system prompt must instruct hard cuts, no transitions."""
+    prompt = build_director_system_prompt(
+        normalize_brief(
+            {
+                "source_mode": "source_text",
+                "video_goal": "Educate the patient on their assessment data.",
+                "audience": "The patient whose report this is.",
+                "source_material": "Assessment results across sessions with reference ranges.",
+            }
+        ),
+        provider="anthropic",
+    )
+
+    assert "transition_after to null" in prompt or "transition_after" in prompt
+    assert "hard cut" in prompt.lower() or "Hard cuts" in prompt
+
+
+def test_director_clinical_template_prompt_documents_brain_region_names():
+    """Clinical template prompt must list the recognized brain region names for coordinate mapping."""
+    prompt = build_director_system_prompt(
+        normalize_brief(
+            {
+                "source_mode": "source_text",
+                "video_goal": "Educate the patient on their assessment data.",
+                "audience": "The patient whose report this is.",
+                "source_material": "Assessment results across sessions.",
+            }
+        ),
+        provider="anthropic",
+    )
+
+    for region in ["Frontal", "Central", "Parietal", "Temporal", "Occipital"]:
+        assert region in prompt, f"Missing region {region!r} from brain_region_focus coordinate table"
+
+
+def test_director_deterministic_overlay_prefers_template_families_over_authored_stills():
+    """When deterministic overlay is active on a clinical brief, the prompt should tell the director
+    to prefer clinical template families, not authored stills."""
+    prompt_user = _build_storyboard_user_prompt_from_brief(
+        normalize_brief(
+            {
+                "source_mode": "source_text",
+                "video_goal": "Educate the patient on their assessment data.",
+                "audience": "The patient whose report this is.",
+                "source_material": "Assessment results across sessions with reference ranges.",
+                "text_render_mode": "deterministic_overlay",
+            }
+        )
+    )
+    # Should NOT say "prefer calm authored stills"
+    assert "prefer calm authored stills" not in prompt_user
+    # Should say to use clinical template families
+    assert "clinical template composition families" in prompt_user
+    assert "three_data_stage" in prompt_user  # mentions reserving it
+
+    prompt_system = build_director_system_prompt(
+        normalize_brief(
+            {
+                "source_mode": "source_text",
+                "video_goal": "Educate the patient on their assessment data.",
+                "audience": "The patient whose report this is.",
+                "source_material": "Assessment results across sessions with reference ranges.",
+                "text_render_mode": "deterministic_overlay",
+            }
+        ),
+        provider="anthropic",
+    )
+    # Registry constraints should prefer templates
+    assert "prefer the clinical template composition families" in prompt_system
+    # Should NOT say "prefer authored stillness" when deterministic overlay is active
+    assert "prefer authored stillness" not in prompt_system
+
+
+def test_director_visual_authored_clinical_still_prefers_authored_stills():
+    """When visual_authored is active on a clinical brief, the prompt should still prefer authored stills."""
+    prompt_user = _build_storyboard_user_prompt_from_brief(
+        normalize_brief(
+            {
+                "source_mode": "source_text",
+                "video_goal": "Educate the patient on their assessment data.",
+                "audience": "The patient whose report this is.",
+                "source_material": "Assessment results across sessions with reference ranges.",
+                "text_render_mode": "visual_authored",
+            }
+        )
+    )
+    assert "prefer calm authored stills" in prompt_user
+
+
+def test_director_clinical_template_diversity_guidance():
+    """Clinical template prompt should include the family selection table and diversity requirement."""
+    prompt = build_director_system_prompt(
+        normalize_brief(
+            {
+                "source_mode": "source_text",
+                "video_goal": "Educate the patient on their assessment data.",
+                "audience": "The patient whose report this is.",
+                "source_material": "Assessment results across sessions.",
+                "text_render_mode": "deterministic_overlay",
+            }
+        ),
+        provider="anthropic",
+    )
+    # Should have the family selection table differentiating from three_data_stage
+    assert "metric_improvement" in prompt
+    assert "brain_region_focus" in prompt
+    assert "metric_comparison" in prompt
+    assert "timeline_progression" in prompt
+    assert "analogy_metaphor" in prompt
+    assert "synthesis_summary" in prompt
+    # Diversity requirement
+    assert "at least 7 different template families" in prompt
+
+
+def test_generate_storyboard_repairs_openai_storyboard_when_runtime_budget_is_blown(monkeypatch):
+    calls: list[str] = []
+
+    def make_scene(index: int, word_count: int) -> dict[str, object]:
+        return {
+            "id": index,
+            "title": f"Scene {index + 1}",
+            "narration": " ".join([f"word{index}"] * word_count),
+            "visual_prompt": f"Visual beat {index + 1}",
+        }
+
+    over_budget_scenes = [make_scene(index, 45) for index in range(22)]
+    repaired_scenes = [make_scene(index, 20) for index in range(12)]
+
+    def fake_generate(system_prompt, user_prompt, *, return_response=False):
+        calls.append(user_prompt)
+        scenes = over_budget_scenes if len(calls) == 1 else repaired_scenes
+        response = type("Resp", (), {"usage": None})()
+        if return_response:
+            return scenes, response
+        return scenes
+
+    monkeypatch.setattr("core.director.build_director_system_prompt", lambda brief, **kwargs: "system prompt")
+    monkeypatch.setattr("core.director._generate_with_openai", fake_generate)
+
+    scenes, metadata = generate_storyboard_with_metadata(
+        {
+            "project_name": "runtime_repair_demo",
+            "source_mode": "ideas_notes",
+            "video_goal": "Explain the progression clearly.",
+            "audience": "General audience",
+            "source_material": "Walk through the baseline, shifts, and conclusion.",
+            "target_length_minutes": 3.0,
+        },
+        provider="openai",
+    )
+
+    assert scenes == repaired_scenes
+    assert len(calls) == 2
+    assert "Revise this storyboard so it actually fits the runtime budget." in calls[1]
+    assert "current scenes: 22" in calls[1]
+    assert metadata["runtime_repair"]["operation"] == "storyboard_runtime_repair"
+
+
 def test_analyze_style_references_openai_builds_multimodal_request(tmp_path, monkeypatch):
     image_path = tmp_path / "ref.png"
     image_path.write_bytes(base64.b64decode(
@@ -275,6 +512,7 @@ def test_validate_scenes_drops_model_supplied_video_path():
 
     assert scenes[0]["footage_asset_id"] == "hero_capture"
     assert scenes[0]["video_path"] is None
+    assert scenes[0]["manifestation_plan"]["primary_path"] == "source_video"
 
 
 def test_validate_scenes_preserves_video_scene_kind_and_speaker_name():
@@ -316,6 +554,59 @@ def test_validate_scenes_keeps_thin_motion_fields():
     assert scenes[0]["staging_notes"] == "headline slams in, source line fades up"
     assert scenes[0]["transition_hint"] == "fade"
     assert scenes[0]["data_points"] == ["$500 per video", "$200 to salesperson"]
+    assert scenes[0]["manifestation_plan"]["primary_path"] == "native_remotion"
+
+
+def test_validate_scenes_derives_scene_type_from_manifestation_plan_when_missing():
+    scenes = _validate_scenes(
+        [
+            {
+                "id": 0,
+                "title": "Reviewed clip",
+                "narration": "Use the supplied walkthrough clip here.",
+                "visual_prompt": "UI cursor moves through the key workflow.",
+                "manifestation_plan": {
+                    "primary_path": "source_video",
+                    "fallback_path": "authored_image",
+                    "risk_level": "medium",
+                    "failure_notes": ["Footage may be too cramped on smaller viewports."],
+                },
+            }
+        ]
+    )
+
+    assert scenes[0]["scene_type"] == "video"
+    assert scenes[0]["manifestation_plan"]["primary_path"] == "source_video"
+    assert scenes[0]["manifestation_plan"]["fallback_path"] == "authored_image"
+    assert scenes[0]["manifestation_plan"]["risk_level"] == "medium"
+
+
+def test_validate_scenes_keeps_native_build_prompt_inside_manifestation_plan():
+    scenes = _validate_scenes(
+        [
+            {
+                "id": 0,
+                "title": "Data proof",
+                "narration": "Stage the ranked outcomes in one deterministic beat.",
+                "visual_prompt": "Three-dimensional data tableau.",
+                "scene_type": "motion",
+                "on_screen_text": ["Fastest", "Most Stable", "Lowest Cost"],
+                "native_build_prompt": "Native build: three illuminated podiums with exact labels.",
+                "manifestation_plan": {
+                    "primary_path": "native_remotion",
+                    "fallback_path": "authored_image",
+                    "native_family_hint": "three_data_stage",
+                    "text_critical": True,
+                },
+            }
+        ]
+    )
+
+    assert scenes[0]["manifestation_plan"]["primary_path"] == "native_remotion"
+    assert scenes[0]["manifestation_plan"]["native_family_hint"] == "three_data_stage"
+    assert scenes[0]["manifestation_plan"]["native_build_prompt"] == "Native build: three illuminated podiums with exact labels."
+    assert scenes[0]["manifestation_plan"]["text_expected"] is True
+    assert scenes[0]["manifestation_plan"]["text_critical"] is True
 
 
 def test_validate_scenes_still_accepts_legacy_composition_intent():
@@ -342,3 +633,6 @@ def test_validate_scenes_still_accepts_legacy_composition_intent():
     assert scenes[0]["transition_hint"] == "fade"
     assert scenes[0]["data_points"] == ["#3 Services", "#2 Licensing", "#1 Production"]
     assert scenes[0]["composition_intent"]["family_hint"] == "three_data_stage"
+    assert scenes[0]["scene_type"] == "motion"
+    assert scenes[0]["manifestation_plan"]["primary_path"] == "native_remotion"
+    assert scenes[0]["manifestation_plan"]["native_family_hint"] == "three_data_stage"

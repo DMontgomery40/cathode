@@ -13,6 +13,8 @@ class ProjectSummary(BaseModel):
     has_video: bool = False
     video_path: str | None = None
     thumbnail_path: str | None = None
+    created_utc: str | None = None
+    updated_utc: str | None = None
     image_profile: dict[str, Any] | None = None
     tts_profile: dict[str, Any] | None = None
 

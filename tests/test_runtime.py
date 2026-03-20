@@ -1,4 +1,14 @@
-from core.runtime import available_tts_providers, available_video_generation_providers, remotion_capabilities, resolve_tts_profile, resolve_video_profile
+from pathlib import Path
+
+from core.runtime import (
+    available_tts_providers,
+    available_video_generation_providers,
+    check_api_keys,
+    load_repo_env,
+    remotion_capabilities,
+    resolve_tts_profile,
+    resolve_video_profile,
+)
 
 
 def test_resolve_tts_profile_rewrites_kokoro_voice_for_elevenlabs_provider(monkeypatch):
@@ -87,6 +97,7 @@ def test_remotion_capabilities_reports_player_transitions_and_three(monkeypatch,
         frontend_dir / "node_modules" / "@remotion" / "renderer" / "package.json",
         frontend_dir / "node_modules" / "@remotion" / "player" / "package.json",
         frontend_dir / "node_modules" / "@remotion" / "transitions" / "package.json",
+        frontend_dir / "node_modules" / "@remotion" / "three" / "package.json",
         frontend_dir / "node_modules" / "three" / "package.json",
         frontend_dir / "node_modules" / "@react-three" / "fiber" / "package.json",
         frontend_dir / "node_modules" / "@react-three" / "drei" / "package.json",
@@ -104,3 +115,20 @@ def test_remotion_capabilities_reports_player_transitions_and_three(monkeypatch,
     assert caps["player_available"] is True
     assert caps["transitions_available"] is True
     assert caps["three_available"] is True
+
+
+def test_load_repo_env_populates_missing_provider_keys(tmp_path, monkeypatch):
+    env_path = tmp_path / ".env"
+    env_path.write_text(
+        "REPLICATE_API_TOKEN=rep-token\nDASHSCOPE_API_KEY=dash-token\n",
+        encoding="utf-8",
+    )
+    monkeypatch.delenv("REPLICATE_API_TOKEN", raising=False)
+    monkeypatch.delenv("DASHSCOPE_API_KEY", raising=False)
+
+    loaded = load_repo_env(env_path=env_path)
+
+    assert loaded == Path(env_path).resolve()
+    keys = check_api_keys()
+    assert keys["replicate"] is True
+    assert keys["dashscope"] is True

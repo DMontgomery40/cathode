@@ -7,7 +7,7 @@ from pathlib import Path
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse
 
-from core.runtime import PROJECTS_DIR
+from core.runtime import PROJECTS_DIR, REPO_ROOT
 
 router = APIRouter()
 
@@ -31,6 +31,30 @@ _MIME_MAP = {
     ".json": "application/json",
     ".txt": "text/plain",
 }
+
+
+@router.get("/template-deck/{path:path}")
+async def serve_template_deck(path: str) -> FileResponse:
+    if ".." in path or path.startswith("/"):
+        raise HTTPException(status_code=400, detail="Invalid path")
+
+    deck_dir = REPO_ROOT / "template_deck"
+    file_path = (deck_dir / path).resolve()
+
+    if not str(file_path).startswith(str(deck_dir.resolve())):
+        raise HTTPException(status_code=400, detail="Invalid path")
+
+    if not file_path.exists() or not file_path.is_file():
+        raise HTTPException(status_code=404, detail="File not found")
+
+    ext = file_path.suffix.lower()
+    media_type = _MIME_MAP.get(ext, "application/octet-stream")
+
+    return FileResponse(
+        path=str(file_path),
+        media_type=media_type,
+        filename=file_path.name,
+    )
 
 
 @router.get("/projects/{project}/media/{path:path}")

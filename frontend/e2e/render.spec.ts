@@ -46,10 +46,10 @@ test.describe('Render Control', () => {
     await expect(page.locator('text=Render Settings')).toBeVisible()
   })
 
-  test('output filename input defaults to final_video.mp4', async ({ page }) => {
+  test('output filename input defaults to the project name', async ({ page }) => {
     const input = page.locator('#output-filename')
     await expect(input).toBeVisible()
-    await expect(input).toHaveValue('final_video.mp4')
+    await expect(input).toHaveValue(`${PROJECT}.mp4`)
   })
 
   test('output filename can be changed', async ({ page }) => {
@@ -229,6 +229,502 @@ test.describe('Render Control', () => {
     await expect(player.locator('img').first()).toBeVisible()
     await expect(player.getByText('422 Maple Ridge Drive', { exact: true })).toHaveCount(1)
     await expect(player.getByText('Top-rated school district · 3 BR · 2.5 BA', { exact: true })).toBeVisible()
+  })
+
+  test('static media manifests keep authored visuals without generic overlay chrome or pan', async ({ page }) => {
+    const backgroundImage = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(
+      '<svg xmlns="http://www.w3.org/2000/svg" width="1664" height="928" viewBox="0 0 1664 928"><rect width="1664" height="928" fill="#0f1524"/><circle cx="540" cy="420" r="210" fill="#ffb66b" fill-opacity="0.28"/><rect x="240" y="250" width="460" height="310" rx="44" fill="#f0a357" fill-opacity="0.18"/><rect x="960" y="220" width="140" height="140" rx="28" fill="#f4d8a0" fill-opacity="0.22"/><rect x="960" y="420" width="180" height="32" rx="16" fill="#f4d8a0" fill-opacity="0.18"/><rect x="960" y="520" width="180" height="32" rx="16" fill="#f4d8a0" fill-opacity="0.18"/></svg>',
+    )}`
+
+    await page.route(`**/api/projects/${PROJECT}/remotion-manifest`, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          width: 1664,
+          height: 928,
+          fps: 24,
+          textRenderMode: 'deterministic_overlay',
+          totalDurationInFrames: 120,
+          scenes: [
+            {
+              uid: 'static-media-scene',
+              sceneType: 'image',
+              title: 'Clinical Follow-up Still',
+              narration: 'Plan a follow-up and keep reinforcing the gains.',
+              onScreenText: [
+                'Exact Authored Label',
+                'Lifestyle panel copy',
+              ],
+              durationInFrames: 120,
+              sequenceDurationInFrames: 120,
+              imageUrl: backgroundImage,
+              composition: {
+                family: 'static_media',
+                mode: 'none',
+                props: {
+                  headline: 'Exact Authored Label',
+                  body: 'Lifestyle panel copy',
+                },
+                transitionAfter: null,
+                data: {},
+                rationale: '',
+              },
+            },
+          ],
+        }),
+      })
+    })
+
+    await page.goto(`/projects/${PROJECT}/render`)
+    const player = page.getByTestId('remotion-player-surface')
+    await expect(player).toBeVisible()
+    const image = player.locator('img').first()
+    await expect(image).toBeVisible()
+    await expect(player.getByText('Exact Authored Label', { exact: true })).toHaveCount(0)
+    await expect(player.getByText('Lifestyle panel copy', { exact: true })).toHaveCount(0)
+    expect(await image.evaluate((node) => (node as HTMLElement).style.transform)).toBe('scale(1)')
+  })
+
+  test('structured data-stage manifests render stable chart labels from composition data', async ({ page }) => {
+    await page.route(`**/api/projects/${PROJECT}/remotion-manifest`, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          width: 1664,
+          height: 928,
+          fps: 24,
+          textRenderMode: 'visual_authored',
+          totalDurationInFrames: 120,
+          scenes: [
+            {
+              uid: 'data-stage-scene',
+              sceneType: 'image',
+              title: 'Trail Making B: The Improvement',
+              narration: 'Session one starts higher and session five ends lower.',
+              onScreenText: [
+                'Trail Making Test B',
+                'Session 1: 75 sec -> Session 5: 63 sec',
+                '12 seconds faster',
+              ],
+              durationInFrames: 120,
+              sequenceDurationInFrames: 120,
+              textLayerKind: 'none',
+              composition: {
+                family: 'three_data_stage',
+                mode: 'native',
+                props: {
+                  headline: 'Trail Making Test B',
+                  kicker: 'Trail Making B: The Improvement',
+                  layoutVariant: 'bars_with_delta',
+                  palette: 'teal_on_navy',
+                },
+                transitionAfter: null,
+                rationale: '',
+                data: {
+                  xAxisLabel: 'Session',
+                  yAxisLabel: 'Time (seconds)',
+                  series: [
+                    {
+                      id: 'trail_making_b',
+                      label: 'Trail Making Test B',
+                      type: 'bar',
+                      points: [
+                        { x: 'Session 1', y: 75 },
+                        { x: 'Session 2', y: null },
+                        { x: 'Session 3', y: null },
+                        { x: 'Session 4', y: null },
+                        { x: 'Session 5', y: 63 },
+                      ],
+                    },
+                  ],
+                  referenceBands: [
+                    {
+                      id: 'trail_b_reference',
+                      label: 'Reference range',
+                      yMin: 0,
+                      yMax: 120,
+                    },
+                  ],
+                  callouts: [
+                    {
+                      id: 'delta',
+                      fromX: 'Session 1',
+                      toX: 'Session 5',
+                      label: '12 seconds faster',
+                    },
+                  ],
+                },
+              },
+            },
+          ],
+        }),
+      })
+    })
+
+    await page.goto(`/projects/${PROJECT}/render`)
+    const player = page.getByTestId('remotion-player-surface')
+    await expect(player).toBeVisible()
+    await expect(player.getByTestId('three-data-stage')).toBeVisible()
+    await expect(player.getByText('Session 1', { exact: true })).toBeVisible()
+    await expect(player.getByText('Session 5', { exact: true })).toBeVisible()
+    await expect(player.getByText('Reference range', { exact: true })).toBeVisible()
+    await expect(player.getByText('12 seconds faster', { exact: true }).first()).toBeVisible()
+    await expect(player.getByText('n/a', { exact: true }).first()).toBeVisible()
+    await expect(player.locator('[data-testid="three-data-stage-bar"]')).toHaveCount(2)
+    const barHeights = await player.locator('[data-testid="three-data-stage-bar"]').evaluateAll((nodes) =>
+      nodes.map((node) => Number(node.getAttribute('height') || '0')),
+    )
+    expect(Math.max(...barHeights)).toBeGreaterThan(40)
+    const visibleBarBounds = await player.locator('[data-testid="three-data-stage-bar"]').evaluateAll((nodes) =>
+      nodes.map((node) => {
+        const rect = node.getBoundingClientRect()
+        return { width: rect.width, height: rect.height }
+      }),
+    )
+    expect(Math.max(...visibleBarBounds.map((bounds) => bounds.height))).toBeGreaterThan(40)
+    expect(Math.max(...visibleBarBounds.map((bounds) => bounds.width))).toBeGreaterThan(20)
+  })
+
+  test('structured data-stage line charts draw visible geometry on the initial frame', async ({ page }) => {
+    await page.route(`**/api/projects/${PROJECT}/remotion-manifest`, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          width: 1664,
+          height: 928,
+          fps: 24,
+          textRenderMode: 'visual_authored',
+          totalDurationInFrames: 120,
+          scenes: [
+            {
+              uid: 'data-stage-line-scene',
+              sceneType: 'image',
+              title: 'Alpha Ratio: Shifted Across Sessions',
+              narration: 'The line crosses from above range to below range.',
+              onScreenText: [
+                'F3/F4 Alpha Ratio',
+                'Session 1: 1.3 (above range)',
+                'Sessions 4-5: 0.6-0.7 (below range)',
+              ],
+              durationInFrames: 120,
+              sequenceDurationInFrames: 120,
+              textLayerKind: 'none',
+              composition: {
+                family: 'three_data_stage',
+                mode: 'native',
+                props: {
+                  headline: 'F3/F4 Alpha Ratio',
+                  kicker: 'Alpha Ratio: Shifted Across Sessions',
+                  layoutVariant: 'line_with_zones',
+                  palette: 'multi_zone_on_charcoal',
+                },
+                transitionAfter: null,
+                rationale: '',
+                data: {
+                  xAxisLabel: 'Session',
+                  yAxisLabel: 'F3/F4 Alpha Ratio',
+                  series: [
+                    {
+                      id: 'alpha_ratio',
+                      label: 'F3/F4 Alpha Ratio',
+                      type: 'line',
+                      points: [
+                        { x: 'Session 1', y: 1.3 },
+                        { x: 'Session 2', y: 0.9 },
+                        { x: 'Session 3', y: 1.0 },
+                        { x: 'Session 4', y: 0.6 },
+                        { x: 'Session 5', y: 0.7 },
+                      ],
+                    },
+                  ],
+                  referenceBands: [
+                    {
+                      id: 'alpha_ratio_reference',
+                      label: 'In-range band',
+                      yMin: 0.8,
+                      yMax: 1.1,
+                    },
+                  ],
+                  callouts: [
+                    {
+                      id: 'above_range',
+                      x: 'Session 1',
+                      y: 1.3,
+                      label: 'Above range',
+                    },
+                  ],
+                },
+              },
+            },
+          ],
+        }),
+      })
+    })
+
+    await page.goto(`/projects/${PROJECT}/render`)
+    const player = page.getByTestId('remotion-player-surface')
+    await expect(player).toBeVisible()
+    await expect(player.getByTestId('three-data-stage')).toBeVisible()
+    await expect(player.getByText('Session 1', { exact: true })).toBeVisible()
+    await expect(player.getByText('Session 5', { exact: true })).toBeVisible()
+    await expect(player.getByText('In-range band', { exact: true })).toBeVisible()
+    const linePath = player.locator('[data-testid="three-data-stage-line"]')
+    await expect(linePath).toHaveCount(1)
+    await expect(player.locator('[data-testid="three-data-stage-line-point"]')).toHaveCount(5)
+    const lineDefinition = await linePath.getAttribute('d')
+    expect(lineDefinition).toContain('L')
+    const lineBounds = await linePath.evaluate((node) => {
+      const rect = node.getBoundingClientRect()
+      return { width: rect.width, height: rect.height }
+    })
+    expect(lineBounds.width).toBeGreaterThan(120)
+    expect(lineBounds.height).toBeGreaterThan(20)
+  })
+
+  test('legacy null-valued data-stage bars recover visible geometry from comparison copy', async ({ page }) => {
+    await page.route(`**/api/projects/${PROJECT}/remotion-manifest`, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          width: 1664,
+          height: 928,
+          fps: 24,
+          textRenderMode: 'visual_authored',
+          totalDurationInFrames: 120,
+          scenes: [
+            {
+              uid: 'legacy-null-bar-scene',
+              sceneType: 'image',
+              title: 'Simpler Tasks: A Mixed Picture',
+              narration: 'Trail Making A slowed slightly but stayed in range.',
+              onScreenText: [
+                'Trail Making A: 33 -> 41 sec (still in range)',
+                'Reaction time: 296 -> 293 ms',
+                'Variability: +-43 -> +-69 ms',
+              ],
+              durationInFrames: 120,
+              sequenceDurationInFrames: 120,
+              textLayerKind: 'none',
+              composition: {
+                family: 'three_data_stage',
+                mode: 'native',
+                props: {
+                  layoutVariant: 'bars_with_band',
+                  palette: 'teal_on_navy',
+                },
+                transitionAfter: null,
+                rationale: '',
+                data: {
+                  xAxisLabel: 'Category',
+                  yAxisLabel: 'Value',
+                  data_points: [
+                    'Trail Making A: 33 -> 41 sec (still in range)',
+                    'Reaction time: 296 -> 293 ms',
+                    'Variability: +-43 -> +-69 ms',
+                  ],
+                  series: [
+                    {
+                      id: 'series_1',
+                      label: 'Simpler Tasks: A Mixed Picture',
+                      type: 'bar',
+                      points: [
+                        { x: 'Trail Making A: 33 -> 41 sec (still in range)', y: null },
+                        { x: 'Reaction time: 296 -> 293 ms', y: null },
+                        { x: 'Variability: +-43 -> +-69 ms', y: null },
+                      ],
+                    },
+                  ],
+                },
+              },
+            },
+          ],
+        }),
+      })
+    })
+
+    await page.goto(`/projects/${PROJECT}/render`)
+    const player = page.getByTestId('remotion-player-surface')
+    await expect(player).toBeVisible()
+    await expect(player.getByTestId('three-data-stage')).toBeVisible()
+    await expect(player.getByText('Session 1', { exact: true })).toBeVisible()
+    await expect(player.getByText('Session 2', { exact: true })).toBeVisible()
+    await expect(player.locator('[data-testid="three-data-stage-bar"]')).toHaveCount(2)
+    const recoveredBarHeights = await player.locator('[data-testid="three-data-stage-bar"]').evaluateAll((nodes) =>
+      nodes.map((node) => Number(node.getAttribute('height') || '0')),
+    )
+    expect(Math.max(...recoveredBarHeights)).toBeGreaterThan(30)
+  })
+
+  test('legacy null-valued data-stage lines recover geometry and target bands from comparison copy', async ({ page }) => {
+    await page.route(`**/api/projects/${PROJECT}/remotion-manifest`, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          width: 1664,
+          height: 928,
+          fps: 24,
+          textRenderMode: 'visual_authored',
+          totalDurationInFrames: 120,
+          scenes: [
+            {
+              uid: 'legacy-null-line-scene',
+              sceneType: 'image',
+              title: 'Background Rhythms: The Cautionary Signal',
+              narration: 'Theta beta rose above the target range.',
+              onScreenText: [
+                'Theta/Beta Ratio: 2.0 -> 3.7',
+                'Target: 0.9-2.1',
+                'Low-yield flag - worth rechecking',
+              ],
+              durationInFrames: 120,
+              sequenceDurationInFrames: 120,
+              textLayerKind: 'none',
+              composition: {
+                family: 'three_data_stage',
+                mode: 'native',
+                props: {
+                  layoutVariant: 'line_with_zones',
+                  palette: 'multi_zone_on_charcoal',
+                },
+                transitionAfter: null,
+                rationale: '',
+                data: {
+                  xAxisLabel: 'Category',
+                  yAxisLabel: 'Value',
+                  data_points: [
+                    'Theta/Beta Ratio: 2.0 -> 3.7',
+                    'Target: 0.9-2.1',
+                    'Low-yield flag - worth rechecking',
+                  ],
+                  series: [
+                    {
+                      id: 'series_1',
+                      label: 'Background Rhythms: The Cautionary Signal',
+                      type: 'line',
+                      points: [
+                        { x: 'Theta/Beta Ratio: 2.0 -> 3.7', y: null },
+                        { x: 'Target: 0.9-2.1', y: null },
+                        { x: 'Low-yield flag - worth rechecking', y: null },
+                      ],
+                    },
+                  ],
+                },
+              },
+            },
+          ],
+        }),
+      })
+    })
+
+    await page.goto(`/projects/${PROJECT}/render`)
+    const player = page.getByTestId('remotion-player-surface')
+    await expect(player).toBeVisible()
+    await expect(player.getByTestId('three-data-stage')).toBeVisible()
+    await expect(player.getByText('Session 1', { exact: true })).toBeVisible()
+    await expect(player.getByText('Session 2', { exact: true })).toBeVisible()
+    await expect(player.getByText('Target: 0.9-2.1', { exact: true }).first()).toBeVisible()
+    const recoveredLine = player.locator('[data-testid="three-data-stage-line"]')
+    await expect(recoveredLine).toHaveCount(1)
+    await expect(player.locator('[data-testid="three-data-stage-line-point"]')).toHaveCount(2)
+    const recoveredLineDefinition = await recoveredLine.getAttribute('d')
+    const recoveredLineXValues = [...(recoveredLineDefinition ?? '').matchAll(/[ML]\s*([0-9.]+)\s+([0-9.]+)/g)]
+      .map((match) => Number(match[1]))
+    expect(Math.max(...recoveredLineXValues) - Math.min(...recoveredLineXValues)).toBeGreaterThan(650)
+    const recoveredLineBounds = await recoveredLine.evaluate((node) => {
+      const rect = node.getBoundingClientRect()
+      return { height: rect.height }
+    })
+    expect(recoveredLineBounds.height).toBeGreaterThan(20)
+  })
+
+  test('legacy multi-comparison data-stage lines recover multiple visible series', async ({ page }) => {
+    await page.route(`**/api/projects/${PROJECT}/remotion-manifest`, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          width: 1664,
+          height: 928,
+          fps: 24,
+          textRenderMode: 'visual_authored',
+          totalDurationInFrames: 120,
+          scenes: [
+            {
+              uid: 'legacy-null-multi-line-scene',
+              sceneType: 'image',
+              title: 'Connectivity: Your Brain Networks',
+              narration: 'One pathway strengthened while another declined slightly.',
+              onScreenText: [
+                'CZ-PZ (midline): 0.51 -> 0.72 - Strengthened',
+                'C3-C4 (left-right): 0.43 -> 0.36 - Mild decline',
+              ],
+              durationInFrames: 120,
+              sequenceDurationInFrames: 120,
+              textLayerKind: 'none',
+              composition: {
+                family: 'three_data_stage',
+                mode: 'native',
+                props: {
+                  layoutVariant: 'line_with_band',
+                  palette: 'teal_on_navy',
+                },
+                transitionAfter: null,
+                rationale: '',
+                data: {
+                  xAxisLabel: 'Category',
+                  yAxisLabel: 'Value',
+                  data_points: [
+                    'CZ-PZ (midline): 0.51 -> 0.72 - Strengthened',
+                    'C3-C4 (left-right): 0.43 -> 0.36 - Mild decline',
+                  ],
+                  series: [
+                    {
+                      id: 'series_1',
+                      label: 'Connectivity: Your Brain Networks',
+                      type: 'line',
+                      points: [
+                        { x: 'CZ-PZ (midline): 0.51 -> 0.72 - Strengthened', y: null },
+                        { x: 'C3-C4 (left-right): 0.43 -> 0.36 - Mild decline', y: null },
+                      ],
+                    },
+                  ],
+                },
+              },
+            },
+          ],
+        }),
+      })
+    })
+
+    await page.goto(`/projects/${PROJECT}/render`)
+    const player = page.getByTestId('remotion-player-surface')
+    await expect(player).toBeVisible()
+    await expect(player.getByTestId('three-data-stage')).toBeVisible()
+    await expect(player.getByText('Session 1', { exact: true })).toBeVisible()
+    await expect(player.getByText('Session 2', { exact: true })).toBeVisible()
+    await expect(player.getByText('CZ-PZ (midline)', { exact: true }).first()).toBeVisible()
+    await expect(player.getByText('C3-C4 (left-right)', { exact: true }).first()).toBeVisible()
+    await expect(player.getByText('0.78', { exact: true })).toHaveCount(0)
+    await expect(player.getByText('0.51', { exact: true }).first()).toBeVisible()
+    await expect(player.getByText('0.72', { exact: true }).first()).toBeVisible()
+    await expect(player.getByText('0.43', { exact: true }).first()).toBeVisible()
+    await expect(player.getByText('0.36', { exact: true }).first()).toBeVisible()
+    const recoveredLines = player.locator('[data-testid="three-data-stage-line"]')
+    await expect(recoveredLines).toHaveCount(2)
+    await expect(player.locator('[data-testid="three-data-stage-line-point"]')).toHaveCount(4)
+    const recoveredLineSpans = await recoveredLines.evaluateAll((nodes) =>
+      nodes.map((node) => {
+        const definition = node.getAttribute('d') || ''
+        const xValues = [...definition.matchAll(/[ML]\s*([0-9.]+)\s+([0-9.]+)/g)].map((match) => Number(match[1]))
+        return Math.max(...xValues) - Math.min(...xValues)
+      }),
+    )
+    expect(Math.min(...recoveredLineSpans)).toBeGreaterThan(650)
   })
 
   // ── Generate All Assets button state ───────────────────────────

@@ -12,6 +12,7 @@ from .demo_assets import build_footage_summary, normalize_footage_manifest
 
 SOURCE_MODES = ("ideas_notes", "source_text", "final_script")
 SCENE_TYPES = ("image", "video", "motion")
+SCENE_MANIFESTATIONS = ("authored_image", "native_remotion", "source_video")
 COMPOSITION_MODES = ("auto", "classic", "motion_only", "hybrid")
 EXPLICIT_COMPOSITION_MODES = ("classic", "motion_only", "hybrid")
 VISUAL_SOURCE_STRATEGIES = ("images_only", "mixed_media", "video_preferred")
@@ -34,6 +35,26 @@ AGENT_DEMO_PROFILE_KEYS = (
     "repo_url",
     "flow_hints",
 )
+_NATIVE_REMOTION_FAMILIES = {
+    "bullet_stack",
+    "kinetic_statements",
+    "kinetic_title",
+    "quote_focus",
+    "software_demo_focus",
+    "surreal_tableau_3d",
+    "three_data_stage",
+    # Clinical template compositions
+    "cover_hook",
+    "orientation",
+    "synthesis_summary",
+    "closing_cta",
+    "clinical_explanation",
+    "metric_improvement",
+    "brain_region_focus",
+    "metric_comparison",
+    "timeline_progression",
+    "analogy_metaphor",
+}
 
 
 def _normalize_project_asset_path(
@@ -128,6 +149,11 @@ def default_render_profile() -> dict[str, Any]:
         "render_backend": "ffmpeg",
         "render_backend_reason": "Classic image/video assembly has no Remotion-only requirements.",
         "text_render_mode": "visual_authored",
+        "auto_compress_oversized_video": True,
+        "compression_min_size_mb": 150.0,
+        "compression_max_average_bitrate_mbps": 3.2,
+        "compression_target_video_kbps": 2500,
+        "compression_target_audio_kbps": 128,
     }
 
 
@@ -305,12 +331,37 @@ def resolve_render_strategy(value: Any) -> str:
     return normalized if normalized in RENDER_STRATEGIES else "auto"
 
 
+def _normalize_scene_manifestation(value: Any) -> str | None:
+    normalized = str(value or "").strip().lower()
+    return normalized if normalized in SCENE_MANIFESTATIONS else None
+
+
+def _composition_family_implies_native_remotion(value: Any) -> bool:
+    return str(value or "").strip().lower() in _NATIVE_REMOTION_FAMILIES
+
+
+def _infer_scene_manifestation(
+    *,
+    scene_type: str,
+    family: Any,
+    mode: Any,
+) -> str:
+    if scene_type == "video":
+        return "source_video"
+    if str(mode or "").strip().lower() in {"native", "overlay"}:
+        return "native_remotion"
+    if _composition_family_implies_native_remotion(family):
+        return "native_remotion"
+    return "authored_image"
+
+
 def default_scene_composition(scene_type: str) -> dict[str, Any]:
     normalized_type = str(scene_type or "image").strip().lower()
     if normalized_type == "motion":
         return {
             "family": "kinetic_title",
             "mode": "native",
+            "manifestation": "native_remotion",
             "props": {},
             "transition_after": None,
             "data": {},
@@ -321,6 +372,7 @@ def default_scene_composition(scene_type: str) -> dict[str, Any]:
     return {
         "family": "static_media",
         "mode": "none",
+        "manifestation": "source_video" if normalized_type == "video" else "authored_image",
         "props": {},
         "transition_after": None,
         "data": {},
@@ -347,6 +399,315 @@ def _normalize_scene_transition(value: Any) -> dict[str, Any] | None:
     }
 
 
+def _relative_review_asset_path(
+    raw_path: Any,
+    *,
+    base_dir: str | Path | None = None,
+    project_name: str | None = None,
+) -> str | None:
+    normalized = _normalize_project_asset_path(
+        raw_path,
+        base_dir=base_dir,
+        project_name=project_name,
+    )
+    if normalized is None:
+        value = str(raw_path or "").strip()
+        return value or None
+    base = Path(base_dir).expanduser().resolve() if base_dir not in (None, "") else None
+    if base is None:
+        return normalized
+    path = Path(str(normalized)).expanduser()
+    if not path.is_absolute():
+        return str(path).replace("\\", "/")
+    resolved = path.resolve()
+    if str(resolved).startswith(str(base)):
+        return str(resolved.relative_to(base)).replace("\\", "/")
+    return str(resolved)
+
+
+def _normalize_review_frame_refs(
+    value: Any,
+    *,
+    base_dir: str | Path | None = None,
+    project_name: str | None = None,
+) -> list[dict[str, Any]]:
+    if not isinstance(value, list):
+        return []
+    normalized: list[dict[str, Any]] = []
+    for item in value:
+        if not isinstance(item, dict):
+            continue
+        frame_role = str(item.get("frame_role") or "").strip()
+        if not frame_role:
+            continue
+        try:
+            timestamp = float(item.get("timestamp_seconds") or 0.0)
+        except (TypeError, ValueError):
+            timestamp = 0.0
+        normalized_item = {
+            "frame_role": frame_role,
+            "path": _relative_review_asset_path(
+                item.get("path"),
+                base_dir=base_dir,
+                project_name=project_name,
+            ),
+            "timestamp_seconds": max(timestamp, 0.0),
+        }
+        candidate_id = str(item.get("candidate_id") or "").strip()
+        if candidate_id:
+            normalized_item["candidate_id"] = candidate_id
+        normalized.append(normalized_item)
+    return normalized
+
+
+def _normalize_candidate_outputs(
+    value: Any,
+    *,
+    base_dir: str | Path | None = None,
+    project_name: str | None = None,
+) -> dict[str, dict[str, Any]]:
+    if not isinstance(value, dict):
+        return {}
+    normalized: dict[str, dict[str, Any]] = {}
+    for key, item in value.items():
+        if not isinstance(item, dict):
+            continue
+        candidate_id = str(item.get("candidate_id") or key or "").strip()
+        if not candidate_id:
+            continue
+        normalized[candidate_id] = {
+            "candidate_id": candidate_id,
+            "label": str(item.get("label") or candidate_id).strip() or candidate_id,
+            "candidate_type": str(item.get("candidate_type") or "").strip() or None,
+            "candidate_spec": copy.deepcopy(item.get("candidate_spec")),
+            "source_kind": str(item.get("source_kind") or "").strip() or None,
+            "source_path": _relative_review_asset_path(
+                item.get("source_path"),
+                base_dir=base_dir,
+                project_name=project_name,
+            ),
+            "review_status": str(item.get("review_status") or "").strip() or None,
+            "frame_refs": _normalize_review_frame_refs(
+                item.get("frame_refs"),
+                base_dir=base_dir,
+                project_name=project_name,
+            ),
+        }
+    return normalized
+
+
+def _normalize_judge_verdict(
+    value: Any,
+    *,
+    base_dir: str | Path | None = None,
+    project_name: str | None = None,
+) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        return {}
+    normalized = dict(value)
+    normalized["trigger"] = str(value.get("trigger") or "").strip() or None
+    provider = str(value.get("judge_provider") or value.get("provider") or "").strip() or None
+    model = str(value.get("judge_model") or value.get("model") or "").strip() or None
+    normalized["judge_provider"] = provider
+    normalized["judge_model"] = model
+    normalized["provider"] = provider
+    normalized["model"] = model
+    normalized["winner"] = str(value.get("winner") or "").strip() or None
+    normalized["reasons"] = [str(item).strip() for item in (value.get("reasons") or []) if str(item).strip()]
+    raw_notes = value.get("candidate_notes")
+    if isinstance(raw_notes, dict):
+        normalized["candidate_notes"] = {
+            str(candidate_id).strip(): [str(note).strip() for note in notes if str(note).strip()]
+            for candidate_id, notes in raw_notes.items()
+            if str(candidate_id).strip() and isinstance(notes, list)
+        }
+    else:
+        normalized["candidate_notes"] = {}
+    raw_text_repairs = value.get("text_repairs")
+    if isinstance(raw_text_repairs, list):
+        normalized["text_repairs"] = [
+            {
+                "candidate_id": str(item.get("candidate_id") or "").strip(),
+                "wrong_text": str(item.get("wrong_text") or "").strip(),
+                "correct_text": str(item.get("correct_text") or "").strip(),
+                "reason": str(item.get("reason") or "").strip(),
+            }
+            for item in raw_text_repairs
+            if isinstance(item, dict)
+            and str(item.get("candidate_id") or "").strip()
+            and str(item.get("wrong_text") or "").strip()
+            and str(item.get("correct_text") or "").strip()
+        ]
+    else:
+        normalized["text_repairs"] = []
+    normalized["frame_refs"] = _normalize_review_frame_refs(
+        value.get("frame_refs"),
+        base_dir=base_dir,
+        project_name=project_name,
+    )
+    return normalized
+
+
+def _normalize_composition_data_number(value: Any) -> float | None:
+    if value in (None, ""):
+        return None
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError):
+        return None
+    return parsed
+
+
+def _normalize_composition_data_points(values: Any) -> list[str]:
+    if not isinstance(values, list):
+        return []
+    return [str(item).strip() for item in values if str(item).strip()]
+
+
+def _normalize_composition_series(values: Any) -> list[dict[str, Any]]:
+    if not isinstance(values, list):
+        return []
+
+    normalized: list[dict[str, Any]] = []
+    for index, entry in enumerate(values):
+        if not isinstance(entry, dict):
+            continue
+        item = copy.deepcopy(entry)
+        item["id"] = str(item.get("id") or f"series_{index + 1}").strip()
+        item["label"] = str(item.get("label") or "").strip()
+        item["type"] = "bar" if str(item.get("type") or "").strip() == "bar" else "line"
+        raw_points = item.get("points") if isinstance(item.get("points"), list) else []
+        points: list[dict[str, Any]] = []
+        for point in raw_points:
+            if not isinstance(point, dict):
+                continue
+            x_value = str(point.get("x") or "").strip()
+            if not x_value:
+                continue
+            normalized_point = copy.deepcopy(point)
+            normalized_point["x"] = x_value
+            normalized_point["y"] = _normalize_composition_data_number(point.get("y"))
+            label = str(point.get("label") or "").strip()
+            if label:
+                normalized_point["label"] = label
+            elif "label" in normalized_point:
+                normalized_point.pop("label", None)
+            points.append(normalized_point)
+        item["points"] = points
+        normalized.append(item)
+    return normalized
+
+
+def _normalize_composition_reference_bands(values: Any) -> list[dict[str, Any]]:
+    if not isinstance(values, list):
+        return []
+
+    normalized: list[dict[str, Any]] = []
+    for index, entry in enumerate(values):
+        if not isinstance(entry, dict):
+            continue
+        item = copy.deepcopy(entry)
+        y_min = _normalize_composition_data_number(item.get("yMin"))
+        y_max = _normalize_composition_data_number(item.get("yMax"))
+        if y_min is None or y_max is None:
+            continue
+        item["id"] = str(item.get("id") or f"reference_band_{index + 1}").strip()
+        item["label"] = str(item.get("label") or "").strip() or "Reference range"
+        item["yMin"] = min(y_min, y_max)
+        item["yMax"] = max(y_min, y_max)
+        x_range = item.get("xRange")
+        if isinstance(x_range, list) and len(x_range) == 2:
+            start = str(x_range[0] or "").strip()
+            end = str(x_range[1] or "").strip()
+            item["xRange"] = [start, end] if start and end else None
+        elif "xRange" in item:
+            item.pop("xRange", None)
+        normalized.append(item)
+    return normalized
+
+
+def _normalize_composition_callouts(values: Any) -> list[dict[str, Any]]:
+    if not isinstance(values, list):
+        return []
+
+    normalized: list[dict[str, Any]] = []
+    for index, entry in enumerate(values):
+        if not isinstance(entry, dict):
+            continue
+        item = copy.deepcopy(entry)
+        label = str(item.get("label") or "").strip()
+        if not label:
+            continue
+        item["id"] = str(item.get("id") or f"callout_{index + 1}").strip()
+        item["label"] = label
+        for key in ("x", "fromX", "toX"):
+            if key in item:
+                value = str(item.get(key) or "").strip()
+                if value:
+                    item[key] = value
+                else:
+                    item.pop(key, None)
+        y_value = _normalize_composition_data_number(item.get("y"))
+        if y_value is not None:
+            item["y"] = y_value
+        elif "y" in item:
+            item.pop("y", None)
+        normalized.append(item)
+    return normalized
+
+
+def _normalize_composition_data(
+    value: Any,
+    *,
+    legacy_data_points: list[str] | None = None,
+) -> dict[str, Any] | list[Any]:
+    if isinstance(value, list):
+        return copy.deepcopy(value)
+
+    if isinstance(value, dict):
+        normalized = copy.deepcopy(value)
+        data_points = _normalize_composition_data_points(normalized.get("data_points"))
+        if data_points:
+            normalized["data_points"] = data_points
+        elif "data_points" in normalized:
+            normalized.pop("data_points", None)
+
+        series = _normalize_composition_series(normalized.get("series"))
+        if series:
+            normalized["series"] = series
+        elif "series" in normalized:
+            normalized.pop("series", None)
+
+        reference_bands = _normalize_composition_reference_bands(normalized.get("referenceBands"))
+        if reference_bands:
+            normalized["referenceBands"] = reference_bands
+        elif "referenceBands" in normalized:
+            normalized.pop("referenceBands", None)
+
+        callouts = _normalize_composition_callouts(normalized.get("callouts"))
+        if callouts:
+            normalized["callouts"] = callouts
+        elif "callouts" in normalized:
+            normalized.pop("callouts", None)
+
+        if "xAxisLabel" in normalized:
+            axis = str(normalized.get("xAxisLabel") or "").strip()
+            if axis:
+                normalized["xAxisLabel"] = axis
+            else:
+                normalized.pop("xAxisLabel", None)
+        if "yAxisLabel" in normalized:
+            axis = str(normalized.get("yAxisLabel") or "").strip()
+            if axis:
+                normalized["yAxisLabel"] = axis
+            else:
+                normalized.pop("yAxisLabel", None)
+        return normalized
+
+    normalized_legacy = [str(item).strip() for item in (legacy_data_points or []) if str(item).strip()]
+    return {"data_points": normalized_legacy} if normalized_legacy else {}
+
+
 def scene_composition_payload(scene: Any) -> dict[str, Any]:
     src = scene if isinstance(scene, dict) else {}
     composition_raw = src.get("composition") if isinstance(src.get("composition"), dict) else {}
@@ -354,13 +715,20 @@ def scene_composition_payload(scene: Any) -> dict[str, Any]:
     legacy_intent = src.get("composition_intent") if isinstance(src.get("composition_intent"), dict) else {}
     scene_type = str(src.get("scene_type") or "image").strip().lower()
     defaults = default_scene_composition(scene_type)
+    explicit_manifestation = _normalize_scene_manifestation(composition_raw.get("manifestation"))
+    allow_legacy_shape_hints = explicit_manifestation is None
+    allow_legacy_motion_mirror = explicit_manifestation in {None, "native_remotion"}
     family = str(
         composition_raw.get("family")
-        or legacy_intent.get("family_hint")
-        or motion_raw.get("template_id")
+        or (legacy_intent.get("family_hint") if allow_legacy_shape_hints else None)
+        or (motion_raw.get("template_id") if allow_legacy_motion_mirror else None)
         or defaults["family"]
     ).strip() or defaults["family"]
-    mode = str(composition_raw.get("mode") or legacy_intent.get("mode_hint") or defaults["mode"]).strip().lower() or defaults["mode"]
+    mode = str(
+        composition_raw.get("mode")
+        or (legacy_intent.get("mode_hint") if allow_legacy_shape_hints else None)
+        or defaults["mode"]
+    ).strip().lower() or defaults["mode"]
     if mode not in {"none", "overlay", "native"}:
         mode = defaults["mode"]
 
@@ -368,42 +736,54 @@ def scene_composition_payload(scene: Any) -> dict[str, Any]:
         composition_raw.get("props")
         if isinstance(composition_raw.get("props"), dict)
         else motion_raw.get("props")
-        if isinstance(motion_raw.get("props"), dict)
+        if allow_legacy_motion_mirror and isinstance(motion_raw.get("props"), dict)
         else {}
     )
-    data = composition_raw.get("data")
-    if not isinstance(data, (dict, list)):
-        if isinstance(src.get("data_points"), list):
-            normalized_data_points = [str(item).strip() for item in src.get("data_points") if str(item).strip()]
-            data = {"data_points": normalized_data_points} if normalized_data_points else {}
-        elif isinstance(legacy_intent.get("data_points"), list):
-            normalized_data_points = [str(item).strip() for item in legacy_intent.get("data_points") if str(item).strip()]
-            data = {"data_points": normalized_data_points} if normalized_data_points else {}
-        else:
-            data = {}
+    legacy_data_points: list[str] = []
+    if isinstance(src.get("data_points"), list):
+        legacy_data_points = [str(item).strip() for item in src.get("data_points") if str(item).strip()]
+    elif isinstance(legacy_intent.get("data_points"), list):
+        legacy_data_points = [str(item).strip() for item in legacy_intent.get("data_points") if str(item).strip()]
+    data = _normalize_composition_data(
+        composition_raw.get("data"),
+        legacy_data_points=legacy_data_points,
+    )
     transition_after = _normalize_scene_transition(composition_raw.get("transition_after"))
     if transition_after is None:
         transition_hint = str(src.get("transition_hint") or legacy_intent.get("transition_after") or "").strip().lower()
         if transition_hint in {"fade", "wipe"}:
             transition_after = {"kind": transition_hint, "duration_in_frames": 20}
 
+    manifestation = explicit_manifestation or _infer_scene_manifestation(
+        scene_type=scene_type,
+        family=family,
+        mode=mode,
+    )
     return {
         "family": family,
         "mode": mode,
+        "manifestation": manifestation,
         "props": props,
         "transition_after": transition_after,
         "data": data if isinstance(data, (dict, list)) else {},
-        "render_path": composition_raw.get("render_path") or motion_raw.get("render_path"),
-        "preview_path": composition_raw.get("preview_path") or motion_raw.get("preview_path"),
+        "render_path": composition_raw.get("render_path")
+        or (motion_raw.get("render_path") if allow_legacy_motion_mirror else None),
+        "preview_path": composition_raw.get("preview_path")
+        or (motion_raw.get("preview_path") if allow_legacy_motion_mirror else None),
         "rationale": str(
             composition_raw.get("rationale")
-            or motion_raw.get("rationale")
+            or (motion_raw.get("rationale") if allow_legacy_motion_mirror else None)
             or src.get("staging_notes")
             or legacy_intent.get("motion_notes")
             or legacy_intent.get("layout")
             or ""
         ).strip(),
     }
+
+
+def scene_primary_manifestation(scene: Any) -> str:
+    payload = scene_composition_payload(scene)
+    return str(payload.get("manifestation") or "authored_image").strip().lower() or "authored_image"
 
 
 def scene_requires_remotion(scene: Any) -> bool:
@@ -434,6 +814,17 @@ def _normalize_nonnegative_float(value: Any, fallback: float) -> float:
     if parsed < 0:
         return fallback
     return parsed
+
+
+def _normalize_bool(value: Any, fallback: bool) -> bool:
+    if isinstance(value, bool):
+        return value
+    normalized = str(value or "").strip().lower()
+    if normalized in {"1", "true", "yes", "on"}:
+        return True
+    if normalized in {"0", "false", "no", "off"}:
+        return False
+    return fallback
 
 
 def _normalize_optional_nonnegative_float(value: Any) -> float | None:
@@ -714,11 +1105,30 @@ def normalize_scene(
             base_dir=base_dir,
             project_name=project_name,
         )
+    candidate_outputs = _normalize_candidate_outputs(
+        src.get("candidate_outputs"),
+        base_dir=base_dir,
+        project_name=project_name,
+    )
+    if candidate_outputs:
+        out["candidate_outputs"] = candidate_outputs
+    elif "candidate_outputs" in out:
+        out["candidate_outputs"] = {}
+    judge_verdict = _normalize_judge_verdict(
+        src.get("judge_verdict"),
+        base_dir=base_dir,
+        project_name=project_name,
+    )
+    if judge_verdict:
+        out["judge_verdict"] = judge_verdict
+    elif "judge_verdict" in out:
+        out["judge_verdict"] = {}
 
     composition = scene_composition_payload(src)
     out["composition"] = {
         "family": composition["family"],
         "mode": composition["mode"],
+        "manifestation": composition["manifestation"],
         "props": composition["props"] if isinstance(composition["props"], dict) else {},
         "transition_after": composition["transition_after"],
         "data": composition["data"],
@@ -737,9 +1147,16 @@ def normalize_scene(
 
     motion_raw = src.get("motion") if isinstance(src.get("motion"), dict) else {}
     if out["scene_type"] == "motion" or motion_raw:
+        raw_template_id = str(motion_raw.get("template_id") or "").strip()
+        template_id = raw_template_id or out["composition"]["family"] or ""
+        if template_id in {"", "kinetic_title"} and out["composition"]["family"]:
+            template_id = str(out["composition"]["family"] or "").strip()
+        motion_props = motion_raw.get("props") if isinstance(motion_raw.get("props"), dict) else None
+        if template_id != raw_template_id and isinstance(out["composition"]["props"], dict):
+            motion_props = out["composition"]["props"]
         out["motion"] = {
-            "template_id": str(motion_raw.get("template_id") or out["composition"]["family"] or "").strip(),
-            "props": motion_raw.get("props") if isinstance(motion_raw.get("props"), dict) else out["composition"]["props"],
+            "template_id": template_id,
+            "props": motion_props if isinstance(motion_props, dict) else out["composition"]["props"],
             "render_path": _normalize_project_asset_path(
                 motion_raw.get("render_path") or out["composition"]["render_path"],
                 base_dir=base_dir,
@@ -883,6 +1300,24 @@ def backfill_plan(
     )[1]
     render_profile["text_render_mode"] = resolve_text_render_mode(
         raw_render_profile.get("text_render_mode") or brief.get("text_render_mode")
+    )
+    render_profile["auto_compress_oversized_video"] = _normalize_bool(
+        render_profile.get("auto_compress_oversized_video"),
+        True,
+    )
+    render_profile["compression_min_size_mb"] = _normalize_float(
+        render_profile.get("compression_min_size_mb"),
+        150.0,
+    )
+    render_profile["compression_max_average_bitrate_mbps"] = _normalize_float(
+        render_profile.get("compression_max_average_bitrate_mbps"),
+        3.2,
+    )
+    render_profile["compression_target_video_kbps"] = int(
+        _normalize_float(render_profile.get("compression_target_video_kbps"), 2500.0)
+    )
+    render_profile["compression_target_audio_kbps"] = int(
+        _normalize_float(render_profile.get("compression_target_audio_kbps"), 128.0)
     )
     brief["text_render_mode"] = render_profile["text_render_mode"]
 

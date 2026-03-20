@@ -13,17 +13,9 @@ _REPO_ROOT = str(Path(__file__).resolve().parent.parent)
 if _REPO_ROOT not in sys.path:
     sys.path.insert(0, _REPO_ROOT)
 
-# Load .env from repo root so API keys are available.
-_env_path = Path(_REPO_ROOT) / ".env"
-if _env_path.exists():
-    for line in _env_path.read_text().splitlines():
-        line = line.strip()
-        if not line or line.startswith("#") or "=" not in line:
-            continue
-        key, _, val = line.partition("=")
-        key, val = key.strip(), val.strip().strip("'\"")
-        if key and key not in os.environ:
-            os.environ[key] = val
+from core.runtime import load_repo_env
+
+load_repo_env()
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse

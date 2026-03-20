@@ -19,6 +19,29 @@ _OPENAI_TTS_VOICES = {"alloy", "ash", "ballad", "coral", "echo", "fable", "nova"
 DEFAULT_REPLICATE_VIDEO_MODEL = "kwaivgi/kling-v3-video"
 
 
+def load_repo_env(*, override: bool = False, env_path: Path | None = None) -> Path | None:
+    """Load repo-local .env values into os.environ for backend entrypoints."""
+    candidate = Path(env_path).expanduser().resolve() if env_path is not None else REPO_ROOT / ".env"
+    if not candidate.exists():
+        return None
+
+    for line in candidate.read_text().splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, value = line.partition("=")
+        key = key.strip()
+        value = value.strip().strip("'\"")
+        if not key:
+            continue
+        if override or key not in os.environ:
+            os.environ[key] = value
+    return candidate
+
+
+load_repo_env()
+
+
 def check_api_keys() -> dict[str, bool]:
     """Return which external providers are configured in the current environment."""
     return {
@@ -147,6 +170,7 @@ def remotion_capabilities() -> dict[str, bool]:
         "player_available": has_node and (node_modules / "@remotion" / "player" / "package.json").exists(),
         "transitions_available": has_node and (node_modules / "@remotion" / "transitions" / "package.json").exists(),
         "three_available": has_node
+        and (node_modules / "@remotion" / "three" / "package.json").exists()
         and (node_modules / "three" / "package.json").exists()
         and (node_modules / "@react-three" / "fiber" / "package.json").exists()
         and (node_modules / "@react-three" / "drei" / "package.json").exists(),
@@ -188,6 +212,24 @@ def choose_llm_provider(preferred: str | None = None) -> str:
         if keys.get(provider):
             return provider
     raise ValueError("No LLM API keys configured. Set ANTHROPIC_API_KEY or OPENAI_API_KEY.")
+
+
+def resolve_workflow_llm_roles(preferred: str | None = None) -> tuple[str, str]:
+    """Resolve creative and machinery LLM roles for the product workflow.
+
+    Cathode's workflow now treats Claude/Anthropic as the creative scene writer
+    and OpenAI as the deterministic producer/treatment layer when available.
+    """
+    _ = preferred
+    keys = check_api_keys()
+    if not keys.get("anthropic"):
+        raise ValueError(
+            "Cathode's creative workflow now requires ANTHROPIC_API_KEY because Claude writes every scene."
+        )
+
+    creative_provider = "anthropic"
+    treatment_provider = "openai" if keys.get("openai") else creative_provider
+    return creative_provider, treatment_provider
 
 
 def resolve_image_profile(profile: dict | None = None) -> dict:
