@@ -12,6 +12,7 @@ def test_frontend_cost_catalog_exposes_versioned_entries():
     catalog = frontend_cost_catalog()
 
     assert catalog["version"] == COST_CATALOG_VERSION
+    assert any(entry["model"] == "gpt-5.4" for entry in catalog["entries"])
     assert any(entry["model"] == "qwen/qwen-image-2512" for entry in catalog["entries"])
     assert any(entry["model"] == "kwaivgi/kling-v3-video" for entry in catalog["entries"])
 

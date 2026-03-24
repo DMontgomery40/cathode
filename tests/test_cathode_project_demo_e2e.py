@@ -204,7 +204,10 @@ def test_live_demo_skill_scripts_prepare_review_and_render(monkeypatch, tmp_path
             )
 
             payload = json.loads(handoff_payload_path.read_text(encoding="utf-8"))
-            monkeypatch.setattr("core.pipeline_service.choose_llm_provider", lambda provider=None: provider or "openai")
+            monkeypatch.setattr(
+                "core.pipeline_service.resolve_workflow_llm_roles",
+                lambda provider=None: (provider or "openai", provider or "openai"),
+            )
             monkeypatch.setattr(
                 "core.pipeline_service.create_plan_from_brief",
                 lambda **kwargs: {
@@ -248,6 +251,7 @@ def test_live_demo_skill_scripts_prepare_review_and_render(monkeypatch, tmp_path
                     "available_footage": payload["available_footage"],
                     "footage_manifest": payload["footage_manifest"],
                 },
+                render_profile={"render_strategy": "force_ffmpeg", "render_backend": "ffmpeg"},
             )
 
             audio_path = project_dir / "audio" / "scene_000.wav"

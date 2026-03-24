@@ -2,6 +2,7 @@ import base64
 import json
 
 from core.director import (
+    _generate_with_openai,
     _build_storyboard_user_prompt_from_brief,
     _validate_scenes,
     analyze_style_references,
@@ -459,10 +460,51 @@ def test_analyze_style_references_openai_builds_multimodal_request(tmp_path, mon
     )
 
     assert summary == "Detailed style summary"
+    assert captured["model"] == "gpt-5.4"
+    assert captured["reasoning"] == {"effort": "xhigh"}
     assert captured["instructions"] == "system prompt"
     assert captured["input"][0]["content"][0]["type"] == "input_text"
     assert captured["input"][0]["content"][1]["type"] == "input_image"
     assert captured["input"][0]["content"][1]["image_url"].startswith("data:image/png;base64,")
+
+
+def test_generate_with_openai_uses_gpt_5_4_with_xhigh_reasoning(monkeypatch):
+    captured = {}
+
+    class FakeResponses:
+        def create(self, **kwargs):
+            captured.update(kwargs)
+            return type(
+                "Resp",
+                (),
+                {
+                    "output_text": json.dumps(
+                        {
+                            "scenes": [
+                                {
+                                    "id": 0,
+                                    "title": "Scene 1",
+                                    "narration": "Short narration.",
+                                    "visual_prompt": "Premium still.",
+                                }
+                            ]
+                        }
+                    )
+                },
+            )()
+
+    class FakeClient:
+        responses = FakeResponses()
+
+    monkeypatch.setattr("core.director._get_openai_client", lambda: FakeClient())
+
+    scenes = _generate_with_openai("system prompt", "user prompt")
+
+    assert scenes[0]["title"] == "Scene 1"
+    assert captured["model"] == "gpt-5.4"
+    assert captured["reasoning"] == {"effort": "xhigh"}
+    assert captured["text"] == {"format": {"type": "json_object"}}
+    assert "temperature" not in captured
 
 
 def test_analyze_style_references_anthropic_builds_multimodal_request(tmp_path, monkeypatch):
@@ -490,7 +532,7 @@ def test_analyze_style_references_anthropic_builds_multimodal_request(tmp_path, 
     )
 
     assert summary == "Anthropic style summary"
-    assert captured["system"] == "system prompt"
+    assert captured["system"] == [{"type": "text", "text": "system prompt", "cache_control": {"type": "ephemeral"}}]
     assert captured["messages"][0]["content"][0]["type"] == "image"
     assert captured["messages"][0]["content"][-1]["type"] == "text"
 

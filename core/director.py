@@ -37,14 +37,36 @@ def _get_anthropic_client():
     return _anthropic_client
 
 
+def _openai_reasoning_config() -> dict[str, str]:
+    """Return the reasoning settings Cathode requires for OpenAI API calls."""
+    return {"effort": _OPENAI_DIRECTOR_REASONING_EFFORT}
+
+
+def _create_openai_response(**kwargs: Any) -> Any:
+    """Create a Responses API call using Cathode's locked OpenAI model policy."""
+    payload = dict(kwargs)
+    # GPT-5.4 reasoning models reject temperature, so strip it centrally from any
+    # lingering OpenAI call sites instead of letting product flows fail at runtime.
+    payload.pop("temperature", None)
+    payload["model"] = _OPENAI_DIRECTOR_MODEL
+    payload["reasoning"] = _openai_reasoning_config()
+    return _get_openai_client().responses.create(**payload)
+
+
 # Cached prompts
 _PROMPTS: dict[str, str] = {}
 _DIRECTOR_EXAMPLES_INDEX = Path(__file__).parent.parent / "prompts" / "director_examples" / "index.json"
 _TRANSITION_HINTS = {"fade", "wipe"}
 _MANIFESTATION_PATHS = {"authored_image", "native_remotion", "source_video"}
 _MANIFESTATION_RISK_LEVELS = {"low", "medium", "high"}
-_OPENAI_DIRECTOR_MODEL = "gpt-5.1"
+_OPENAI_DIRECTOR_MODEL = "gpt-5.4"
+_OPENAI_DIRECTOR_REASONING_EFFORT = "xhigh"
 _ANTHROPIC_DIRECTOR_MODEL = "claude-sonnet-4-6"
+
+def _cached_system(text: str) -> list[dict[str, Any]]:
+    """Wrap a system prompt string with cache_control for Anthropic prompt caching."""
+    return [{"type": "text", "text": text, "cache_control": {"type": "ephemeral"}}]
+
 
 SOURCE_MODE_BEHAVIOR: dict[str, str] = {
     "ideas_notes": (
@@ -902,6 +924,8 @@ def _llm_call_metadata(
     usage = getattr(response, "usage", None) or (response.get("usage") if isinstance(response, dict) else None)
     input_tokens = _response_usage_value(usage, "input_tokens")
     output_tokens = _response_usage_value(usage, "output_tokens")
+    cache_creation_input_tokens = _response_usage_value(usage, "cache_creation_input_tokens")
+    cache_read_input_tokens = _response_usage_value(usage, "cache_read_input_tokens")
     return {
         "provider": provider,
         "model": model,
@@ -919,6 +943,8 @@ def _llm_call_metadata(
             operation=operation,
             input_tokens=input_tokens,
             output_tokens=output_tokens,
+            cache_creation_input_tokens=cache_creation_input_tokens,
+            cache_read_input_tokens=cache_read_input_tokens,
         ),
     }
 
@@ -1174,13 +1200,11 @@ def analyze_style_references_with_metadata(
     )
 
     if provider == "openai":
-        client = _get_openai_client()
         content: list[dict[str, Any]] = [{"type": "input_text", "text": user_prompt}]
         for path in valid_paths:
             content.append({"type": "input_image", "image_url": _data_url_for_image(path)})
 
-        response = client.responses.create(
-            model=_OPENAI_DIRECTOR_MODEL,
+        response = _create_openai_response(
             instructions=system_prompt,
             input=[{"role": "user", "content": content}],
             temperature=0.3,
@@ -1212,7 +1236,7 @@ def analyze_style_references_with_metadata(
         response = client.messages.create(
             model=_ANTHROPIC_DIRECTOR_MODEL,
             max_tokens=2500,
-            system=system_prompt,
+            system=_cached_system(system_prompt),
             messages=[{"role": "user", "content": content}],
         )
         text_block = next((b for b in response.content if hasattr(b, "text")), None)
@@ -1232,10 +1256,7 @@ def analyze_style_references_with_metadata(
 
 def _generate_with_openai(system_prompt: str, user_prompt: str, *, return_response: bool = False) -> list[dict] | tuple[list[dict], Any]:
     """Generate storyboard using OpenAI Responses API."""
-    client = _get_openai_client()
-
-    response = client.responses.create(
-        model="gpt-5.1",
+    response = _create_openai_response(
         instructions=system_prompt,
         input=user_prompt,
         text={"format": {"type": "json_object"}},
@@ -1254,17 +1275,22 @@ def _generate_with_anthropic(system_prompt: str, user_prompt: str, *, return_res
     """Generate storyboard using Anthropic Claude Sonnet 4.6 with forced structured tool output."""
     client = _get_anthropic_client()
 
-    response = client.messages.create(
+    # Use streaming to avoid timeout on large storyboard requests
+    collected_content = []
+    final_message = None
+    with client.messages.stream(
         model="claude-sonnet-4-6",
-        max_tokens=12000,
-        system=system_prompt,
+        max_tokens=64000,
+        system=_cached_system(system_prompt),
         messages=[
             {"role": "user", "content": user_prompt},
         ],
         tools=[storyboard_tool_schema()],
         tool_choice={"type": "tool", "name": "emit_storyboard"},
-    )
+    ) as stream:
+        final_message = stream.get_final_message()
 
+    response = final_message
     tool_input = extract_storyboard_tool_input(response.content)
     if not tool_input:
         raise ValueError("No structured storyboard tool output from Anthropic")
@@ -1435,9 +1461,7 @@ User feedback: {feedback}
 Please provide the refined prompt."""
 
     if provider == "openai":
-        client = _get_openai_client()
-        response = client.responses.create(
-            model=_OPENAI_DIRECTOR_MODEL,
+        response = _create_openai_response(
             instructions=system_prompt,
             input=user_prompt,
             temperature=0.7,
@@ -1456,7 +1480,7 @@ Please provide the refined prompt."""
         response = client.messages.create(
             model=_ANTHROPIC_DIRECTOR_MODEL,
             max_tokens=2048,
-            system=system_prompt,
+            system=_cached_system(system_prompt),
             messages=[{"role": "user", "content": user_prompt}],
         )
         text_block = next((b for b in response.content if hasattr(b, "text")), None)
@@ -1529,9 +1553,7 @@ def rewrite_prompt_for_synonym_fallback_with_metadata(
         }
 
     if provider == "openai":
-        client = _get_openai_client()
-        response = client.responses.create(
-            model=_OPENAI_DIRECTOR_MODEL,
+        response = _create_openai_response(
             instructions=system_prompt,
             input=user_prompt,
             text={"format": {"type": "json_object"}},
@@ -1551,7 +1573,7 @@ def rewrite_prompt_for_synonym_fallback_with_metadata(
         response = client.messages.create(
             model=_ANTHROPIC_DIRECTOR_MODEL,
             max_tokens=2048,
-            system=system_prompt,
+            system=_cached_system(system_prompt),
             messages=[{"role": "user", "content": user_prompt}],
         )
         text_block = next((b for b in response.content if hasattr(b, "text")), None)
@@ -1583,9 +1605,7 @@ User feedback: {feedback}
 Please provide the refined narration."""
 
     if provider == "openai":
-        client = _get_openai_client()
-        response = client.responses.create(
-            model=_OPENAI_DIRECTOR_MODEL,
+        response = _create_openai_response(
             instructions=system_prompt,
             input=user_prompt,
             temperature=0.7,
@@ -1604,7 +1624,7 @@ Please provide the refined narration."""
         response = client.messages.create(
             model=_ANTHROPIC_DIRECTOR_MODEL,
             max_tokens=2048,
-            system=system_prompt,
+            system=_cached_system(system_prompt),
             messages=[{"role": "user", "content": user_prompt}],
         )
         text_block = next((b for b in response.content if hasattr(b, "text")), None)

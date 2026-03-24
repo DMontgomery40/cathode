@@ -14,6 +14,10 @@ from .video_gen import estimate_scene_duration_seconds, resolve_replicate_video_
 COST_CATALOG_VERSION = "2026-03-14"
 DEFAULT_CNY_TO_USD = 1.0 / 6.9
 
+# Anthropic prompt caching pricing multipliers (relative to base input rate)
+ANTHROPIC_CACHE_CREATE_MULTIPLIER = 1.25
+ANTHROPIC_CACHE_READ_MULTIPLIER = 0.10
+
 _USD = "USD"
 _CNY = "CNY"
 
@@ -33,11 +37,11 @@ _ENTRY_DEFS: list[dict[str, Any]] = [
     {
         "kind": "llm",
         "provider": "openai",
-        "model": "gpt-5.1",
-        "label": "OpenAI GPT-5.1",
+        "model": "gpt-5.4",
+        "label": "OpenAI GPT-5.4",
         "pricing_type": "per_million_tokens",
-        "input_unit_amount": 15.0,
-        "output_unit_amount": 120.0,
+        "input_unit_amount": 2.5,
+        "output_unit_amount": 15.0,
         "currency": _USD,
         "source_url": "https://openai.com/api/pricing/",
         "gating": False,
@@ -346,17 +350,24 @@ def llm_actual_entry(
     operation: str,
     input_tokens: int | None,
     output_tokens: int | None,
+    cache_creation_input_tokens: int | None = None,
+    cache_read_input_tokens: int | None = None,
 ) -> dict[str, Any] | None:
     entry = _find_entry(kind="llm", provider=provider, model=model)
     if not entry:
         return None
     resolved_input = max(0, int(input_tokens or 0))
     resolved_output = max(0, int(output_tokens or 0))
-    total_usd = _money(
-        (float(entry["input_unit_amount"]) * resolved_input / 1_000_000.0)
-        + (float(entry["output_unit_amount"]) * resolved_output / 1_000_000.0)
-    )
-    return {
+    resolved_cache_create = max(0, int(cache_creation_input_tokens or 0))
+    resolved_cache_read = max(0, int(cache_read_input_tokens or 0))
+    input_rate = float(entry["input_unit_amount"])
+    output_rate = float(entry["output_unit_amount"])
+    input_cost = input_rate * resolved_input / 1_000_000.0
+    output_cost = output_rate * resolved_output / 1_000_000.0
+    cache_create_cost = input_rate * ANTHROPIC_CACHE_CREATE_MULTIPLIER * resolved_cache_create / 1_000_000.0
+    cache_read_cost = input_rate * ANTHROPIC_CACHE_READ_MULTIPLIER * resolved_cache_read / 1_000_000.0
+    total_usd = _money(input_cost + output_cost + cache_create_cost + cache_read_cost)
+    result: dict[str, Any] = {
         "kind": "llm",
         "provider": provider,
         "model": model,
@@ -370,11 +381,17 @@ def llm_actual_entry(
             "output_tokens": resolved_output,
         },
         "rates": {
-            "input_per_million_usd": float(entry["input_unit_amount"]),
-            "output_per_million_usd": float(entry["output_unit_amount"]),
+            "input_per_million_usd": input_rate,
+            "output_per_million_usd": output_rate,
         },
         "total_usd": total_usd,
     }
+    if resolved_cache_create or resolved_cache_read:
+        result["units"]["cache_creation_input_tokens"] = resolved_cache_create
+        result["units"]["cache_read_input_tokens"] = resolved_cache_read
+        result["rates"]["cache_create_per_million_usd"] = _money(input_rate * ANTHROPIC_CACHE_CREATE_MULTIPLIER)
+        result["rates"]["cache_read_per_million_usd"] = _money(input_rate * ANTHROPIC_CACHE_READ_MULTIPLIER)
+    return result
 
 
 def _scene_identifier(scene: dict[str, Any]) -> dict[str, Any]:
