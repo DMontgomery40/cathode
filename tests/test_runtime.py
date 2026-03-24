@@ -6,6 +6,7 @@ from core.runtime import (
     check_api_keys,
     load_repo_env,
     remotion_capabilities,
+    resolve_workflow_llm_roles,
     resolve_tts_profile,
     resolve_video_profile,
 )
@@ -132,3 +133,15 @@ def test_load_repo_env_populates_missing_provider_keys(tmp_path, monkeypatch):
     keys = check_api_keys()
     assert keys["replicate"] is True
     assert keys["dashscope"] is True
+
+
+def test_resolve_workflow_llm_roles_keeps_product_pipeline_on_anthropic(monkeypatch):
+    monkeypatch.setattr(
+        "core.runtime.check_api_keys",
+        lambda: {"openai": True, "anthropic": True, "replicate": False, "dashscope": False, "elevenlabs": False},
+    )
+
+    creative_provider, treatment_provider = resolve_workflow_llm_roles("openai")
+
+    assert creative_provider == "anthropic"
+    assert treatment_provider == "anthropic"

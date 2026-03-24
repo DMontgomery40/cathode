@@ -61,8 +61,11 @@ def test_treatment_planner_prompt_forbids_transitions_for_clinical_decks():
 
 
 def test_treatment_planner_applies_supported_registry_override_without_decorative_fade_drift(monkeypatch):
+    captured = {}
+
     class FakeResponses:
         def create(self, **kwargs):
+            captured.update(kwargs)
             return type(
                 "Resp",
                 (),
@@ -99,7 +102,7 @@ def test_treatment_planner_applies_supported_registry_override_without_decorativ
     class FakeClient:
         responses = FakeResponses()
 
-    monkeypatch.setattr("core.treatment_planner._get_openai_client", lambda: FakeClient())
+    monkeypatch.setattr("core.director._get_openai_client", lambda: FakeClient())
     monkeypatch.setattr("core.treatment_planner.load_prompt", lambda name: "system prompt")
 
     scenes, metadata = plan_scene_treatments_with_metadata(
@@ -142,6 +145,8 @@ def test_treatment_planner_applies_supported_registry_override_without_decorativ
     assert scene["composition"]["props"]["heroObject"] == "Warm wave"
     assert scene["composition"]["rationale"] == "Symbolic duet benefits from a cinematic 3D tableau."
     assert metadata["actual"]["operation"] == "treatment_planning"
+    assert captured["model"] == "gpt-5.4"
+    assert captured["reasoning"] == {"effort": "xhigh"}
 
 
 def test_treatment_planner_can_upgrade_weak_text_card_family_to_surreal_tableau(monkeypatch):
@@ -182,7 +187,7 @@ def test_treatment_planner_can_upgrade_weak_text_card_family_to_surreal_tableau(
     class FakeClient:
         responses = FakeResponses()
 
-    monkeypatch.setattr("core.treatment_planner._get_openai_client", lambda: FakeClient())
+    monkeypatch.setattr("core.director._get_openai_client", lambda: FakeClient())
     monkeypatch.setattr("core.treatment_planner.load_prompt", lambda name: "system prompt")
 
     scenes, _ = plan_scene_treatments_with_metadata(
@@ -247,7 +252,7 @@ def test_treatment_planner_cannot_downgrade_obvious_surreal_tableau_to_quote_foc
     class FakeClient:
         responses = FakeResponses()
 
-    monkeypatch.setattr("core.treatment_planner._get_openai_client", lambda: FakeClient())
+    monkeypatch.setattr("core.director._get_openai_client", lambda: FakeClient())
     monkeypatch.setattr("core.treatment_planner.load_prompt", lambda name: "system prompt")
 
     scenes, _ = plan_scene_treatments_with_metadata(
@@ -285,10 +290,10 @@ def test_treatment_planner_cannot_downgrade_obvious_surreal_tableau_to_quote_foc
 
 
 def test_treatment_planner_cannot_upgrade_plain_ui_surface_to_overlay_without_callout_intent(monkeypatch):
-    def fail_if_called():
+    def fail_if_called(**kwargs):
         raise AssertionError("non-native scenes should not call the treatment planner")
 
-    monkeypatch.setattr("core.treatment_planner._get_openai_client", fail_if_called)
+    monkeypatch.setattr("core.director._get_openai_client", fail_if_called)
     monkeypatch.setattr("core.treatment_planner.load_prompt", lambda name: "system prompt")
 
     scenes, metadata = plan_scene_treatments_with_metadata(
@@ -369,7 +374,7 @@ def test_treatment_planner_preserves_scene_copy_and_rebuilds_data_from_scene_sou
     class FakeClient:
         responses = FakeResponses()
 
-    monkeypatch.setattr("core.treatment_planner._get_openai_client", lambda: FakeClient())
+    monkeypatch.setattr("core.director._get_openai_client", lambda: FakeClient())
     monkeypatch.setattr("core.treatment_planner.load_prompt", lambda name: "system prompt")
 
     scenes, _ = plan_scene_treatments_with_metadata(

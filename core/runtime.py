@@ -218,7 +218,9 @@ def resolve_workflow_llm_roles(preferred: str | None = None) -> tuple[str, str]:
     """Resolve creative and machinery LLM roles for the product workflow.
 
     Cathode's workflow now treats Claude/Anthropic as the creative scene writer
-    and OpenAI as the deterministic producer/treatment layer when available.
+    and, for the product pipeline, the treatment planner must stay on Anthropic
+    too so the one-click flow cannot drift back onto an incompatible OpenAI
+    Responses path.
     """
     _ = preferred
     keys = check_api_keys()
@@ -228,7 +230,7 @@ def resolve_workflow_llm_roles(preferred: str | None = None) -> tuple[str, str]:
         )
 
     creative_provider = "anthropic"
-    treatment_provider = "openai" if keys.get("openai") else creative_provider
+    treatment_provider = creative_provider
     return creative_provider, treatment_provider
 
 

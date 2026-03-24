@@ -16,8 +16,9 @@ from .composition_planner import (
 from .director import (
     _ANTHROPIC_DIRECTOR_MODEL,
     _OPENAI_DIRECTOR_MODEL,
+    _cached_system,
+    _create_openai_response,
     _get_anthropic_client,
-    _get_openai_client,
     _llm_call_metadata,
     load_prompt,
 )
@@ -334,9 +335,7 @@ def _merge_treatment_overrides(
 
 
 def _plan_with_openai(system_prompt: str, user_prompt: str) -> tuple[list[dict[str, Any]], Any]:
-    client = _get_openai_client()
-    response = client.responses.create(
-        model=_OPENAI_DIRECTOR_MODEL,
+    response = _create_openai_response(
         instructions=system_prompt,
         input=user_prompt,
         text={"format": {"type": "json_object"}},
@@ -366,7 +365,7 @@ def _plan_with_anthropic(system_prompt: str, user_prompt: str) -> tuple[list[dic
     response = client.messages.create(
         model=_ANTHROPIC_DIRECTOR_MODEL,
         max_tokens=4000,
-        system=system_prompt,
+        system=_cached_system(system_prompt),
         messages=[{"role": "user", "content": user_prompt}],
         tools=[treatment_tool_schema()],
         tool_choice={"type": "tool", "name": "emit_treatments"},

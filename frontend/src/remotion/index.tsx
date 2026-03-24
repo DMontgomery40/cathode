@@ -75,7 +75,7 @@ function useBodyFontSize(
     try {
       const { fontSize } = fitTextOnNLines({
         text,
-        withinWidth,
+        maxBoxWidth: withinWidth,
         maxLines,
         fontFamily: FONT_BODY,
       })
@@ -114,7 +114,7 @@ function useCaptionFontSize(
   return useMemo(() => {
     if (!text.trim()) return CAPTION_SIZE
     try {
-      const { fontSize } = fitTextOnNLines({ text, withinWidth, maxLines, fontFamily: FONT_CAPTION })
+      const { fontSize } = fitTextOnNLines({ text, maxBoxWidth: withinWidth, maxLines, fontFamily: FONT_CAPTION })
       return Math.min(fontSize, maxSize)
     } catch {
       return CAPTION_SIZE
@@ -1643,15 +1643,9 @@ function TimelineProgressionTemplate({ scene }: { scene: RemotionScene }) {
   const spanLabel = sceneStr(scene, 'span_label', '')
   const caption = sceneStr(scene, 'caption', '')
   const p = scene.composition?.props as Record<string, unknown> | undefined
-  const markers = (p?.markers ?? []) as Array<{ label?: string; date?: string; annotation?: string; status?: string }>
-  const effectiveMarkers = markers.length > 0 ? markers : scene.onScreenText.slice(1).map(t => ({ label: t }))
-
-  const statusColors: Record<string, string> = {
-    completed: overrides.accentColor || '#5eead4',
-    active: '#fbbf24',
-    flagged: '#f87171',
-    upcoming: 'rgba(255,255,255,0.3)',
-  }
+  type TimelineMarker = { label?: string; date?: string; annotation?: string; status?: string }
+  const markers = (p?.markers ?? []) as TimelineMarker[]
+  const effectiveMarkers: TimelineMarker[] = markers.length > 0 ? markers : scene.onScreenText.slice(1).map(t => ({ label: t }))
 
   const markerCount = Math.max(effectiveMarkers.length, 1)
   const trackLeft = 140
@@ -1806,7 +1800,6 @@ function AnalogyMetaphorTemplate({ scene }: { scene: RemotionScene }) {
 
   const renderAnalogyPanel = (side: typeof left, fromX: number) => {
     const color = accentColors[side.accent || 'teal'] || (overrides.accentColor || '#5eead4')
-    const arrow = side.direction === 'up' ? '\u2191' : side.direction === 'down' ? '\u2193' : ''
     const panelReveal = spring({
       frame: Math.max(frame - 8, 0),
       fps,
