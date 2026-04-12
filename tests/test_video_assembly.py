@@ -4,7 +4,12 @@ import subprocess
 import wave
 from pathlib import Path
 
-from core.video_assembly import assemble_video, get_media_duration, get_video_scene_timing
+from core.video_assembly import (
+    assemble_video,
+    compress_video_if_oversized,
+    get_media_duration,
+    get_video_scene_timing,
+)
 
 
 def _write_silent_wav(path: Path, duration_seconds: float, sample_rate: int = 16000) -> None:
@@ -151,3 +156,93 @@ def test_assemble_video_prefers_clip_audio_when_requested(tmp_path):
     assert output_path.exists()
     assert output_duration is not None
     assert 0.85 <= output_duration <= 1.15
+
+
+def test_compress_video_if_oversized_reencodes_large_outputs(tmp_path):
+    project_dir = tmp_path / "compress_project"
+    video_path = project_dir / "clips" / "scene_000.mp4"
+    audio_path = project_dir / "audio" / "scene_000.wav"
+
+    _write_color_video(video_path, duration_seconds=2.4, size=(1280, 720))
+    _write_silent_wav(audio_path, duration_seconds=2.4)
+
+    output_path = assemble_video(
+        [
+            {
+                "id": 0,
+                "scene_type": "video",
+                "video_path": str(video_path),
+                "video_trim_start": 0.0,
+                "video_trim_end": None,
+                "video_playback_speed": 1.0,
+                "video_hold_last_frame": True,
+                "audio_path": str(audio_path),
+            }
+        ],
+        project_dir,
+        output_filename="final.mp4",
+        fps=24,
+        render_profile={"auto_compress_oversized_video": False},
+    )
+    original_size = output_path.stat().st_size
+
+    compression = compress_video_if_oversized(
+        output_path,
+        render_profile={
+            "compression_min_size_mb": 0.001,
+            "compression_max_average_bitrate_mbps": 0.01,
+            "compression_target_video_kbps": 220,
+            "compression_target_audio_kbps": 64,
+        },
+    )
+
+    assert compression["compressed"] is True
+    assert compression["reason"] == "compressed"
+    assert output_path.exists()
+    assert output_path.stat().st_size < original_size
+    assert compression["final_size_bytes"] == output_path.stat().st_size
+    output_duration = get_media_duration(output_path)
+    assert output_duration is not None
+    assert 2.1 <= output_duration <= 2.7
+
+
+def test_compress_video_if_oversized_skips_reasonable_outputs(tmp_path):
+    project_dir = tmp_path / "skip_compress_project"
+    video_path = project_dir / "clips" / "scene_000.mp4"
+    audio_path = project_dir / "audio" / "scene_000.wav"
+
+    _write_color_video(video_path, duration_seconds=1.0)
+    _write_silent_wav(audio_path, duration_seconds=1.0)
+
+    output_path = assemble_video(
+        [
+            {
+                "id": 0,
+                "scene_type": "video",
+                "video_path": str(video_path),
+                "video_trim_start": 0.0,
+                "video_trim_end": None,
+                "video_playback_speed": 1.0,
+                "video_hold_last_frame": True,
+                "audio_path": str(audio_path),
+            }
+        ],
+        project_dir,
+        output_filename="final.mp4",
+        fps=24,
+        render_profile={"auto_compress_oversized_video": False},
+    )
+    original_size = output_path.stat().st_size
+
+    compression = compress_video_if_oversized(
+        output_path,
+        render_profile={
+            "compression_min_size_mb": 500.0,
+            "compression_max_average_bitrate_mbps": 100.0,
+        },
+    )
+
+    assert compression["compressed"] is False
+    assert compression["reason"] == "below_size_threshold"
+    assert output_path.exists()
+    assert output_path.stat().st_size == original_size

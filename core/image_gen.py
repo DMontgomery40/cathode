@@ -3,6 +3,7 @@
 from pathlib import Path
 import base64
 import os
+import re
 import traceback
 import sys
 from contextlib import ExitStack
@@ -55,42 +56,27 @@ def _ensure_png(path: Path) -> Path:
     return path
 
 
-# Style suffix appended to every image prompt when apply_style=True.
-NEUTRAL_STYLE_SUFFIX = (
-    ", premium cinematic explainer frame, editorial-grade lighting, layered depth, tactile texture, "
-    "refined composition, high-detail visual storytelling, immaculate typography, polished brand-film still, "
-    "avoid bland template-slide aesthetics, 16:9 aspect ratio"
+_EXACT_TEXT_EDIT_PROMPT_RE = re.compile(
+    r'^change\s+"([^"\r\n]+)"\s+to\s+"([^"\r\n]+)"$',
+    re.IGNORECASE,
 )
 
 
-def _truncate_style_reference_summary(text: str, max_chars: int = 1400) -> str:
-    value = str(text or "").strip()
-    if len(value) <= max_chars:
-        return value
-    return value[: max_chars - 3].rstrip() + "..."
+def build_exact_text_edit_prompt(source_text: str, target_text: str) -> str:
+    source = str(source_text or "")
+    target = str(target_text or "")
+    if not source.strip() or not target.strip():
+        raise ValueError("Exact text edit prompts require both source and target text.")
+    if '"' in source or '"' in target:
+        raise ValueError("Exact text edit prompts do not support embedded double quotes.")
+    return f'change "{source}" to "{target}"'
 
 
-def build_style_suffix(brief: dict | None = None) -> str:
-    """Build a style suffix from a normalized brief (or fallback to neutral style)."""
-    if not isinstance(brief, dict):
-        return NEUTRAL_STYLE_SUFFIX
-
-    pieces = [NEUTRAL_STYLE_SUFFIX]
-    visual_style = str(brief.get("visual_style") or "").strip()
-    tone = str(brief.get("tone") or "").strip()
-    audience = str(brief.get("audience") or "").strip()
-    style_reference_summary = _truncate_style_reference_summary(brief.get("style_reference_summary") or "")
-
-    if visual_style:
-        pieces.append(f", visual style: {visual_style}")
-    if tone:
-        pieces.append(f", tone: {tone}")
-    if audience:
-        pieces.append(f", target audience: {audience}")
-    if style_reference_summary:
-        pieces.append(f", style reference guidance: {style_reference_summary}")
-
-    return "".join(pieces)
+def canonicalize_exact_text_edit_prompt(prompt: str) -> str | None:
+    match = _EXACT_TEXT_EDIT_PROMPT_RE.fullmatch(str(prompt or "").strip())
+    if not match:
+        return None
+    return build_exact_text_edit_prompt(match.group(1), match.group(2))
 
 # DashScope (Alibaba Model Studio) endpoints for Qwen image edit models.
 # NOTE: Beijing + Singapore have separate API keys and endpoints (cross-region calls fail).
@@ -373,9 +359,7 @@ def generate_image(
     _log(f"  Creating parent dir: {output_path.parent}")
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    # Apply style suffix for consistent aesthetic
-    style_suffix = build_style_suffix(brief=brief)
-    full_prompt = f"{prompt}{style_suffix}" if apply_style else prompt
+    full_prompt = prompt
     _log(f"  Full prompt length: {len(full_prompt)} chars")
 
     # Run the model with rate limiting and retry
@@ -457,11 +441,8 @@ def generate_image_local(
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    style_suffix = build_style_suffix(brief=brief)
-    full_prompt = f"{prompt}{style_suffix}" if apply_style else prompt
-
     return generate_local_image(
-        prompt=full_prompt,
+        prompt=prompt,
         output_path=output_path,
         model=str(model or DEFAULT_LOCAL_IMAGE_MODEL).strip() or DEFAULT_LOCAL_IMAGE_MODEL,
         width=TARGET_WIDTH,
@@ -503,6 +484,8 @@ def edit_image(
     else:
         input_image_paths = [Path(input_image_path)]
 
+    normalized_prompt = canonicalize_exact_text_edit_prompt(prompt)
+    prompt = normalized_prompt or str(prompt or "").strip()
     chosen_model = (model or "").strip() or default_image_edit_model()
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -557,8 +540,9 @@ def generate_scene_image(
     scene_id = scene.get("id")
     _log(f"  scene_id: {scene_id}")
 
-    prompt = scene.get("visual_prompt")
-    if not prompt:
+    raw_prompt = scene.get("visual_prompt")
+    prompt = raw_prompt if isinstance(raw_prompt, str) else str(raw_prompt or "")
+    if not prompt.strip():
         _log(f"  ERROR: No visual_prompt in scene!")
         raise ValueError(f"Scene {scene_id} has no visual_prompt")
 

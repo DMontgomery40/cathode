@@ -610,6 +610,158 @@ def test_scene_requires_remotion_for_overlay_and_native_composition():
     ) is False
 
 
+# ── Clinical template families: schema integration ──
+
+CLINICAL_TEMPLATE_FAMILIES = [
+    "cover_hook",
+    "orientation",
+    "synthesis_summary",
+    "closing_cta",
+    "clinical_explanation",
+    "metric_improvement",
+    "brain_region_focus",
+    "metric_comparison",
+    "timeline_progression",
+    "analogy_metaphor",
+]
+
+
+def test_scene_requires_remotion_for_all_clinical_template_families():
+    """Every clinical template family with mode=native requires the Remotion render backend."""
+    for family in CLINICAL_TEMPLATE_FAMILIES:
+        result = scene_requires_remotion(
+            {"scene_type": "motion", "composition": {"family": family, "mode": "native"}}
+        )
+        assert result is True, f"{family} with mode=native should require Remotion"
+
+
+def test_backfill_plan_preserves_clinical_template_composition_props():
+    """Clinical template scenes survive plan normalization with family, mode, and rich props intact."""
+    plan = backfill_plan(
+        {
+            "meta": {
+                "project_name": "clinical_demo",
+                "brief": {
+                    "project_name": "clinical_demo",
+                    "source_material": "Clinical explainer demo",
+                    "composition_mode": "motion_only",
+                },
+            },
+            "scenes": [
+                {
+                    "title": "Cover",
+                    "narration": "Welcome to your brain map.",
+                    "visual_prompt": "Warm clinical background.",
+                    "scene_type": "motion",
+                    "composition": {
+                        "family": "cover_hook",
+                        "mode": "native",
+                        "props": {
+                            "headline": "Your Brain Map",
+                            "subtitle": "A personalized look at your neural landscape",
+                            "kicker": "Session 3 of 10",
+                        },
+                    },
+                },
+                {
+                    "title": "Metric Change",
+                    "narration": "Alpha power improved by 18 percent.",
+                    "visual_prompt": "Before/after comparison.",
+                    "scene_type": "motion",
+                    "composition": {
+                        "family": "metric_improvement",
+                        "mode": "native",
+                        "props": {
+                            "headline": "Alpha Power",
+                            "metric_name": "Fz Alpha (8-12 Hz)",
+                            "before": {"value": "4.2 uV", "label": "Session 1"},
+                            "after": {"value": "6.1 uV", "label": "Session 3"},
+                            "delta": "+45%",
+                            "direction": "improvement",
+                            "caption": "Consistent upward trend",
+                        },
+                    },
+                },
+                {
+                    "title": "Brain Focus",
+                    "narration": "Frontal and temporal regions show improvement.",
+                    "visual_prompt": "Brain diagram.",
+                    "scene_type": "motion",
+                    "composition": {
+                        "family": "brain_region_focus",
+                        "mode": "native",
+                        "props": {
+                            "headline": "Regional Activity",
+                            "regions": [
+                                {"name": "Frontal", "value": "+18%", "status": "improved"},
+                                {"name": "Temporal", "value": "+12%", "status": "improved"},
+                                {"name": "Parietal", "value": "-2%", "status": "stable"},
+                            ],
+                            "caption": "Three regions tracked",
+                        },
+                    },
+                },
+                {
+                    "title": "Timeline",
+                    "narration": "Showing progress over the treatment window.",
+                    "visual_prompt": "Timeline track.",
+                    "scene_type": "motion",
+                    "composition": {
+                        "family": "timeline_progression",
+                        "mode": "native",
+                        "props": {
+                            "headline": "Treatment Window",
+                            "span_label": "6-month protocol",
+                            "markers": [
+                                {"label": "Intake", "date": "Jan", "annotation": "Baseline", "status": "completed"},
+                                {"label": "Mid-point", "date": "Apr", "annotation": "Check-in", "status": "current"},
+                            ],
+                            "caption": "On track",
+                        },
+                    },
+                },
+            ],
+        }
+    )
+
+    # All scenes should survive normalization
+    assert len(plan["scenes"]) == 4
+
+    # Cover hook
+    cover = plan["scenes"][0]
+    assert cover["scene_type"] == "motion"
+    assert cover["composition"]["family"] == "cover_hook"
+    assert cover["composition"]["mode"] == "native"
+    assert cover["composition"]["props"]["headline"] == "Your Brain Map"
+    assert cover["composition"]["props"]["subtitle"] == "A personalized look at your neural landscape"
+    assert cover["composition"]["props"]["kicker"] == "Session 3 of 10"
+
+    # Metric improvement -- nested before/after objects
+    metric = plan["scenes"][1]
+    assert metric["composition"]["family"] == "metric_improvement"
+    assert metric["composition"]["props"]["before"]["value"] == "4.2 uV"
+    assert metric["composition"]["props"]["after"]["label"] == "Session 3"
+    assert metric["composition"]["props"]["delta"] == "+45%"
+    assert metric["composition"]["props"]["direction"] == "improvement"
+
+    # Brain region focus -- regions array
+    brain = plan["scenes"][2]
+    assert brain["composition"]["family"] == "brain_region_focus"
+    assert len(brain["composition"]["props"]["regions"]) == 3
+    assert brain["composition"]["props"]["regions"][0]["name"] == "Frontal"
+    assert brain["composition"]["props"]["regions"][2]["status"] == "stable"
+
+    # Timeline progression -- markers array
+    timeline = plan["scenes"][3]
+    assert timeline["composition"]["family"] == "timeline_progression"
+    assert timeline["composition"]["props"]["span_label"] == "6-month protocol"
+    assert len(timeline["composition"]["props"]["markers"]) == 2
+    assert timeline["composition"]["props"]["markers"][0]["label"] == "Intake"
+
+    # Remotion backend should be auto-selected
+    assert plan["meta"]["render_profile"]["render_backend"] == "remotion"
+
+
 def test_backfill_plan_auto_switches_render_backend_when_scene_requires_remotion():
     plan = backfill_plan(
         {

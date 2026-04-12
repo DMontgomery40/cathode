@@ -142,7 +142,7 @@ test.describe('Cross-route navigation', () => {
 
     // Refresh - note: form state is local, so it resets
     await page.reload()
-    await expect(page.locator('#output-filename')).toHaveValue('final_video.mp4')
+    await expect(page.locator('#output-filename')).toHaveValue(`${PROJECT}.mp4`)
   })
 
   // ── Direct URL navigation ──────────────────────────────────────

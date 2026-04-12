@@ -6,7 +6,7 @@ import os
 import subprocess
 import tempfile
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 # Target dimensions for video output (must match image_gen.py)
 TARGET_WIDTH = 1664
@@ -18,6 +18,11 @@ DEFAULT_AUDIO_CHANNELS = 2
 DEFAULT_AUDIO_LAYOUT = "stereo"
 DEFAULT_SCENE_CODEC = "mp4"
 DEFAULT_SCENE_BITRATE = "6M"
+DEFAULT_AUTO_COMPRESS_OVERSIZED_VIDEO = True
+DEFAULT_COMPRESSION_MIN_SIZE_MB = 150.0
+DEFAULT_COMPRESSION_MAX_AVERAGE_BITRATE_MBPS = 3.2
+DEFAULT_COMPRESSION_TARGET_VIDEO_KBPS = 2500
+DEFAULT_COMPRESSION_TARGET_AUDIO_KBPS = 128
 
 _ENCODER_CACHE: set[str] | None = None
 
@@ -33,6 +38,11 @@ def normalize_render_profile(render_profile: dict[str, Any] | None = None) -> di
         "scene_types": ["image", "video", "motion"],
         "video_encoder": "auto",
         "prefer_gpu": True,
+        "auto_compress_oversized_video": DEFAULT_AUTO_COMPRESS_OVERSIZED_VIDEO,
+        "compression_min_size_mb": DEFAULT_COMPRESSION_MIN_SIZE_MB,
+        "compression_max_average_bitrate_mbps": DEFAULT_COMPRESSION_MAX_AVERAGE_BITRATE_MBPS,
+        "compression_target_video_kbps": DEFAULT_COMPRESSION_TARGET_VIDEO_KBPS,
+        "compression_target_audio_kbps": DEFAULT_COMPRESSION_TARGET_AUDIO_KBPS,
     }
     if isinstance(render_profile, dict):
         profile.update(render_profile)
@@ -43,6 +53,30 @@ def normalize_render_profile(render_profile: dict[str, Any] | None = None) -> di
     profile["fps"] = int(profile.get("fps") or DEFAULT_FPS)
     profile["video_encoder"] = str(profile.get("video_encoder") or "auto").strip().lower() or "auto"
     profile["prefer_gpu"] = bool(profile.get("prefer_gpu", True))
+    profile["auto_compress_oversized_video"] = _normalize_bool(
+        profile.get("auto_compress_oversized_video"),
+        DEFAULT_AUTO_COMPRESS_OVERSIZED_VIDEO,
+    )
+    profile["compression_min_size_mb"] = _normalize_positive_float(
+        profile.get("compression_min_size_mb"),
+        DEFAULT_COMPRESSION_MIN_SIZE_MB,
+    )
+    profile["compression_max_average_bitrate_mbps"] = _normalize_positive_float(
+        profile.get("compression_max_average_bitrate_mbps"),
+        DEFAULT_COMPRESSION_MAX_AVERAGE_BITRATE_MBPS,
+    )
+    profile["compression_target_video_kbps"] = int(
+        _normalize_positive_float(
+            profile.get("compression_target_video_kbps"),
+            DEFAULT_COMPRESSION_TARGET_VIDEO_KBPS,
+        )
+    )
+    profile["compression_target_audio_kbps"] = int(
+        _normalize_positive_float(
+            profile.get("compression_target_audio_kbps"),
+            DEFAULT_COMPRESSION_TARGET_AUDIO_KBPS,
+        )
+    )
 
     scene_types = profile.get("scene_types")
     if not isinstance(scene_types, list) or not scene_types:
@@ -72,6 +106,17 @@ def _normalize_nonnegative_float(value: Any, fallback: float) -> float:
     return parsed
 
 
+def _normalize_bool(value: Any, fallback: bool) -> bool:
+    if isinstance(value, bool):
+        return value
+    normalized = str(value or "").strip().lower()
+    if normalized in {"1", "true", "yes", "on"}:
+        return True
+    if normalized in {"0", "false", "no", "off"}:
+        return False
+    return fallback
+
+
 def _normalize_positive_float(value: Any, fallback: float) -> float:
     try:
         parsed = float(value)
@@ -80,6 +125,12 @@ def _normalize_positive_float(value: Any, fallback: float) -> float:
     if parsed <= 0:
         return fallback
     return parsed
+
+
+def _average_bitrate_mbps(size_bytes: int, duration_seconds: float | None) -> float | None:
+    if duration_seconds is None or duration_seconds <= 0:
+        return None
+    return round((float(size_bytes) * 8.0) / float(duration_seconds) / 1_000_000.0, 3)
 
 
 def _run_command(
@@ -299,6 +350,32 @@ def _encoder_flags(encoder: str) -> list[str]:
     if encoder == "h264_amf":
         return ["-c:v", encoder, "-usage", "transcoding", "-quality", "speed", "-b:v", DEFAULT_SCENE_BITRATE]
     return ["-c:v", encoder]
+
+
+def _compression_encoder_flags(encoder: str, *, video_bitrate_kbps: int) -> list[str]:
+    maxrate_kbps = max(int(round(video_bitrate_kbps * 1.25)), video_bitrate_kbps)
+    bufsize_kbps = maxrate_kbps * 2
+    shared_flags = [
+        "-c:v",
+        encoder,
+        "-b:v",
+        f"{video_bitrate_kbps}k",
+        "-maxrate",
+        f"{maxrate_kbps}k",
+        "-bufsize",
+        f"{bufsize_kbps}k",
+    ]
+    if encoder == "libx264":
+        return ["-c:v", "libx264", "-preset", "medium", *shared_flags[2:]]
+    if encoder == "h264_videotoolbox":
+        return ["-c:v", encoder, "-allow_sw", "1", *shared_flags[2:]]
+    if encoder == "h264_nvenc":
+        return ["-c:v", encoder, "-preset", "p5", *shared_flags[2:]]
+    if encoder == "h264_qsv":
+        return ["-c:v", encoder, "-preset", "medium", *shared_flags[2:]]
+    if encoder == "h264_amf":
+        return ["-c:v", encoder, "-usage", "transcoding", "-quality", "quality", *shared_flags[2:]]
+    return shared_flags
 
 
 def _fit_filter(target_width: int, target_height: int, fps: int) -> str:
@@ -646,6 +723,149 @@ def _concat_scene_files(scene_paths: list[Path], *, output_path: Path) -> None:
         )
     finally:
         concat_list_path.unlink(missing_ok=True)
+
+
+def compress_video_if_oversized(
+    output_path: str | Path,
+    *,
+    render_profile: dict[str, Any] | None = None,
+    progress_callback: Callable[[dict[str, Any]], None] | None = None,
+) -> dict[str, Any]:
+    """Compress a finished MP4 in place when its delivery size is unreasonable."""
+    path = Path(output_path)
+    result: dict[str, Any] = {
+        "path": str(path),
+        "compressed": False,
+        "reason": "",
+        "original_size_bytes": 0,
+        "final_size_bytes": 0,
+        "duration_seconds": None,
+        "original_average_bitrate_mbps": None,
+        "final_average_bitrate_mbps": None,
+    }
+    if not path.exists():
+        result["reason"] = "missing_output"
+        return result
+
+    profile = normalize_render_profile(render_profile)
+    original_size_bytes = path.stat().st_size
+    duration_seconds = get_media_duration(path)
+    original_average_bitrate = _average_bitrate_mbps(original_size_bytes, duration_seconds)
+    result.update(
+        {
+            "original_size_bytes": int(original_size_bytes),
+            "final_size_bytes": int(original_size_bytes),
+            "duration_seconds": duration_seconds,
+            "original_average_bitrate_mbps": original_average_bitrate,
+            "final_average_bitrate_mbps": original_average_bitrate,
+        }
+    )
+
+    if not bool(profile["auto_compress_oversized_video"]):
+        result["reason"] = "disabled"
+        return result
+
+    size_mb = original_size_bytes / (1024.0 * 1024.0)
+    min_size_mb = float(profile["compression_min_size_mb"])
+    max_average_bitrate_mbps = float(profile["compression_max_average_bitrate_mbps"])
+    should_compress = size_mb >= min_size_mb and (
+        original_average_bitrate is None or original_average_bitrate > max_average_bitrate_mbps
+    )
+    if not should_compress:
+        result["reason"] = (
+            "below_size_threshold"
+            if size_mb < min_size_mb
+            else "within_bitrate_budget"
+        )
+        return result
+
+    try:
+        available_encoders = _available_encoders()
+        encoder = "libx264" if "libx264" in available_encoders else _select_video_encoder(profile)
+    except Exception as exc:  # pragma: no cover - ffmpeg discovery failure
+        result["reason"] = "encoder_unavailable"
+        result["error"] = str(exc)
+        return result
+
+    if progress_callback is not None:
+        progress_callback(
+            {
+                "progress": 0.98,
+                "progress_kind": "render",
+                "progress_label": "Compressing oversized video",
+                "progress_detail": f"{size_mb:.1f} MB at {original_average_bitrate or 0:.2f} Mbps",
+                "progress_status": "running",
+            }
+        )
+
+    compressed_path: Path | None = None
+    try:
+        with tempfile.TemporaryDirectory(prefix="compress_final_", dir=path.parent) as tmp_dir:
+            compressed_path = Path(tmp_dir) / path.name
+            cmd = [
+                "ffmpeg",
+                "-y",
+                "-hide_banner",
+                "-loglevel",
+                "error",
+                "-i",
+                str(path),
+                "-map",
+                "0:v:0",
+                "-map",
+                "0:a:0",
+                *(_compression_encoder_flags(
+                    encoder,
+                    video_bitrate_kbps=int(profile["compression_target_video_kbps"]),
+                )),
+                "-c:a",
+                "aac",
+                "-b:a",
+                f"{int(profile['compression_target_audio_kbps'])}k",
+                "-ar",
+                str(DEFAULT_AUDIO_SAMPLE_RATE),
+                "-ac",
+                str(DEFAULT_AUDIO_CHANNELS),
+                "-pix_fmt",
+                "yuv420p",
+                "-movflags",
+                "+faststart",
+                str(compressed_path),
+            ]
+            _run_command(cmd)
+            if not compressed_path.exists() or compressed_path.stat().st_size <= 0:
+                result["reason"] = "compression_failed"
+                return result
+
+            compressed_size_bytes = compressed_path.stat().st_size
+            if compressed_size_bytes >= original_size_bytes:
+                result["reason"] = "not_smaller"
+                return result
+
+            compressed_path.replace(path)
+    except (FileNotFoundError, subprocess.CalledProcessError) as exc:
+        result["reason"] = "compression_failed"
+        result["error"] = str(exc)
+        print(f"Video compression skipped after ffmpeg failure: {exc}")
+        return result
+
+    final_size_bytes = path.stat().st_size
+    final_duration_seconds = get_media_duration(path) or duration_seconds
+    final_average_bitrate = _average_bitrate_mbps(final_size_bytes, final_duration_seconds)
+    print(
+        "Compressed oversized video "
+        f"from {size_mb:.1f} MB to {final_size_bytes / (1024.0 * 1024.0):.1f} MB."
+    )
+    result.update(
+        {
+            "compressed": True,
+            "reason": "compressed",
+            "final_size_bytes": int(final_size_bytes),
+            "duration_seconds": final_duration_seconds,
+            "final_average_bitrate_mbps": final_average_bitrate,
+        }
+    )
+    return result
 
 
 def assemble_video(

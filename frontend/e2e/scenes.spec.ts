@@ -723,4 +723,186 @@ test.describe('Scene Timeline', () => {
       await page.getByRole('button', { name: 'Agent Demo Scene' }).click()
     })
   })
+
+  test.describe.serial('clinical template composition editors', () => {
+    const CLINICAL_PROJECT = `e2e_clinical_template_${Date.now()}`
+
+    test.beforeAll(() => {
+      cloneProjectFixture(PROJECT, CLINICAL_PROJECT)
+      const planPath = path.resolve(process.cwd(), '..', 'projects', CLINICAL_PROJECT, 'plan.json')
+      const plan = JSON.parse(fs.readFileSync(planPath, 'utf8')) as Record<string, any>
+      plan.meta.render_profile = {
+        ...(plan.meta.render_profile || {}),
+        render_backend: 'remotion',
+      }
+      plan.meta.brief = {
+        ...(plan.meta.brief || {}),
+        composition_mode: 'motion_only',
+      }
+
+      // Scene 0: cover_hook with headline, subtitle, kicker
+      Object.assign(plan.scenes[0], {
+        scene_type: 'motion',
+        image_path: null,
+        video_path: null,
+        preview_path: null,
+        composition: {
+          family: 'cover_hook',
+          mode: 'native',
+          props: {
+            headline: 'Your Brain Map',
+            subtitle: 'A personalized neural landscape',
+            kicker: 'Session 3 of 10',
+          },
+        },
+      })
+
+      // Scene 1: metric_improvement with before/after, delta, direction
+      if (plan.scenes.length > 1) {
+        Object.assign(plan.scenes[1], {
+          scene_type: 'motion',
+          image_path: null,
+          video_path: null,
+          preview_path: null,
+          composition: {
+            family: 'metric_improvement',
+            mode: 'native',
+            props: {
+              headline: 'Alpha Power',
+              metric_name: 'Fz Alpha (8-12 Hz)',
+              before: { value: '4.2 uV', label: 'Session 1' },
+              after: { value: '6.1 uV', label: 'Session 3' },
+              delta: '+45%',
+              direction: 'improvement',
+              caption: 'Upward trend',
+            },
+          },
+        })
+      }
+
+      // Scene 2: brain_region_focus with regions array
+      if (plan.scenes.length > 2) {
+        Object.assign(plan.scenes[2], {
+          scene_type: 'motion',
+          image_path: null,
+          video_path: null,
+          preview_path: null,
+          composition: {
+            family: 'brain_region_focus',
+            mode: 'native',
+            props: {
+              headline: 'Regional Activity',
+              regions: [
+                { name: 'Frontal', value: '+18%', status: 'improved' },
+                { name: 'Temporal', value: '+12%', status: 'stable' },
+              ],
+              caption: 'Two regions tracked',
+            },
+          },
+        })
+      }
+
+      // Scene 3: timeline_progression with markers array
+      if (plan.scenes.length > 3) {
+        Object.assign(plan.scenes[3], {
+          scene_type: 'motion',
+          image_path: null,
+          video_path: null,
+          preview_path: null,
+          composition: {
+            family: 'timeline_progression',
+            mode: 'native',
+            props: {
+              headline: 'Treatment Window',
+              span_label: '6-month protocol',
+              markers: [
+                { label: 'Intake', date: 'Jan', annotation: 'Baseline', status: 'completed' },
+                { label: 'Mid-point', date: 'Apr', annotation: 'Check-in', status: 'current' },
+              ],
+              caption: 'On track',
+            },
+          },
+        })
+      }
+
+      fs.writeFileSync(planPath, JSON.stringify(plan, null, 2))
+    })
+
+    test.afterAll(() => {
+      cleanupProjectFixture(CLINICAL_PROJECT)
+    })
+
+    test('cover_hook editor shows headline, subtitle, and kicker fields', async ({ page }) => {
+      await page.goto(`/projects/${CLINICAL_PROJECT}/scenes`)
+      await expect(page.getByRole('region', { name: 'Scene inspector' })).toBeVisible()
+      await expect(page.getByLabel('Scene type')).toHaveValue('motion')
+      await expect(page.getByLabel('Composition family')).toHaveValue('cover_hook')
+      await expect(page.getByLabel('Cover headline')).toHaveValue('Your Brain Map')
+      await expect(page.getByLabel('Cover subtitle')).toHaveValue('A personalized neural landscape')
+      await expect(page.getByLabel('Cover kicker')).toHaveValue('Session 3 of 10')
+    })
+
+    test('metric_improvement editor shows before/after panels and delta', async ({ page }) => {
+      await page.goto(`/projects/${CLINICAL_PROJECT}/scenes`)
+      await expect(page.getByRole('region', { name: 'Scene inspector' })).toBeVisible()
+      await page.getByRole('option').nth(1).click()
+      await expect(page.getByLabel('Composition family')).toHaveValue('metric_improvement')
+      await expect(page.getByLabel('Metric headline')).toHaveValue('Alpha Power')
+      await expect(page.getByLabel('Metric name')).toHaveValue('Fz Alpha (8-12 Hz)')
+      await expect(page.getByLabel('Before value')).toHaveValue('4.2 uV')
+      await expect(page.getByLabel('Before label')).toHaveValue('Session 1')
+      await expect(page.getByLabel('After value')).toHaveValue('6.1 uV')
+      await expect(page.getByLabel('After label')).toHaveValue('Session 3')
+      await expect(page.getByLabel('Delta')).toHaveValue('+45%')
+      await expect(page.getByLabel('Direction')).toHaveValue('improvement')
+    })
+
+    test('brain_region_focus editor shows headline, regions array, and caption', async ({ page }) => {
+      await page.goto(`/projects/${CLINICAL_PROJECT}/scenes`)
+      await expect(page.getByRole('region', { name: 'Scene inspector' })).toBeVisible()
+      await page.getByRole('option').nth(2).click()
+      await expect(page.getByLabel('Composition family')).toHaveValue('brain_region_focus')
+      await expect(page.getByLabel('Brain region headline')).toHaveValue('Regional Activity')
+      await expect(page.getByLabel('Brain region caption')).toHaveValue('Two regions tracked')
+      await expect(page.getByLabel('Region 1 name')).toHaveValue('Frontal')
+      await expect(page.getByLabel('Region 1 value')).toHaveValue('+18%')
+      await expect(page.getByLabel('Region 1 status')).toHaveValue('improved')
+      await expect(page.getByLabel('Region 2 name')).toHaveValue('Temporal')
+      await expect(page.getByLabel('Region 2 value')).toHaveValue('+12%')
+      await expect(page.getByLabel('Region 2 status')).toHaveValue('stable')
+    })
+
+    test('timeline_progression editor shows headline, span_label, markers, and caption', async ({ page }) => {
+      await page.goto(`/projects/${CLINICAL_PROJECT}/scenes`)
+      await expect(page.getByRole('region', { name: 'Scene inspector' })).toBeVisible()
+      await page.getByRole('option').nth(3).click()
+      await expect(page.getByLabel('Composition family')).toHaveValue('timeline_progression')
+      await expect(page.getByLabel('Timeline headline')).toHaveValue('Treatment Window')
+      await expect(page.getByLabel('Span label')).toHaveValue('6-month protocol')
+      await expect(page.getByLabel('Timeline caption')).toHaveValue('On track')
+      await expect(page.getByText('Markers (2)')).toBeVisible()
+    })
+
+    test('cover_hook prop edits persist through the real save endpoint', async ({ page }) => {
+      await page.goto(`/projects/${CLINICAL_PROJECT}/scenes`)
+      await expect(page.getByLabel('Cover headline')).toBeVisible()
+
+      const saveResponse = page.waitForResponse((response) =>
+        response.request().method() === 'PUT'
+        && response.url().includes(`/api/projects/${CLINICAL_PROJECT}/plan`),
+      )
+
+      await page.getByLabel('Cover headline').fill('Updated Brain Map')
+      await saveResponse
+
+      await expect.poll(() => {
+        const plan = readProjectPlan(CLINICAL_PROJECT) as Record<string, any>
+        const props = plan.scenes?.[0]?.composition?.props ?? {}
+        return props.headline ?? ''
+      }).toBe('Updated Brain Map')
+
+      await page.reload()
+      await expect(page.getByLabel('Cover headline')).toHaveValue('Updated Brain Map')
+    })
+  })
 })

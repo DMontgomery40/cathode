@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import shutil
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -15,6 +16,54 @@ from core.runtime import PROJECTS_DIR
 from server.schemas.projects import CreateProjectRequest, ProjectSummary
 
 router = APIRouter()
+
+
+def _normalize_utc_iso(raw_value: Any) -> str | None:
+    value = str(raw_value or "").strip()
+    if not value:
+        return None
+
+    normalized = value.replace("Z", "+00:00") if value.endswith("Z") else value
+    try:
+        moment = datetime.fromisoformat(normalized)
+    except ValueError:
+        return None
+
+    if moment.tzinfo is None:
+        moment = moment.replace(tzinfo=timezone.utc)
+    else:
+        moment = moment.astimezone(timezone.utc)
+    return moment.isoformat().replace("+00:00", "Z")
+
+
+def _utc_iso_from_timestamp(timestamp: float) -> str:
+    return datetime.fromtimestamp(timestamp, tz=timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def _latest_utc_iso(*values: Any) -> str | None:
+    latest: datetime | None = None
+    for raw_value in values:
+        normalized = _normalize_utc_iso(raw_value)
+        if not normalized:
+            continue
+        moment = datetime.fromisoformat(normalized.replace("Z", "+00:00"))
+        if latest is None or moment > latest:
+            latest = moment
+    return latest.isoformat().replace("+00:00", "Z") if latest else None
+
+
+def _project_dates(project_dir: Path, meta: dict[str, Any]) -> tuple[str | None, str | None]:
+    plan_path = project_dir / "plan.json"
+    plan_mtime_utc = _utc_iso_from_timestamp(plan_path.stat().st_mtime) if plan_path.exists() else None
+    meta_created_utc = _normalize_utc_iso(meta.get("created_utc"))
+    meta_updated_utc = _latest_utc_iso(
+        meta_created_utc,
+        meta.get("updated_utc"),
+        meta.get("rendered_utc"),
+    )
+    created_utc = meta_created_utc or plan_mtime_utc
+    updated_utc = meta_updated_utc or plan_mtime_utc or created_utc
+    return created_utc, updated_utc
 
 
 def _project_asset_path(project_dir: Path, raw_path: Any) -> str | None:
@@ -51,6 +100,7 @@ async def get_projects() -> list[ProjectSummary]:
         if plan is None:
             continue
         meta = plan.get("meta") or {}
+        created_utc, updated_utc = _project_dates(project_dir, meta)
         video_path = _project_asset_path(project_dir, meta.get("video_path"))
         thumbnail_path = None
         for scene in plan.get("scenes", []):
@@ -71,6 +121,8 @@ async def get_projects() -> list[ProjectSummary]:
                 has_video=bool(video_path),
                 video_path=video_path,
                 thumbnail_path=thumbnail_path,
+                created_utc=created_utc,
+                updated_utc=updated_utc,
                 image_profile=meta.get("image_profile"),
                 tts_profile=meta.get("tts_profile"),
             )

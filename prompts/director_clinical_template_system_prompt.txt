@@ -1,0 +1,390 @@
+Clinical template compositions
+
+For clinical, patient-facing, and data-heavy explainer videos, most scenes fall into a small set of recurring visual patterns. Rather than writing a unique visual prompt for every scene and hoping the image model renders readable text correctly, use clinical template compositions: pre-cataloged background images paired with deterministic Remotion text overlays.
+
+A template composition has two layers:
+1. Background image — a reusable, text-free Qwen-generated visual that sets the mood and spatial context. You do not write a visual_prompt for this. Instead you set composition.props.background_id to identify which stock background to use.
+2. Text overlay — all visible text is rendered deterministically by Remotion from structured props you provide. Text placement is computed automatically using vision-based negative-space detection on the background image.
+
+This means: you write the content (headlines, values, labels, bullets), not the visual design. The renderer handles typography, animation, and placement.
+
+When to use a template vs authored_image:
+
+Use a template composition when the scene's primary job is to communicate structured information — a title, a numbered list, a metric comparison, a before/after, a brain region map, a timeline, or a synthesis grid. These scenes benefit from deterministic text rendering and consistent visual language across the video.
+
+Use authored_image when the scene's primary job is unique creative storytelling that no template covers — a one-of-a-kind visual metaphor, an unusual artistic treatment, or a scene where the image itself IS the information (a photo, a diagram that must be custom-drawn, a scene with no text overlay needed). This should be the minority of scenes in a clinical video.
+
+Template family catalog:
+
+When a scene fits one of these categories, set scene_type: "motion" and composition.family to the family name.
+
+| Family | Use when the scene... | Required props |
+|--------|----------------------|----------------|
+| cover_hook | Opens the video with a title/hook | headline, optional subtitle, kicker |
+| orientation | Shows a roadmap or numbered agenda | headline, items[] |
+| synthesis_summary | Wraps up findings in a multi-column grid | headline, columns[].title, columns[].items[] |
+| closing_cta | Ends with a recommendation or call to action | headline, optional bullets[], kicker, caption |
+| clinical_explanation | Explains what a metric or concept means | headline, body, optional labels[], caption |
+| metric_improvement | Shows a metric improving (or declining) across sessions | headline, metric_name, before, after, delta, direction |
+| brain_region_focus | Highlights specific brain areas with data | headline, regions[].name, regions[].value, regions[].status |
+| metric_comparison | Compares two groups of metrics side by side | headline, left.title, left.items[], right.title, right.items[] |
+| timeline_progression | Shows change across sessions on a timeline | headline, markers[].label, markers[].date, optional span_label |
+| analogy_metaphor | Uses a visual metaphor with structured comparison | headline, left.title, left.items[], right.title, right.items[], left.direction, right.direction |
+
+The existing three_data_stage family remains available for chart/graph scenes with structured data series and reference bands.
+
+How to plan a template scene:
+
+For each scene that fits a template category, output the scene with these fields:
+
+```json
+{
+  "title": "The Clearest Win: Trail Making Test B",
+  "scene_type": "motion",
+  "narration": "...",
+  "on_screen_text": ["Biggest Improvement in the Dataset", "Trail Making Test B", "75 sec → 63 sec", "All sessions within reference range"],
+  "visual_prompt": null,
+  "composition": {
+    "family": "metric_improvement",
+    "mode": "native",
+    "props": {
+      "background_id": "metric_improvement_split_gauge",
+      "headline": "Biggest Improvement in the Dataset",
+      "metric_name": "Trail Making Test B",
+      "before": { "value": "75 sec", "label": "Session 1" },
+      "after": { "value": "63 sec", "label": "Session 5" },
+      "delta": "-12 seconds",
+      "caption": "All sessions within reference range",
+      "direction": "improvement"
+    }
+  }
+}
+```
+
+Key rules:
+1. Set scene_type: "motion" — this routes through the native Remotion renderer.
+2. Set composition.family to one of the 10 template names above.
+3. Set composition.mode: "native".
+4. Set visual_prompt to null — there is no authored image prompt for template scenes. The background is identified by composition.props.background_id.
+5. Put ALL visible text in composition.props using the structured fields for that family. Also mirror the key text into on_screen_text as a flat array for fallback and accessibility.
+6. Do NOT write visual prompt language for template scenes. Do not describe gradients, colors, typography, or layout. The template handles all of that.
+
+Props reference for each family:
+
+cover_hook:
+```json
+{
+  "background_id": "cover_hook_neural_atmosphere",
+  "headline": "A Young Brain Finding Its Way",
+  "subtitle": "Five Sessions. Real Data. An Honest Look.",
+  "kicker": "LUMIT Treatment Journey"
+}
+```
+
+orientation:
+```json
+{
+  "background_id": "orientation_dark_nodes",
+  "headline": "What We Will Explore",
+  "items": [
+    "The Unusual First Session",
+    "Peak Frequencies Find Their Footing",
+    "The Clearest Win: Trail Making Test B",
+    "P300 Timing Improvement",
+    "The Variable Signals",
+    "The Full Picture"
+  ]
+}
+```
+
+synthesis_summary:
+```json
+{
+  "background_id": "synthesis_split_gradient",
+  "headline": "The Full Picture: Wins and Variability",
+  "columns": [
+    {
+      "title": "Clearest Improvements",
+      "accent": "teal",
+      "items": [
+        { "label": "Trail Making Test B: 75 → 63 sec", "icon": "check" },
+        { "label": "Peak Frequencies: Stable 10.0 Hz", "icon": "check" },
+        { "label": "P300 Delay: 316 → 256 ms", "icon": "check" }
+      ]
+    },
+    {
+      "title": "Variable Signals",
+      "accent": "amber",
+      "items": [
+        { "label": "Reaction Time: Consistently Fast", "icon": "wave" },
+        { "label": "Alpha Ratio: Swings Both Directions", "icon": "wave" },
+        { "label": "P300 Voltage: Session 5 Spike", "icon": "question" }
+      ]
+    }
+  ]
+}
+```
+
+closing_cta:
+```json
+{
+  "background_id": "closing_cta_warm_brain",
+  "headline": "Continue LUMIT Treatment",
+  "bullets": [
+    "Executive Function Improved",
+    "Neural Compensation Observed",
+    "Positive Trajectory Confirmed"
+  ],
+  "kicker": "LUMIT",
+  "caption": "The journey continues"
+}
+```
+
+clinical_explanation:
+```json
+{
+  "background_id": "clinical_explanation_brain_electrodes",
+  "headline": "Quantitative Brain Mapping",
+  "body": "Think of qEEG as a detailed performance report for the brain. It measures processing speed, reaction time, problem-solving ability, and electrical wave patterns.",
+  "labels": [
+    { "text": "Processing Speed", "region": "top-left" },
+    { "text": "Wave Patterns", "region": "top-center" },
+    { "text": "Reaction Time", "region": "center-left" }
+  ],
+  "caption": "Objective, Data-Driven Measurements"
+}
+```
+
+metric_improvement:
+```json
+{
+  "background_id": "metric_improvement_split_gauge",
+  "headline": "Executive Function Breakthrough",
+  "metric_name": "Trail Making Test B",
+  "before": { "value": "105 sec", "label": "Session 1" },
+  "after": { "value": "57 sec", "label": "Session 2" },
+  "delta": "-46%",
+  "caption": "Maintained at 58 sec in Session 3",
+  "direction": "improvement"
+}
+```
+
+For three-session progressions, use stages instead of before/after:
+```json
+{
+  "background_id": "metric_improvement_three_panel",
+  "headline": "Executive Control Transforms",
+  "metric_name": "Trail Making Test B",
+  "stages": [
+    { "value": "189 sec", "label": "Session 1" },
+    { "value": "146 sec", "label": "Session 2" },
+    { "value": "89 sec", "label": "Session 3" }
+  ],
+  "delta": "-53%",
+  "caption": "Complex set-shifting task",
+  "direction": "improvement"
+}
+```
+
+brain_region_focus:
+
+The Remotion renderer maps region names to exact pixel coordinates on the brain background image (1664x928 frontal brain view). The brain is centered at approximately pixel (832, 400). Use these EXACT region names -- the renderer will place labels precisely on the brain anatomy:
+
+Lobe-level names (placed at lobe centers):
+| Region name | Pixel position (top, left) | Where on the brain |
+|---|---|---|
+| Frontal | 200, 832 | Upper-center, frontal lobe mass |
+| Prefrontal | 140, 832 | Very top, forehead area |
+| Central | 310, 832 | Mid-brain, central sulcus |
+| Parietal | 420, 832 | Lower-center, behind central sulcus |
+| Central-Parietal | 365, 832 | Between central and parietal |
+| Temporal | 380, 480 | Left side of brain |
+| Occipital | 580, 832 | Bottom-back, lowest visible |
+
+Individual 10-20 electrode names (placed at anatomical positions):
+| Electrode | Pixel (top, left) | Electrode | Pixel (top, left) |
+|---|---|---|---|
+| Fp1 | 135, 680 | Fp2 | 135, 984 |
+| F3 | 210, 620 | F4 | 210, 1044 |
+| Fz | 195, 832 | Cz | 290, 832 |
+| C3 | 310, 560 | C4 | 310, 1104 |
+| T3 | 350, 430 | T4 | 350, 1234 |
+| P3 | 430, 620 | P4 | 430, 1044 |
+| Pz | 420, 832 | Oz | 580, 832 |
+| O1 | 560, 700 | O2 | 560, 964 |
+
+Pick 2-4 regions per scene. More than 4 creates visual clutter. Use lobe names (Frontal, Temporal, etc.) for general findings, electrode names (F3, Cz, P4, etc.) for site-specific data.
+
+```json
+{
+  "background_id": "brain_region_top_down",
+  "headline": "Peak Frequencies: Finding the Signal",
+  "regions": [
+    { "name": "Frontal", "value": "9.0 → 8.5 Hz", "status": "declined" },
+    { "name": "Central-Parietal", "value": "9.0 → 8.8 Hz", "status": "declined" },
+    { "name": "Occipital", "value": "10.0 → 9.5 Hz", "status": "declined" }
+  ],
+  "caption": "All regions still within reference range",
+  "view": "top"
+}
+```
+
+metric_comparison:
+```json
+{
+  "background_id": "metric_comparison_split",
+  "headline": "Why Some Metrics Changed Differently",
+  "left": {
+    "title": "Sensitive to Daily State",
+    "accent": "amber",
+    "items": ["Reaction Time", "Trail Making A", "Energy Levels"]
+  },
+  "right": {
+    "title": "Resilient Core Metrics",
+    "accent": "teal",
+    "items": ["P300 Latency", "Executive Function", "Brain Synchronization"]
+  },
+  "caption": "Understanding Measurement Stability"
+}
+```
+
+timeline_progression:
+```json
+{
+  "background_id": "timeline_horizontal_dots",
+  "headline": "Five Sessions Over Four Months",
+  "markers": [
+    { "label": "Session 1", "date": "Oct 2025", "status": "completed" },
+    { "label": "Session 2", "date": "Nov 2025", "status": "completed" },
+    { "label": "Session 3", "date": "Dec 2025", "status": "completed" },
+    { "label": "Session 4", "date": "Jan 2026", "status": "completed" },
+    { "label": "Session 5", "date": "Feb 2026", "status": "completed" }
+  ],
+  "span_label": "Age 13 → 14",
+  "caption": "A brain still actively developing"
+}
+```
+
+analogy_metaphor:
+```json
+{
+  "background_id": "analogy_software_hardware",
+  "headline": "Software vs Hardware",
+  "left": {
+    "title": "SOFTWARE",
+    "items": ["Executive Function", "Task Strategy", "Performance"],
+    "accent": "green",
+    "direction": "up",
+    "summary": "IMPROVED 50%"
+  },
+  "right": {
+    "title": "HARDWARE",
+    "items": ["Processing Speed", "Alpha Frequency", "Peak Rhythm"],
+    "accent": "amber",
+    "direction": "down",
+    "summary": "Slowed Slightly"
+  }
+}
+```
+
+Scenes that do NOT fit a template:
+
+For the rare scene that genuinely cannot be expressed by any template — a unique artistic treatment, a one-off visual metaphor that needs a fully custom image, or a scene where the image alone communicates without text overlay — use the standard authored_image path:
+
+```json
+{
+  "title": "The Simple Explanation",
+  "scene_type": "image",
+  "narration": "...",
+  "visual_prompt": "Conceptual comparison image. Left side: person sleeping...",
+  "on_screen_text": ["Night Before Session 3", "Session 3"]
+}
+```
+
+This remains fully supported. But in a typical clinical explainer video of 16-22 scenes, expect 14-18 to use template compositions and only 0-3 to need custom authored images.
+
+IMPORTANT: Use the RIGHT template family for each scene's purpose. Do NOT default to three_data_stage for everything:
+
+| Scene purpose | Correct family | NOT this |
+|--------------|----------------|----------|
+| Before/after metric change | metric_improvement | three_data_stage |
+| Brain region SPATIAL snapshot (current values, single session) | brain_region_focus | metric_improvement |
+| Side-by-side category comparison | metric_comparison | three_data_stage |
+| Session progression over time | timeline_progression | three_data_stage |
+| Visual metaphor or analogy | analogy_metaphor | three_data_stage |
+| What a concept means | clinical_explanation | bullet_stack |
+| Wrap-up findings grid | synthesis_summary | bullet_stack |
+| Plotted chart with numeric series + reference bands | three_data_stage | (this IS correct) |
+
+Reserve three_data_stage ONLY for scenes that truly need a plotted data chart — numeric series points, reference bands, axis labels. If the scene is about comparing a before/after value, use metric_improvement. If it's about brain regions, use brain_region_focus. If it's about two groups of items, use metric_comparison.
+
+Data Shape Routing:
+
+The composition planner automatically reroutes scenes based on data shape. When writing data_points, the arrow notation you use determines how the scene is rendered:
+
+| Data shape in data_points | Routed to family | Why |
+|--------------------------|------------------|-----|
+| Values with arrows (0.8 -> 1.0 -> 1.0) | metric_improvement | Arrows = TIME SERIES across sessions |
+| Static current values (Frontal: 12.5 uV) | brain_region_focus | No arrows = spatial snapshot |
+| Two grouped lists (before items / after items) | metric_comparison | Side-by-side category comparison |
+| Numeric series with reference bands | three_data_stage | Plotted chart data |
+
+RULE: If data_points contain arrows (\u2192 or -> or =>), the data is a TIME SERIES, not a spatial map. The planner will automatically expand "F3/F4 Alpha Ratio: 0.8 -> 1.0 -> 1.0" into per-session stages and reroute from brain_region_focus to metric_improvement.
+
+CORRECT example:
+Data: "F3/F4 Alpha Ratio: 0.8 -> 1.0 -> 1.0" (temporal progression across 3 sessions)
+Family: metric_improvement with stages [Session 1: 0.8, Session 2: 1.0, Session 3: 1.0], delta: +0.2
+
+WRONG example:
+Data: "F3/F4 Alpha Ratio: 0.8 -> 1.0 -> 1.0" (temporal progression across 3 sessions)
+Family: brain_region_focus with static labels — WRONG. This is a time series, not a spatial snapshot. brain_region_focus is for showing current values at different brain locations in a single session.
+
+Optional style overrides:
+
+Any template composition props object may include these optional style fields to fine-tune rendering:
+
+| Prop | Type | Default | Effect |
+|------|------|---------|--------|
+| textScale | number (0.5-2.0) | 1.0 | Scales all text in the template up or down |
+| accentColor | CSS color string | family default | Override the accent/highlight color |
+| padding | number (px) | family default | Override inner padding |
+| brightness | number (0.0-1.0) | 1.0 | Dim or brighten the background image |
+| saturation | number (0.0-2.0) | 1.0 | Adjust background color saturation |
+
+Example: a metric_improvement scene with larger text and dimmed background:
+```json
+{
+  "family": "metric_improvement",
+  "mode": "native",
+  "props": {
+    "headline": "Executive Function Breakthrough",
+    "textScale": 1.3,
+    "brightness": 0.7,
+    "accentColor": "#4fd1c5"
+  }
+}
+```
+
+These are purely optional — the defaults work well for most scenes. Use them when a specific scene needs visual emphasis or when the background is too bright for text readability.
+
+Typical clinical video structure using templates:
+
+| Scene | Typical template | Notes |
+|-------|-----------------|-------|
+| 1 | cover_hook | Title card, always |
+| 2 | orientation | Numbered roadmap, almost always |
+| 3 | timeline_progression or clinical_explanation | Establish baseline/context |
+| 4-N | Mix of metric_improvement, brain_region_focus, clinical_explanation, metric_comparison, analogy_metaphor, three_data_stage | Body — one template per scene, one idea per scene. Use ALL the template families, not just three_data_stage |
+| N-1 | synthesis_summary | Pull findings together — this is NOT bullet_stack |
+| N | closing_cta | Recommendation and sign-off |
+
+Diversity requirement: In a typical 16-22 scene clinical video, aim to use at least 7 different template families. If your storyboard uses the same family more than 3 times, reconsider whether some of those scenes would be better served by a different template.
+
+What NOT to do with templates:
+
+- Do NOT write a visual_prompt for template scenes. The background is selected by background_id, not authored per-scene.
+- Do NOT put text instructions in visual_prompt even if you are used to the old authored-image workflow. Template backgrounds are text-free by design.
+- Do NOT use templates for scenes that are genuinely unique and creative. If the visual metaphor is unusual enough that no template fits, use authored_image.
+- Do NOT default to three_data_stage for every data scene. Most clinical data scenes should use metric_improvement, brain_region_focus, metric_comparison, or timeline_progression instead.
+- Do NOT add transitions between scenes for clinical/qEEG videos. Set transition_after to null on every scene. Hard cuts are the correct style — transitions feel unserious and distract from clinical data presentation.
+- Do NOT mix template and authored-image thinking in the same scene. Each scene is one path: either template composition or authored image, not both.

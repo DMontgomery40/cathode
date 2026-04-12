@@ -26,6 +26,17 @@ function labelForEntry(entry: Record<string, unknown>): string {
   return parts.join(' · ')
 }
 
+function cacheDetail(entry: Record<string, unknown>): string | null {
+  const units = entry.units && typeof entry.units === 'object' ? entry.units as Record<string, unknown> : null
+  if (!units) return null
+  const cacheCreate = asNumber(units.cache_creation_input_tokens)
+  const cacheRead = asNumber(units.cache_read_input_tokens)
+  if (!cacheCreate && !cacheRead) return null
+  const total = asNumber(units.input_tokens) + cacheCreate + cacheRead
+  const hitRate = total > 0 ? Math.round((cacheRead / total) * 100) : 0
+  return `Cache: ${hitRate}% hit (${(cacheRead / 1000).toFixed(0)}K read, ${(cacheCreate / 1000).toFixed(0)}K write)`
+}
+
 export function CostPanel({ plan }: { plan: Plan | undefined }) {
   const estimate = plan?.meta?.cost_estimate && typeof plan.meta.cost_estimate === 'object'
     ? plan.meta.cost_estimate as Record<string, unknown>
@@ -71,6 +82,10 @@ export function CostPanel({ plan }: { plan: Plan | undefined }) {
       {estimate && typeof estimate.breakdown === 'object' && estimate.breakdown && (
         <div className="workspace-kpi-grid" style={{ marginBottom: 'var(--space-3)' }}>
           <div>
+            <p className="workspace-eyebrow">LLM</p>
+            <div className="workspace-panel-title text-[var(--text-xl)]">{money((estimate.breakdown as Record<string, unknown>).llm_total_usd)}</div>
+          </div>
+          <div>
             <p className="workspace-eyebrow">Video</p>
             <div className="workspace-panel-title text-[var(--text-xl)]">{money((estimate.breakdown as Record<string, unknown>).video_generation_total_usd)}</div>
           </div>
@@ -81,6 +96,18 @@ export function CostPanel({ plan }: { plan: Plan | undefined }) {
           <div>
             <p className="workspace-eyebrow">Paid TTS</p>
             <div className="workspace-panel-title text-[var(--text-xl)]">{money((estimate.breakdown as Record<string, unknown>).tts_total_usd)}</div>
+          </div>
+        </div>
+      )}
+      {actual && typeof actual.total_usd === 'number' && actual.total_usd > 0 && (
+        <div className="workspace-kpi-grid" style={{ marginBottom: 'var(--space-3)' }}>
+          <div>
+            <p className="workspace-eyebrow">Actual LLM</p>
+            <div className="workspace-panel-title text-[var(--text-xl)]">{money((actual as Record<string, unknown>).llm_total_usd)}</div>
+          </div>
+          <div>
+            <p className="workspace-eyebrow">Actual Total</p>
+            <div className="workspace-panel-title text-[var(--text-xl)]">{money(actual.total_usd)}</div>
           </div>
         </div>
       )}
@@ -95,7 +122,7 @@ export function CostPanel({ plan }: { plan: Plan | undefined }) {
             </div>
           </li>
         ))}
-        {!estimateEntries.length && actualEntries.slice(0, 3).map((entry, index) => (
+        {!estimateEntries.length && actualEntries.slice(0, 5).map((entry, index) => (
           <li key={`actual-${index}`} className="rounded-[var(--radius-md)] border border-[var(--border-subtle)] bg-[var(--surface-stage)] px-[var(--space-3)] py-[var(--space-2)]">
             <div className="text-[var(--text-primary)]" style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--weight-medium)' }}>
               {labelForEntry(entry)}
@@ -103,6 +130,11 @@ export function CostPanel({ plan }: { plan: Plan | undefined }) {
             <div className="text-[var(--text-tertiary)]" style={{ fontSize: 'var(--text-xs)', marginTop: 'var(--space-1)' }}>
               Actual {money(entry.total_usd)}
             </div>
+            {cacheDetail(entry) && (
+              <div className="text-[var(--text-tertiary)]" style={{ fontSize: 'var(--text-xs)', marginTop: 'var(--space-1)' }}>
+                {cacheDetail(entry)}
+              </div>
+            )}
           </li>
         ))}
       </ul>

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 from pathlib import Path
 
 from core.pipeline_service import create_project_from_brief_service, generate_project_assets_service
@@ -10,7 +11,10 @@ def test_create_project_from_brief_service_copies_and_assigns_reviewed_footage(m
     source_clip.write_bytes(b"demo")
     project_dir = tmp_path / "demo_project"
 
-    monkeypatch.setattr("core.pipeline_service.choose_llm_provider", lambda provider=None: provider or "openai")
+    monkeypatch.setattr(
+        "core.pipeline_service.resolve_workflow_llm_roles",
+        lambda provider=None: (provider or "anthropic", "openai"),
+    )
     monkeypatch.setattr(
         "core.pipeline_service.create_plan_from_brief",
         lambda **kwargs: {
@@ -74,7 +78,10 @@ def test_create_project_from_brief_service_recomputes_available_footage_after_mi
     source_clip.write_bytes(b"demo")
     project_dir = tmp_path / "demo_project"
 
-    monkeypatch.setattr("core.pipeline_service.choose_llm_provider", lambda provider=None: provider or "openai")
+    monkeypatch.setattr(
+        "core.pipeline_service.resolve_workflow_llm_roles",
+        lambda provider=None: (provider or "anthropic", "openai"),
+    )
     monkeypatch.setattr(
         "core.pipeline_service.create_plan_from_brief",
         lambda **kwargs: {
@@ -129,7 +136,10 @@ def test_create_project_from_brief_service_recomputes_available_footage_after_mi
 def test_create_project_from_brief_service_persists_agent_demo_profile(monkeypatch, tmp_path):
     project_dir = tmp_path / "demo_project"
 
-    monkeypatch.setattr("core.pipeline_service.choose_llm_provider", lambda provider=None: provider or "openai")
+    monkeypatch.setattr(
+        "core.pipeline_service.resolve_workflow_llm_roles",
+        lambda provider=None: (provider or "anthropic", "openai"),
+    )
     monkeypatch.setattr(
         "core.pipeline_service.create_plan_from_brief",
         lambda **kwargs: {
@@ -235,6 +245,70 @@ def test_generate_project_assets_service_emits_scene_progress(monkeypatch, tmp_p
     assert events[-1]["progress_label"] == "Asset pass complete"
 
 
+def test_generate_project_assets_service_skips_native_remotion_scenes_for_image_generation(monkeypatch, tmp_path):
+    project_dir = tmp_path / "demo_project"
+    project_dir.mkdir()
+
+    plan = {
+        "meta": {
+            "brief": {},
+            "image_profile": {"provider": "replicate", "generation_model": "demo-model"},
+            "video_profile": {"provider": "manual"},
+            "tts_profile": {"provider": "kokoro", "voice": "af", "speed": 1.1},
+        },
+        "scenes": [
+            {
+                "id": 1,
+                "uid": "scene_001",
+                "title": "Still",
+                "scene_type": "image",
+                "visual_prompt": "Ordinary still",
+                "narration": "Scene one",
+            },
+            {
+                "id": 2,
+                "uid": "scene_002",
+                "title": "Overlay beat",
+                "scene_type": "image",
+                "visual_prompt": "Pinned callout scene",
+                "narration": "Scene two",
+                "composition": {
+                    "family": "software_demo_focus",
+                    "mode": "overlay",
+                    "manifestation": "native_remotion",
+                    "props": {"headline": "Pinned callout"},
+                },
+            },
+        ],
+    }
+
+    image_calls: list[str] = []
+
+    monkeypatch.setattr("core.pipeline_service.load_plan", lambda _project_dir: plan)
+    monkeypatch.setattr("core.pipeline_service.save_plan", lambda _project_dir, saved_plan: saved_plan)
+    monkeypatch.setattr("core.pipeline_service.resolve_image_profile", lambda profile=None: profile or {})
+    monkeypatch.setattr("core.pipeline_service.resolve_video_profile", lambda profile=None: profile or {})
+    monkeypatch.setattr("core.pipeline_service.resolve_tts_profile", lambda profile=None: profile or {})
+
+    def fake_image(scene, _project_dir, **_kwargs):
+        image_calls.append(str(scene["uid"]))
+        path = tmp_path / f"{scene['uid']}.png"
+        path.write_bytes(b"png")
+        return path
+
+    monkeypatch.setattr("core.pipeline_service.generate_scene_image", fake_image)
+
+    result = generate_project_assets_service(
+        project_dir,
+        generate_images=True,
+        generate_audio=False,
+        generate_videos=False,
+    )
+
+    assert result["images_generated"] == 1
+    assert image_calls == ["scene_001"]
+
+
 def test_generate_project_assets_service_skips_final_audio_when_replicate_clip_audio_is_expected(monkeypatch, tmp_path):
     project_dir = tmp_path / "demo_project"
     project_dir.mkdir()
@@ -262,6 +336,12 @@ def test_generate_project_assets_service_skips_final_audio_when_replicate_clip_a
                 "visual_prompt": "A founder speaks to camera.",
                 "narration": "Come visit our showroom this weekend.",
                 "audio_path": str(tmp_path / "stale.wav"),
+                "composition": {
+                    "family": "software_demo_focus",
+                    "mode": "overlay",
+                    "manifestation": "source_video",
+                    "props": {"headline": "Pinned callout"},
+                },
             },
         ],
     }
@@ -388,3 +468,144 @@ def test_generate_project_assets_service_runs_agent_demo_for_video_scenes(monkey
     assert prompt_calls[0]["workspace_path"] == "/tmp/workspace"
     assert run_calls[0]["agent_name"] == "codex"
     assert saved_plans[-1]["scenes"][0]["video_path"] == str(tmp_path / "scene_001.mp4")
+
+
+def test_generate_project_assets_service_runs_primary_only_review_and_text_repair(monkeypatch, tmp_path):
+    project_dir = tmp_path / "demo_project"
+    project_dir.mkdir()
+    images_dir = project_dir / "images"
+    images_dir.mkdir(parents=True, exist_ok=True)
+    drifted_image = images_dir / "image_scene_001_textfix.png"
+    drifted_image.write_bytes(b"png-drifted")
+    canonical_image = images_dir / "scene_001.png"
+
+    plan_state = {
+        "meta": {
+            "brief": {},
+            "image_profile": {
+                "provider": "replicate",
+                "generation_model": "demo-model",
+                "edit_model": "qwen-image-edit-2511",
+            },
+            "video_profile": {"provider": "manual"},
+            "tts_profile": {"provider": "kokoro", "voice": "af", "speed": 1.1},
+        },
+        "scenes": [
+            {
+                "id": 1,
+                "uid": "scene_001",
+                "title": "Gap slide",
+                "scene_type": "image",
+                "visual_prompt": 'Still slide with "Inconsistency".',
+                "narration": "Call out the remaining gaps honestly.",
+                "on_screen_text": ["Inconsistency in low-structure situations"],
+                "manifestation_plan": {
+                    "primary_path": "authored_image",
+                    "fallback_path": "native_remotion",
+                    "text_expected": True,
+                    "text_critical": False,
+                },
+                "composition": {
+                    "manifestation": "authored_image",
+                    "family": "static_media",
+                    "mode": "none",
+                },
+                "image_path": str(drifted_image),
+                "judge_verdict": {
+                    "winner": "primary",
+                    "text_repairs": [],
+                    "frame_refs": [{"path": "images/image_scene_001_textfix.png"}],
+                },
+                "candidate_outputs": {
+                    "primary": {
+                        "candidate_id": "primary",
+                        "candidate_type": "authored_image",
+                        "source_path": "images/image_scene_001_textfix.png",
+                        "review_status": "winner",
+                    }
+                },
+            }
+        ],
+    }
+
+    review_calls: list[tuple[str, tuple[str, ...] | None, str]] = []
+    edit_prompts: list[str] = []
+    edited_image = images_dir / ".scene_001_textfix.png"
+    edited_image.write_bytes(b"png-edit")
+
+    def fake_load(_project_dir):
+        return copy.deepcopy(plan_state)
+
+    def fake_save(_project_dir, saved_plan):
+        nonlocal plan_state
+        plan_state = copy.deepcopy(saved_plan)
+        return saved_plan
+
+    def fake_review(_project_dir, *, trigger, scene_candidates=None, scene_uids=None):
+        assert scene_candidates is not None
+        candidate_source = scene_candidates["scene_001"][0]["source_path"]
+        review_calls.append((trigger, tuple(scene_uids) if scene_uids else None, candidate_source))
+        assert scene_candidates is not None
+        assert list(scene_candidates) == ["scene_001"]
+        assert len(scene_candidates["scene_001"]) == 1
+        assert scene_candidates["scene_001"][0]["candidate_id"] == "primary"
+        assert candidate_source == str(canonical_image.resolve())
+        scene = plan_state["scenes"][0]
+        scene["candidate_outputs"] = {
+            "primary": {
+                "candidate_id": "primary",
+                "candidate_type": "authored_image",
+                "source_path": str(canonical_image.resolve()),
+                "review_status": "winner",
+            }
+        }
+        if trigger == "post_asset_generation_review":
+            scene["judge_verdict"] = {
+                "winner": "primary",
+                "text_repairs": [
+                    {
+                        "candidate_id": "primary",
+                        "wrong_text": "Inconsitency",
+                        "correct_text": "Inconsistency",
+                        "reason": "Direct literal correction is safe.",
+                    }
+                ],
+            }
+        else:
+            scene["judge_verdict"] = {
+                "winner": "primary",
+                "text_repairs": [],
+            }
+        return {"provider": "codex", "scene_count": 1, "review_dir": "/tmp/review", "scenes": []}
+
+    monkeypatch.setattr("core.pipeline_service.load_plan", fake_load)
+    monkeypatch.setattr("core.pipeline_service.save_plan", fake_save)
+    monkeypatch.setattr("core.pipeline_service.resolve_image_profile", lambda profile=None: profile or {})
+    monkeypatch.setattr("core.pipeline_service.resolve_video_profile", lambda profile=None: profile or {})
+    monkeypatch.setattr("core.pipeline_service.resolve_tts_profile", lambda profile=None: profile or {})
+    monkeypatch.setattr("core.pipeline_service.review_project_scenes", fake_review)
+    monkeypatch.setattr(
+        "core.pipeline_service.edit_image",
+        lambda prompt, *_args, **_kwargs: edit_prompts.append(prompt) or edited_image,
+    )
+
+    result = generate_project_assets_service(
+        project_dir,
+        generate_images=False,
+        generate_audio=False,
+        generate_videos=False,
+    )
+
+    assert result["images_generated"] == 0
+    assert review_calls == [
+        ("post_asset_generation_review", None, str(canonical_image.resolve())),
+        ("post_asset_exact_text_edit_review", ("scene_001",), str(canonical_image.resolve())),
+        ("post_asset_review_after_repairs", None, str(canonical_image.resolve())),
+    ]
+    assert edit_prompts == ['change "Inconsitency" to "Inconsistency"']
+    assert plan_state["scenes"][0]["image_path"] == str(canonical_image.resolve())
+    assert plan_state["scenes"][0]["candidate_outputs"]["primary"]["source_path"] == str(canonical_image.resolve())
+    assert canonical_image.exists()
+    assert not drifted_image.exists()
+    assert not edited_image.exists()
+    assert result["scene_review"]["provider"] == "codex"

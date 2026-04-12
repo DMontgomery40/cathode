@@ -8,11 +8,23 @@ interface ProjectCardProps {
   project: ProjectSummary
 }
 
+function formatProjectDate(iso?: string | null): string | null {
+  if (!iso) return null
+  const date = new Date(iso)
+  if (Number.isNaN(date.valueOf())) return null
+  return date.toLocaleDateString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  })
+}
+
 export function ProjectCard({ project }: ProjectCardProps) {
   const navigate = useNavigate()
 
   const statusVariant = project.has_video ? 'success' : project.scene_count > 0 ? 'active' : 'default'
   const statusLabel = project.has_video ? 'Rendered' : project.scene_count > 0 ? 'In Progress' : 'Empty'
+  const createdLabel = formatProjectDate(project.created_utc || project.updated_utc)
 
   const target = project.scene_count > 0
     ? `/projects/${encodeURIComponent(project.name)}/scenes`
@@ -87,6 +99,17 @@ export function ProjectCard({ project }: ProjectCardProps) {
         >
           {project.scene_count} {project.scene_count === 1 ? 'scene' : 'scenes'}
         </p>
+        {createdLabel ? (
+          <p
+            className="text-[var(--text-tertiary)] m-0"
+            style={{
+              fontSize: '10px',
+              marginTop: 'var(--space-1)',
+            }}
+          >
+            Created {createdLabel}
+          </p>
+        ) : null}
       </div>
     </GlassPanel>
   )

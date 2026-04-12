@@ -129,6 +129,150 @@ def test_motion_only_brief_converts_storyboard_to_motion_scenes(monkeypatch):
     assert scene["composition"]["mode"] == "native"
 
 
+def test_motion_only_3d_tableau_scene_becomes_surreal_tableau_not_quote_focus(monkeypatch):
+    def fake_generate(_source, provider="openai"):
+        return [
+            {
+                "id": 0,
+                "title": "The 3D Observatory Tableau — Orbiting Moths",
+                "narration": (
+                    "And then the observatory reveals its innermost room, where brass moths orbit a cracked moon "
+                    "inside a chamber that seems to keep a different kind of time."
+                ),
+                "visual_prompt": (
+                    "A fully three-dimensional surreal tableau in a vast dark chamber with deep indigo velvet walls, "
+                    "a glowing cracked hourglass moon, orbiting brass moths, bending constellation lines, subtle volumetric fog, and a cinematic widescreen finish."
+                ),
+                "scene_type": "motion",
+                "staging_notes": "This is the must-include hero scene. The camera performs a slow circular orbit around the tableau.",
+            }
+        ], {}
+
+    monkeypatch.setattr("core.workflow.generate_storyboard_with_metadata", fake_generate)
+    monkeypatch.setattr("core.workflow.plan_scene_treatments_with_metadata", lambda scenes, brief, provider: (scenes, {}))
+
+    plan = create_plan_from_brief(
+        project_name="moth_observatory_demo",
+        brief={
+            "project_name": "moth_observatory_demo",
+            "source_mode": "ideas_notes",
+            "source_material": "Build a motion-first surreal 3D observatory scene with orbiting moths.",
+            "composition_mode": "motion_only",
+        },
+        provider="openai",
+    )
+
+    scene = plan["scenes"][0]
+    assert scene["composition"]["family"] == "surreal_tableau_3d"
+    assert scene["motion"]["template_id"] == "surreal_tableau_3d"
+    assert scene["composition"]["props"]["layoutVariant"] == "orbit_tableau"
+    assert scene["composition"]["props"]["heroObject"] == "glowing cracked hourglass moon"
+
+
+def test_motion_only_long_narration_alone_no_longer_forces_quote_focus(monkeypatch):
+    def fake_generate(_source, provider="openai"):
+        return [
+            {
+                "id": 0,
+                "title": "Long motion beat",
+                "narration": (
+                    "This scene has intentionally long narration so the classifier has to decide based on the actual beat "
+                    "instead of treating length alone as proof that it should become a generic centered text layout."
+                ),
+                "visual_prompt": "Elegant motion-first opener with animated typographic hierarchy.",
+                "scene_type": "motion",
+                "staging_notes": "Kinetic words rise and settle into a deliberate statement.",
+            }
+        ], {}
+
+    monkeypatch.setattr("core.workflow.generate_storyboard_with_metadata", fake_generate)
+    monkeypatch.setattr("core.workflow.plan_scene_treatments_with_metadata", lambda scenes, brief, provider: (scenes, {}))
+
+    plan = create_plan_from_brief(
+        project_name="long_motion_narration_demo",
+        brief={
+            "project_name": "long_motion_narration_demo",
+            "source_mode": "ideas_notes",
+            "source_material": "Create one motion-first statement beat.",
+            "composition_mode": "motion_only",
+        },
+        provider="openai",
+    )
+
+    assert plan["scenes"][0]["composition"]["family"] != "quote_focus"
+
+
+def test_create_plan_from_brief_can_split_creative_and_treatment_providers(monkeypatch):
+    captured: dict[str, str] = {}
+
+    def fake_generate(source, provider="openai"):
+        captured["storyboard_provider"] = provider
+        return [_sample_scene()], {}
+
+    def fake_treat(scenes, brief, provider):
+        captured["treatment_provider"] = provider
+        return scenes, {}
+
+    monkeypatch.setattr("core.workflow.generate_storyboard_with_metadata", fake_generate)
+    monkeypatch.setattr("core.workflow.plan_scene_treatments_with_metadata", fake_treat)
+
+    plan = create_plan_from_brief(
+        project_name="provider_split_demo",
+        brief={
+            "project_name": "provider_split_demo",
+            "source_mode": "ideas_notes",
+            "source_material": "A creative brief that still needs deterministic machinery.",
+        },
+        provider="anthropic",
+        storyboard_provider="anthropic",
+        treatment_provider="openai",
+    )
+
+    assert captured["storyboard_provider"] == "anthropic"
+    assert captured["treatment_provider"] == "openai"
+    assert plan["meta"]["creative_llm_provider"] == "anthropic"
+    assert plan["meta"]["treatment_llm_provider"] == "openai"
+
+
+def test_create_plan_from_brief_records_runtime_repair_costs(monkeypatch):
+    def fake_generate(source, provider="openai"):
+        return [
+            {
+                "id": 0,
+                "title": "Intro",
+                "narration": "Welcome to the demo.",
+                "visual_prompt": "Clean title card.",
+            }
+        ], {
+            "actual": {"kind": "llm", "label": "storyboard", "total_usd": 0.12},
+            "preflight": {"label": "storyboard_preflight"},
+            "runtime_repair": {
+                "actual": {"kind": "llm", "label": "storyboard_runtime_repair", "total_usd": 0.07},
+                "preflight": {"label": "storyboard_runtime_repair_preflight"},
+            },
+        }
+
+    monkeypatch.setattr("core.workflow.generate_storyboard_with_metadata", fake_generate)
+    monkeypatch.setattr("core.workflow.plan_scene_treatments_with_metadata", lambda scenes, brief, provider: (scenes, {}))
+
+    plan = create_plan_from_brief(
+        project_name="runtime_repair_cost_demo",
+        brief={
+            "project_name": "runtime_repair_cost_demo",
+            "source_mode": "ideas_notes",
+            "source_material": "Explain the runtime fix.",
+        },
+        provider="openai",
+    )
+
+    entries = plan["meta"]["cost_actual"]["entries"]
+    assert [entry["label"] for entry in entries] == ["storyboard", "storyboard_runtime_repair"]
+    assert plan["meta"]["cost_actual"]["llm_preflight"] == {"label": "storyboard_preflight"}
+    assert plan["meta"]["cost_actual"]["llm_preflight_runtime_repair"] == {
+        "label": "storyboard_runtime_repair_preflight"
+    }
+
+
 def test_create_plan_from_brief_assigns_scene_voice_overrides_for_multiple_speakers(monkeypatch):
     def fake_generate(_source, provider="openai"):
         return [
@@ -282,6 +426,76 @@ def test_create_plan_from_brief_keeps_whimsical_creative_brief_image_first(monke
     assert scene["scene_type"] == "image"
     assert scene["composition"]["family"] == "media_pan"
     assert plan["meta"]["render_profile"]["render_backend"] == "ffmpeg"
+
+
+def test_create_plan_from_brief_finalizes_native_remotion_manifestation_after_treatment(monkeypatch):
+    def fake_generate(_source, provider="openai"):
+        return [_sample_scene()], {}
+
+    def fake_treat(scenes, brief, provider):
+        treated = dict(scenes[0])
+        treated["composition"] = {
+            "family": "software_demo_focus",
+            "mode": "overlay",
+            "props": {"headline": "Pinned callout"},
+        }
+        return [treated], {}
+
+    monkeypatch.setattr("core.workflow.generate_storyboard_with_metadata", fake_generate)
+    monkeypatch.setattr("core.workflow.plan_scene_treatments_with_metadata", fake_treat)
+
+    plan = create_plan_from_brief(
+        project_name="overlay_manifest_demo",
+        brief={
+            "project_name": "overlay_manifest_demo",
+            "source_mode": "ideas_notes",
+            "source_material": "Highlight one UI state with a pinned callout.",
+        },
+        provider="anthropic",
+    )
+
+    scene = plan["scenes"][0]
+    assert scene["composition"]["manifestation"] == "native_remotion"
+    assert plan["meta"]["render_profile"]["render_backend"] == "remotion"
+
+
+def test_create_plan_from_brief_keeps_source_video_manifestation_when_treatment_adds_overlay(monkeypatch):
+    def fake_generate(_source, provider="openai"):
+        return [
+            {
+                "id": 0,
+                "title": "Guided clip",
+                "narration": "Walk through the product clip.",
+                "visual_prompt": "Use the uploaded walkthrough clip.",
+                "scene_type": "video",
+            }
+        ], {}
+
+    def fake_treat(scenes, brief, provider):
+        treated = dict(scenes[0])
+        treated["composition"] = {
+            "family": "software_demo_focus",
+            "mode": "overlay",
+            "props": {"headline": "Pinned callout"},
+        }
+        return [treated], {}
+
+    monkeypatch.setattr("core.workflow.generate_storyboard_with_metadata", fake_generate)
+    monkeypatch.setattr("core.workflow.plan_scene_treatments_with_metadata", fake_treat)
+
+    plan = create_plan_from_brief(
+        project_name="video_overlay_manifest_demo",
+        brief={
+            "project_name": "video_overlay_manifest_demo",
+            "source_mode": "ideas_notes",
+            "source_material": "Use the walkthrough clip and add one callout.",
+        },
+        provider="anthropic",
+    )
+
+    scene = plan["scenes"][0]
+    assert scene["composition"]["manifestation"] == "source_video"
+    assert plan["meta"]["render_profile"]["render_backend"] == "remotion"
 
 
 def test_pitch_style_raw_brief_stays_intact_and_yields_multi_voice_motion_capable_plan(monkeypatch):

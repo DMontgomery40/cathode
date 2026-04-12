@@ -11,14 +11,18 @@ from starlette.concurrency import run_in_threadpool
 
 from core.costs import append_actual_cost_entry, image_edit_entry, image_generation_entry, tts_entry, video_generation_entry
 from core.director import refine_narration_with_metadata, refine_prompt_with_metadata
-from core.image_gen import edit_image, generate_scene_image
+from core.image_gen import canonicalize_exact_text_edit_prompt, edit_image, generate_scene_image
 from core.project_store import annotate_plan_asset_existence, load_plan, save_plan
 from core.remotion_render import build_remotion_manifest, render_manifest_with_remotion
 from core.runtime import PROJECTS_DIR, choose_llm_provider, resolve_image_profile, resolve_tts_profile, resolve_video_profile
 from core.video_gen import generate_scene_video_result
 from core.video_assembly import preview_scene
 from core.voice_gen import generate_scene_audio_result
-from core.pipeline_service import tts_kwargs_from_profile
+from core.pipeline_service import (
+    _canonical_scene_image_path,
+    replace_scene_image_preserving_identity,
+    tts_kwargs_from_profile,
+)
 from server.services.uploads import IMAGE_UPLOAD_SPEC, VIDEO_UPLOAD_SPEC, persist_upload
 from server.schemas.scenes import (
     AudioGenerateRequest,
@@ -249,6 +253,17 @@ async def generate_image_for_scene(
     idx, scene = _find_scene(plan, scene_uid)
     meta = plan.get("meta", {})
     brief = meta.get("brief", {})
+    composition = scene.get("composition") if isinstance(scene.get("composition"), dict) else {}
+    scene_type = str(scene.get("scene_type") or "image").strip().lower()
+    composition_mode = str(composition.get("mode") or "").strip().lower()
+    if scene_type == "motion" or composition_mode == "native":
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "This scene is on Cathode's native Remotion path. "
+                "Use Generate Motion Preview or Render Video instead of Generate Image."
+            ),
+        )
 
     image_profile = resolve_image_profile(meta.get("image_profile"))
     provider = (body.provider if body and body.provider else None) or image_profile["provider"]
@@ -426,6 +441,8 @@ async def edit_image_for_scene(
         )
         raise HTTPException(status_code=400, detail=message)
 
+    exact_text_edit_prompt = canonicalize_exact_text_edit_prompt(feedback)
+    feedback = exact_text_edit_prompt or feedback
     model = str(body.model or image_profile.get("edit_model") or "").strip()
     if not model:
         message = "No image editor is configured for this project."
@@ -440,7 +457,12 @@ async def edit_image_for_scene(
         )
         raise HTTPException(status_code=400, detail=message)
 
-    edited_path = project_dir / "images" / f"image_{scene_uid}_edited.png"
+    canonical_image_path = _canonical_scene_image_path(project_dir, scene)
+    edited_path = (
+        canonical_image_path.with_name(f".{canonical_image_path.stem}_edited{canonical_image_path.suffix}")
+        if canonical_image_path is not None
+        else project_dir / "images" / f"image_{scene_uid}_edited.png"
+    )
     edit_kwargs: dict[str, Any] = {"model": model}
     if model.startswith("qwen-image-edit"):
         edit_kwargs["n"] = int(image_profile.get("dashscope_edit_n") or 1)
@@ -450,6 +472,10 @@ async def edit_image_for_scene(
         seed_raw = str(image_profile.get("dashscope_edit_seed") or "").strip()
         if seed_raw.isdigit():
             edit_kwargs["seed"] = int(seed_raw)
+        if exact_text_edit_prompt:
+            edit_kwargs["n"] = 1
+            edit_kwargs["prompt_extend"] = False
+            edit_kwargs["negative_prompt"] = " "
     request_payload = {
         "feedback": feedback,
         "model": model,
@@ -479,7 +505,8 @@ async def edit_image_for_scene(
         )
         raise HTTPException(status_code=400, detail=message)
 
-    scene["image_path"] = str(output_path)
+    preserved_image_path = replace_scene_image_preserving_identity(project_dir, scene, output_path)
+    scene["image_path"] = str(preserved_image_path or output_path)
     scene["video_path"] = None
     scene["preview_path"] = None
     scene["scene_type"] = "image"
@@ -502,7 +529,7 @@ async def edit_image_for_scene(
         status="succeeded",
         request=request_payload,
         result={
-            "image_path": str(output_path),
+            "image_path": scene["image_path"],
             "scene_type": "image",
         },
     )

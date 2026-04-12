@@ -14,10 +14,6 @@ DEFAULT_LOCAL_IMAGE_MODEL = "Qwen/Qwen-Image-2512"
 DEFAULT_LOCAL_IMAGE_MLX_MODEL = "mlx-community/Qwen-Image-2512-8bit"
 DEFAULT_LOCAL_IMAGE_STEPS = 50
 DEFAULT_LOCAL_IMAGE_TRUE_CFG_SCALE = 4.0
-DEFAULT_LOCAL_IMAGE_NEGATIVE_PROMPT = (
-    "low resolution, blurry text, malformed hands, deformed anatomy, over-smoothed skin, "
-    "plastic lighting, confusing composition, obvious AI artifacts"
-)
 
 _PIPELINE_CACHE: dict[tuple[str, str, str], Any] = {}
 
@@ -102,11 +98,6 @@ def _guidance_scale() -> float:
     return value if value > 0 else DEFAULT_LOCAL_IMAGE_TRUE_CFG_SCALE
 
 
-def _negative_prompt() -> str:
-    value = str(os.getenv("CATHODE_LOCAL_IMAGE_NEGATIVE_PROMPT") or "").strip()
-    return value or DEFAULT_LOCAL_IMAGE_NEGATIVE_PROMPT
-
-
 def resolve_local_image_backend(model_name: str) -> tuple[str, str]:
     """Resolve the runtime engine and concrete model repo/path for local image generation."""
     requested_runtime = _runtime_preference()
@@ -172,7 +163,6 @@ def _generate_local_image_torch(
 
     kwargs: dict[str, Any] = {
         "prompt": prompt,
-        "negative_prompt": _negative_prompt(),
         "width": int(width),
         "height": int(height),
         "num_inference_steps": _inference_steps(),
@@ -214,8 +204,6 @@ def _generate_local_image_mlx(
         model,
         "--prompt",
         prompt,
-        "--negative-prompt",
-        _negative_prompt(),
         "--width",
         str(int(width)),
         "--height",

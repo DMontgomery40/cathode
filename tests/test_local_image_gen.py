@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import core.local_image_gen as local_image_gen
 
 
@@ -30,3 +32,37 @@ def test_resolve_local_image_backend_keeps_explicit_mlx_model(monkeypatch):
 
     assert runtime == "mlx"
     assert model == "mlx-community/Qwen-Image-2512-6bit"
+
+
+def test_generate_local_image_torch_does_not_inject_negative_prompt(monkeypatch, tmp_path):
+    captured: dict[str, object] = {}
+
+    class FakeImage:
+        def save(self, output_path):
+            Path(output_path).write_bytes(b"fake-local-image")
+
+    class FakePipeline:
+        def __call__(self, **kwargs):
+            captured.update(kwargs)
+            return type("FakeResult", (), {"images": [FakeImage()]})()
+
+    class FakeTorch:
+        mps = None
+
+    monkeypatch.setenv("CATHODE_LOCAL_IMAGE_RUNTIME", "torch")
+    monkeypatch.setattr(local_image_gen, "_load_torch_pipeline", lambda model: (FakePipeline(), FakeTorch(), "cpu"))
+    monkeypatch.setattr(local_image_gen, "_inference_steps", lambda: 12)
+    monkeypatch.setattr(local_image_gen, "_guidance_scale", lambda: 3.5)
+
+    result = local_image_gen.generate_local_image(
+        prompt="Anthropic-authored prompt",
+        output_path=tmp_path / "scene.png",
+        model=local_image_gen.DEFAULT_LOCAL_IMAGE_MODEL,
+        width=1280,
+        height=720,
+    )
+
+    assert result.exists()
+    assert result.read_bytes() == b"fake-local-image"
+    assert captured["prompt"] == "Anthropic-authored prompt"
+    assert "negative_prompt" not in captured

@@ -135,7 +135,19 @@ run_streamlit() {
   echo "Starting Cathode Streamlit app..."
   echo "Opening http://127.0.0.1:${STREAMLIT_PORT}"
   cd "$ROOT_DIR"
-  "$PYTHON" -m streamlit run app.py --server.port "${STREAMLIT_PORT}" "${EXTRA_ARGS[@]}"
+  local streamlit_cmd=(
+    "$PYTHON"
+    -m
+    streamlit
+    run
+    app.py
+    --server.port
+    "${STREAMLIT_PORT}"
+  )
+  if [[ ${#EXTRA_ARGS[@]} -gt 0 ]]; then
+    streamlit_cmd+=("${EXTRA_ARGS[@]}")
+  fi
+  "${streamlit_cmd[@]}"
 }
 
 run_react_stack() {

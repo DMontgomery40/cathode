@@ -6,7 +6,10 @@ from core.image_gen import (
     DASHSCOPE_IMAGE_EDIT_MODELS,
     DEFAULT_REPLICATE_IMAGE_EDIT_MODEL,
     available_image_edit_models,
+    build_exact_text_edit_prompt,
+    canonicalize_exact_text_edit_prompt,
     default_image_edit_model,
+    generate_image_local,
     generate_scene_image,
 )
 from core.runtime import available_image_generation_providers, resolve_image_profile
@@ -83,7 +86,10 @@ def test_resolve_image_profile_falls_back_when_local_backend_is_not_runnable(mon
 
 
 def test_generate_scene_image_uses_local_backend(monkeypatch, tmp_path):
+    captured: dict[str, str] = {}
+
     def fake_generate_image_local(prompt, output_path, model, apply_style=True, seed=None, brief=None):
+        captured["prompt"] = prompt
         Path(output_path).parent.mkdir(parents=True, exist_ok=True)
         Path(output_path).write_bytes(b"fake-local-image")
         return Path(output_path)
@@ -99,3 +105,127 @@ def test_generate_scene_image_uses_local_backend(monkeypatch, tmp_path):
 
     assert result.exists()
     assert result.read_bytes() == b"fake-local-image"
+    assert captured["prompt"] == "A clean product still."
+
+
+def test_generate_scene_image_preserves_raw_prompt_for_authored_image_scene(monkeypatch, tmp_path):
+    captured: dict[str, str] = {}
+
+    def fake_generate_image_local(prompt, output_path, model, apply_style=True, seed=None, brief=None):
+        captured["prompt"] = prompt
+        Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+        Path(output_path).write_bytes(b"fake-local-image")
+        return Path(output_path)
+
+    monkeypatch.setattr(image_gen, "generate_image_local", fake_generate_image_local)
+
+    generate_scene_image(
+        {
+            "id": 3,
+            "scene_type": "authored_image",
+            "visual_prompt": '  Deep navy background with waveform panels labeled "Session 1" and "Session 3".  ',
+            "composition": {
+                "family": "three_data_stage",
+                "mode": "overlay",
+            },
+        },
+        tmp_path,
+        provider="local",
+        model="Qwen/Qwen-Image-2512",
+    )
+
+    assert captured["prompt"] == '  Deep navy background with waveform panels labeled "Session 1" and "Session 3".  '
+
+
+def test_generate_scene_image_preserves_authored_prompt_for_ordinary_slides(monkeypatch, tmp_path):
+    captured: dict[str, str] = {}
+
+    def fake_generate_image_local(prompt, output_path, model, apply_style=True, seed=None, brief=None):
+        captured["prompt"] = prompt
+        Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+        Path(output_path).write_bytes(b"fake-local-image")
+        return Path(output_path)
+
+    monkeypatch.setattr(image_gen, "generate_image_local", fake_generate_image_local)
+
+    generate_scene_image(
+        {
+            "id": 1,
+            "visual_prompt": "Warm illustrated scene with three circular icons.",
+            "composition": {"family": "static_media", "mode": "none"},
+            "on_screen_text": ["Three Snapshots, Seven Weeks"],
+        },
+        tmp_path,
+        provider="local",
+        model="Qwen/Qwen-Image-2512",
+    )
+
+    prompt = captured["prompt"]
+    assert prompt == "Warm illustrated scene with three circular icons."
+
+
+def test_generate_image_passes_raw_prompt_without_style_suffix(monkeypatch, tmp_path):
+    captured: dict[str, str] = {}
+
+    class FakeClient:
+        def run(self, model, input):
+            captured["model"] = model
+            captured["prompt"] = input["prompt"]
+            return "https://example.com/image.png"
+
+    class FakeResponse:
+        status_code = 200
+        content = b"fake-image"
+
+        def raise_for_status(self):
+            return None
+
+    monkeypatch.setattr(image_gen, "_get_replicate_client", lambda: FakeClient())
+    monkeypatch.setattr(image_gen.image_limiter, "call_with_retry", lambda fn: fn())
+    monkeypatch.setattr(image_gen.requests, "get", lambda url, timeout: FakeResponse())
+    monkeypatch.setattr(image_gen, "_ensure_png", lambda path: path)
+
+    result = image_gen.generate_image(
+        "Anthropic-authored prompt",
+        tmp_path / "scene.png",
+        brief={"visual_style": "cinematic illustration", "tone": "warm"},
+    )
+
+    assert result.exists()
+    assert result.read_bytes() == b"fake-image"
+    assert captured["model"] == image_gen.DEFAULT_IMAGE_MODEL
+    assert captured["prompt"] == "Anthropic-authored prompt"
+
+
+def test_generate_image_local_passes_raw_prompt_without_style_suffix(monkeypatch, tmp_path):
+    captured: dict[str, object] = {}
+
+    def fake_generate_local_image(*, prompt, output_path, model, width, height, seed):
+        captured["prompt"] = prompt
+        captured["model"] = model
+        captured["width"] = width
+        captured["height"] = height
+        Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+        Path(output_path).write_bytes(b"fake-local-image")
+        return Path(output_path)
+
+    monkeypatch.setattr(image_gen, "generate_local_image", fake_generate_local_image)
+
+    result = generate_image_local(
+        "Anthropic-authored prompt",
+        tmp_path / "scene.png",
+        brief={"visual_style": "cinematic illustration", "tone": "warm"},
+    )
+
+    assert result.exists()
+    assert result.read_bytes() == b"fake-local-image"
+    assert captured["prompt"] == "Anthropic-authored prompt"
+    assert captured["model"] == image_gen.DEFAULT_LOCAL_IMAGE_MODEL
+    assert captured["width"] == image_gen.TARGET_WIDTH
+    assert captured["height"] == image_gen.TARGET_HEIGHT
+
+
+def test_canonicalize_exact_text_edit_prompt_rebuilds_literal_template():
+    assert canonicalize_exact_text_edit_prompt(' Change   "teh"   to   "the" ') == 'change "teh" to "the"'
+    assert build_exact_text_edit_prompt("bad", "good") == 'change "bad" to "good"'
+    assert canonicalize_exact_text_edit_prompt("Make the image more cinematic") is None

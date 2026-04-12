@@ -78,6 +78,57 @@ Then add a second, optional Remotion treatment-planner stage that is informed by
 
 ## Implementation Notes
 - Status: in progress
+- 2026-03-14: active implementation restarted for the motion-first 3D failure. Root cause confirmed from `/Users/davidmontgomery/cathode/projects/moth_orrery_api_1773538729/plan.json`: `_apply_composition_mode_to_scenes()` pre-seeds `motion.template_id` from `infer_motion_template()`, long narration pushes the hero tableau into `quote_focus`, and `plan_scene_compositions()` then preserves that weak family instead of re-evaluating the 3D/tableau/orbit cues.
+- 2026-03-14: official doc set locked for this overhaul because future agents should not have to rediscover it:
+  - <https://www.remotion.dev/docs/player>
+  - <https://www.remotion.dev/docs/sequence>
+  - <https://www.remotion.dev/docs/transitions/transitionseries>
+  - <https://www.remotion.dev/docs/three>
+  - <https://www.remotion.dev/docs/ai/system-prompt>
+  - <https://www.remotion.dev/prompts>
+- 2026-03-14: execution order tightened:
+  1. Write active project-local memory and keep it updated during implementation.
+  2. Fix planner classification so explicit 3D/tableau scenes stop becoming text cards.
+  3. Rebuild `surreal_tableau_3d` into a semantic deterministic renderer.
+  4. Unify motion-scene editing on canonical `scene.composition`.
+  5. Add a repo skill pack and handoff references so future agents have a zero-search Cathode/Remotion path.
+- 2026-03-14: planner-side fix completed and verified.
+  - `_apply_composition_mode_to_scenes()` now seeds motion scenes neutrally instead of pre-classifying them from narration length.
+  - `core/composition_planner.py` now has explicit 3D/tableau/orbit heuristics and semantic `surreal_tableau_3d` props.
+  - `core/project_schema.py` now mirrors generic `kinetic_title` seeds back to canonical `scene.composition.family`.
+  - Python changed-surface verification: `50 passed`.
+- 2026-03-14: frontend and workflow contract updates completed.
+  - Added `@remotion/three`.
+  - Rebuilt `surreal_tableau_3d` into a semantic deterministic scene family in `frontend/src/remotion/index.tsx`.
+  - Unified motion-scene editing on canonical `scene.composition` in `frontend/src/features/scenes/SceneInspector.tsx`.
+  - Added workflow role split so the product path uses Claude/Anthropic for scene writing and OpenAI for deterministic treatment/machinery when available.
+  - Added repo skill pack at `skills/cathode-remotion-development/` plus Claude mirror.
+- 2026-03-14: live validation surfaced two real classifier false positives that unit tests had missed.
+  - Software-demo hints were matching raw substrings (`screen` in `widescreen`, `form` in `performs`).
+  - Bullet-stack hints were matching the generic word `sequence`.
+  - Both were tightened after replaying a real UI-created observatory brief.
+- 2026-03-14: live validation still shows a separate operator bug in the async one-click `make_video` path.
+  - Background job can remain `running` at `storyboard` with no visible progress change.
+  - That is tracked as a real gap from this turn, not hand-waved away.
+- 2026-03-15: live validation against the fresh UI-created observatory brief completed.
+  - Project: `/Users/davidmontgomery/cathode/projects/moth_observatory_ui_1773542716609`
+  - Hero scene now persists as `surreal_tableau_3d` and exposes semantic 3D controls in the browser.
+  - Audio generation completed for all scenes and final render completed at `/Users/davidmontgomery/cathode/projects/moth_observatory_ui_1773542716609/final_video.mp4`.
+  - Captured validation artifacts live under `/tmp/cathode-remotion-validation/`.
+- 2026-03-15: Projects library sorting no longer relies on alphabetical order alone.
+  - `/api/projects` now exposes `created_utc` and `updated_utc`.
+  - `updated_utc` prefers real plan lifecycle timestamps (`updated_utc`, `rendered_utc`, `created_utc`) and only falls back to `plan.json` mtime when a project has no stored dates, to avoid git-checkout noise masquerading as activity.
+  - The React Projects index now defaults to creation-date order and exposes `Newest first`, `Oldest first`, `Recently updated`, and `A to Z` controls.
+  - Coverage added in `tests/test_server_api.py` and `frontend/e2e/projects.spec.ts`.
+- 2026-03-15: compacted the Scenes inspector header to reclaim vertical space for actual controls.
+  - `Scene controls`, the scene chip, and save state now share the same horizontal band instead of stacking in a tall utility column.
+  - `Collapse Panel` stays available but no longer burns a full extra header tier.
+  - Coverage added in `frontend/e2e/scenes.spec.ts` to keep the header compact.
+- 2026-03-15: investigated Remotion's full-video Three.js ranking prompt as a benchmark Cathode does not currently meet.
+  - Official benchmark prompt: `https://www.remotion.dev/prompts/threejs-top-20-games-sold-ranking-1`
+  - The prompt target is a single full 1920x1080 60fps 3D video with a programmed camera journey from rank 20 to rank 1, not a small per-scene 3D treatment.
+  - Cathode's current `three_data_stage` is not that. It is a four-item bar stage with overlay labels and a mild turntable camera.
+  - Cathode currently lacks a reusable registry family for a full-video 3D ranking world with structured item records, environment components, and timeline-driven camera stops.
 - 2026-03-14: starting with guardrail updates in `AGENTS.md` and `prompts/AGENTS.md` before changing the planner pipeline.
 - 2026-03-15: completed repo/prompt guardrail updates.
 - 2026-03-15: completed director prompt reset plus intent-specific example selection, including a promoted `whimsical_storybook__v1` example harvested through the director-golden workflow.
