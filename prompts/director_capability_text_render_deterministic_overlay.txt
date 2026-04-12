@@ -1,5 +1,7 @@
 Capability mode: deterministic overlay.
 
 - Treat `on_screen_text` as the exact source of visible copy Cathode should preserve.
-- Avoid leaning on image-model text rendering for critical headings, labels, prices, steps, or proof points.
-- If a scene depends on exact text or structured copy, prefer a motion beat or a clean media scene with deterministic overlays.
+- Use deterministic overlay only for scenes Cathode explicitly owns as `native_remotion` motion or overlay treatments.
+- Do not use this mode as blanket permission to strip authored labels or layout intent from ordinary `authored_image` scenes.
+- For ordinary Anthropic-authored image scenes, `visual_prompt` is the final authored prompt. Do not rely on code-side prompt mutation before Qwen.
+- If a scene depends on exact text or structured copy, prefer an explicit native/overlay treatment instead of silently mutating an authored still prompt.

@@ -396,6 +396,20 @@ test.describe('Brief Studio', () => {
       await expect(page.getByRole('heading', { name: 'Render', exact: true })).toBeVisible()
     })
 
+    test('live primary action shows an actionable API-offline message when the request drops', async ({ page }) => {
+      await page.getByLabel('Project Name').fill('brief_live_api_offline')
+      await page.getByLabel('Source Material').fill('Prompt plus a job description go in, but the API drops out.')
+
+      await page.route('**/api/jobs/make-video', async (route) => {
+        await route.abort('failed')
+      })
+
+      await page.locator('button[type="submit"]:has-text("F#@K it, we\'re doing it live!!")').click()
+
+      await expect(page.getByText('Could not reach the Cathode API at http://127.0.0.1:9321. Make sure the server is running and try again.')).toBeVisible()
+      await expect(page).toHaveURL(/\/projects\/new\/brief$/)
+    })
+
     // ── Tab through all fields ───────────────────────────────────
     test('Tab order traverses all form fields', async ({ page }) => {
       const nameInput = page.getByLabel('Project Name')

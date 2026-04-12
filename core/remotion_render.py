@@ -10,7 +10,12 @@ from pathlib import Path
 from typing import Any, Callable
 from urllib.parse import quote
 
-from .project_schema import resolve_text_render_mode, scene_composition_payload, scene_requires_remotion
+from .project_schema import (
+    resolve_text_render_mode,
+    scene_composition_payload,
+    scene_primary_manifestation,
+    scene_requires_remotion,
+)
 from .runtime import REPO_ROOT
 from .video_assembly import (
     DEFAULT_FPS,
@@ -25,9 +30,60 @@ _DEFAULT_API_BASE_URL = "http://127.0.0.1:9321"
 _DEFAULT_MOTION_TEMPLATE = "kinetic_title"
 _BUILTIN_TEXT_OVERLAY_FAMILIES = {"software_demo_focus"}
 
+_CLINICAL_TEMPLATE_FAMILIES = {
+    "cover_hook", "orientation", "synthesis_summary", "closing_cta",
+    "clinical_explanation", "metric_improvement", "brain_region_focus",
+    "metric_comparison", "timeline_progression", "analogy_metaphor",
+}
+
+# Analogy backgrounds use a prefix naming convention
+_ANALOGY_BACKGROUND_OPTIONS = [
+    "analogy_balance_scale", "analogy_fog_lifting", "analogy_orchestra",
+    "analogy_porch_light", "analogy_rowing", "analogy_traffic",
+]
+
+
+def _trim_overlay_copy(value: Any) -> str:
+    return str(value or "").strip()
+
 
 def _api_base_url() -> str:
     return str(os.getenv("CATHODE_API_BASE_URL") or _DEFAULT_API_BASE_URL).rstrip("/")
+
+
+def _resolve_image_url_for_scene(composition: dict[str, Any], scene: dict[str, Any]) -> str | None:
+    """Fall back to template_deck background for native clinical template scenes."""
+    mode = str(composition.get("mode") or "").strip().lower()
+    family = str(composition.get("family") or "").strip()
+    if mode == "native" and family in _CLINICAL_TEMPLATE_FAMILIES:
+        props = composition.get("props") if isinstance(composition.get("props"), dict) else {}
+        return _template_background_url(family, props)
+    return None
+
+
+def _template_background_url(family: str, props: dict[str, Any]) -> str | None:
+    """Resolve a template_deck background URL for a clinical template family."""
+    bg_id = str(props.get("background_id") or "").strip()
+    if not bg_id:
+        if family == "analogy_metaphor":
+            bg_id = _ANALOGY_BACKGROUND_OPTIONS[0]
+        elif family == "brain_region_focus":
+            # Template coordinates are mapped to the topdown (front-on coronal) view
+            bg_id = "brain_region_focus_topdown"
+        else:
+            bg_id = family
+
+    # Try family-name match first, then with subdirectories for brain diagrams
+    candidates = [
+        REPO_ROOT / "template_deck" / "backgrounds" / f"{bg_id}.png",
+        REPO_ROOT / "template_deck" / "backgrounds" / "brain_diagrams" / f"{bg_id}.png",
+    ]
+    for candidate in candidates:
+        if candidate.exists():
+            rel = str(candidate.relative_to(REPO_ROOT / "template_deck")).replace("\\", "/")
+            encoded = "/".join(quote(part) for part in rel.split("/") if part)
+            return f"{_api_base_url()}/api/template-deck/{encoded}"
+    return None
 
 
 def _relative_project_media_path(project_name: str, project_dir: Path, raw_path: Any) -> str | None:
@@ -69,6 +125,7 @@ def motion_template_options() -> list[str]:
         "kinetic_title",
         "bullet_stack",
         "quote_focus",
+        "three_data_stage",
         "kinetic_statements",
         "media_pan",
         "software_demo_focus",
@@ -94,6 +151,7 @@ def scene_motion_payload(scene: dict[str, Any]) -> dict[str, Any]:
     lines = [str(item).strip() for item in (scene.get("on_screen_text") or []) if str(item).strip()]
     title = str(scene.get("title") or "").strip()
     narration = str(scene.get("narration") or "").strip()
+    template_id = str(motion_raw.get("template_id") or composition.get("family") or "").strip() or infer_motion_template(scene)
     props = (
         composition.get("props")
         if isinstance(composition.get("props"), dict)
@@ -102,13 +160,22 @@ def scene_motion_payload(scene: dict[str, Any]) -> dict[str, Any]:
         else {}
     )
 
+    if template_id in {"surreal_tableau_3d", "three_data_stage"}:
+        return {
+            "template_id": template_id,
+            "props": props,
+            "render_path": motion_raw.get("render_path") or composition.get("render_path"),
+            "preview_path": motion_raw.get("preview_path") or composition.get("preview_path"),
+            "rationale": str(motion_raw.get("rationale") or composition.get("rationale") or "").strip(),
+        }
+
     headline = str(props.get("headline") or (lines[0] if lines else title) or "Motion beat").strip()
     body = str(props.get("body") or "\n".join(lines[1:3]) or narration[:180]).strip()
     kicker = str(props.get("kicker") or title or "Cathode").strip()
     bullets = props.get("bullets") if isinstance(props.get("bullets"), list) else lines[:4]
 
     return {
-        "template_id": str(motion_raw.get("template_id") or composition.get("family") or "").strip() or infer_motion_template(scene),
+        "template_id": template_id,
         "props": {
             "headline": headline,
             "body": body,
@@ -134,12 +201,12 @@ def scene_has_renderable_visual(
     render_backend: str = "ffmpeg",
 ) -> bool:
     """Return whether the scene has the visual requirements for the chosen backend."""
-    scene_type = str(scene.get("scene_type") or "image").strip().lower()
+    manifestation = scene_primary_manifestation(scene)
     composition = scene_composition_payload(scene)
-    if scene_type == "video":
+    if manifestation == "source_video":
         value = resolve_scene_video_path(scene)
         return bool(value and Path(str(value)).exists())
-    if scene_type == "motion" or (render_backend == "remotion" and composition.get("mode") == "native"):
+    if manifestation == "native_remotion":
         if render_backend == "remotion":
             return motion_scene_is_ready(scene)
         value = resolve_scene_video_path(scene)
@@ -154,9 +221,9 @@ def _scene_duration_seconds(scene: dict[str, Any], fps: int) -> tuple[float, dic
     if audio_path and Path(str(audio_path)).exists():
         audio_duration = float(get_media_duration(audio_path) or 0.0) or None
 
-    scene_type = str(scene.get("scene_type") or "image").strip().lower()
+    manifestation = scene_primary_manifestation(scene)
     timing: dict[str, Any] = {}
-    if scene_type == "video":
+    if manifestation == "source_video":
         effective_audio_duration = None if scene_uses_clip_audio(scene) else audio_duration
         timing = get_video_scene_timing(scene, audio_duration=effective_audio_duration)
         duration = float(effective_audio_duration or timing.get("effective_duration") or 5.0)
@@ -176,16 +243,27 @@ def _scene_text_layer_kind(
     family = str(composition.get("family") or "").strip()
     mode = str(composition.get("mode") or "none").strip().lower()
     lines = [str(item).strip() for item in (scene.get("on_screen_text") or []) if str(item).strip()]
+    props = composition.get("props") if isinstance(composition.get("props"), dict) else {}
+    headline = _trim_overlay_copy(props.get("headline"))
+    body = _trim_overlay_copy(props.get("body"))
+    has_copy = bool(lines or headline or body)
     if scene_type != "motion" and family in _BUILTIN_TEXT_OVERLAY_FAMILIES:
-        props = composition.get("props") if isinstance(composition.get("props"), dict) else {}
-        headline = str(props.get("headline") or "").strip()
-        if lines or headline:
+        if has_copy:
             return family
-    if scene_type == "motion" or not lines:
+    if scene_type == "motion" or not has_copy:
         return "none"
 
+    if mode == "native" and family:
+        return "none"
     if mode == "overlay":
         return "captions"
+    # Don't overlay deterministic text on scenes explicitly marked as authored_image
+    # (pre-generated images with text baked in) -- check the raw scene's composition,
+    # not the computed payload, to distinguish explicit from default
+    raw_comp = scene.get("composition") if isinstance(scene.get("composition"), dict) else {}
+    raw_manifestation = str(raw_comp.get("manifestation") or "").strip().lower()
+    if raw_manifestation == "authored_image" and scene.get("image_path"):
+        return "none"
     if text_render_mode == "deterministic_overlay" and scene_type == "image":
         return "captions"
     return "none"
@@ -220,6 +298,40 @@ def build_remotion_manifest(
         duration_in_frames = max(1, round(duration_seconds * fps))
         motion = scene_motion_payload(scene)
         composition = scene_composition_payload(scene)
+        # Reroute family when data shape contradicts visualization type
+        # (e.g. brain_region_focus with temporal arrows -> metric_improvement)
+        family = str(composition.get("family") or "").strip()
+        if family in _CLINICAL_TEMPLATE_FAMILIES:
+            from .composition_planner import (
+                _enrich_clinical_props,
+                _reroute_family_by_data_shape,
+                _scene_data_points,
+            )
+            family = _reroute_family_by_data_shape(family, scene)
+            composition["family"] = family
+            # Enrich clinical template props from on_screen_text/data_points
+            # (handles plans created before enrichment code existed)
+            props = composition.get("props") if isinstance(composition.get("props"), dict) else {}
+            lines = [str(item).strip() for item in (scene.get("on_screen_text") or []) if str(item).strip()]
+            data_points = _scene_data_points(scene)
+            _enrich_clinical_props(family, props, lines, data_points)
+            composition["props"] = props
+        if family == "three_data_stage":
+            # Re-extract numeric series from data_points when the director
+            # populated series with y=null placeholders.
+            from .composition_planner import _three_data_stage_data
+            comp_data = composition.get("data") if isinstance(composition.get("data"), dict) else {}
+            comp_props = composition.get("props") if isinstance(composition.get("props"), dict) else {}
+            # Build minimal intent — _three_data_stage_data only uses
+            # intent as fallback when scene.data_points is missing.
+            intent = {
+                "data_points": [],
+                "family_hint": "three_data_stage",
+                "mode_hint": "",
+                "transition_after": None,
+            }
+            enriched_data = _three_data_stage_data(scene, intent, comp_data, comp_props)
+            composition["data"] = enriched_data
         video_audio_source = "clip" if scene_uses_clip_audio(scene) else "narration"
         trim_end = timing.get("trim_end")
         trim_end_frames = round(float(trim_end) * fps) if trim_end is not None else None
@@ -257,7 +369,8 @@ def build_remotion_manifest(
                 "durationInFrames": duration_in_frames,
                 "sequenceDurationInFrames": duration_in_frames + transition_duration_in_frames,
                 "audioUrl": None if video_audio_source == "clip" else project_media_url(project_name, project_dir, scene.get("audio_path")),
-                "imageUrl": project_media_url(project_name, project_dir, scene.get("image_path")),
+                "imageUrl": project_media_url(project_name, project_dir, scene.get("image_path"))
+                    or _resolve_image_url_for_scene(composition, scene),
                 "videoUrl": project_media_url(project_name, project_dir, scene.get("video_path")),
                 "previewUrl": project_media_url(project_name, project_dir, scene.get("preview_path")),
                 "videoAudioSource": video_audio_source,
@@ -275,6 +388,7 @@ def build_remotion_manifest(
                 "composition": {
                     "family": str(composition.get("family") or "").strip(),
                     "mode": str(composition.get("mode") or "none").strip(),
+                    "manifestation": str(composition.get("manifestation") or "").strip(),
                     "props": composition.get("props") if isinstance(composition.get("props"), dict) else {},
                     "transitionAfter": transition_after,
                     "data": composition.get("data"),

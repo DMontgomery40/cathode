@@ -247,8 +247,11 @@ def test_image_edit_uses_profile_model(mock_edit, client, tmp_path):
     }
     plan["scenes"][0]["image_path"] = str(source)
     plan["scenes"][0]["preview_path"] = str(project_dir / "previews" / "existing.mp4")
+    plan["scenes"][0]["judge_verdict"] = {"winner": "primary", "text_repairs": []}
+    plan["scenes"][0]["candidate_outputs"] = {"primary": {"candidate_type": "authored_image"}}
 
-    edited = project_dir / "images" / "image_abc1_edited.png"
+    edited = project_dir / "images" / ".scene_000_edited.png"
+    edited.write_bytes(b"\x89PNG\r\n\x1a\n" + b"\x00" * 32)
     mock_edit.return_value = edited
 
     with (
@@ -263,16 +266,69 @@ def test_image_edit_uses_profile_model(mock_edit, client, tmp_path):
 
     assert resp.status_code == 200
     scene = resp.json()["scenes"][0]
-    assert scene["image_path"] == str(edited)
+    assert scene["image_path"] == str(source.resolve())
     assert scene["preview_path"] is None
     assert scene["scene_type"] == "image"
+    assert "judge_verdict" not in scene
+    assert "candidate_outputs" not in scene
     history = resp.json()["meta"]["image_action_history"]
     assert history[0]["action"] == "edit"
     assert history[0]["status"] == "succeeded"
     assert history[0]["request"]["feedback"] == "Make the image more cinematic"
-    assert history[0]["result"]["image_path"] == str(edited)
+    assert history[0]["result"]["image_path"] == str(source.resolve())
     kwargs = mock_edit.call_args.kwargs
     assert kwargs["model"] == "qwen/qwen-image-edit-2511"
+    assert not edited.exists()
+
+
+@patch("server.routers.scenes.edit_image")
+def test_image_edit_canonicalizes_exact_text_change_prompt_for_dashscope(mock_edit, client, tmp_path):
+    project_dir = tmp_path / "demo"
+    project_dir.mkdir()
+    source = project_dir / "images" / "scene_000.png"
+    source.parent.mkdir(parents=True)
+    source.write_bytes(b"\x89PNG\r\n\x1a\n" + b"\x00" * 32)
+
+    plan = _fresh_plan()
+    plan["meta"]["image_profile"] = {
+        "provider": "replicate",
+        "generation_model": "qwen/qwen-image-2512",
+        "edit_model": "qwen-image-edit-plus",
+        "dashscope_edit_n": 4,
+        "dashscope_edit_prompt_extend": True,
+        "dashscope_edit_negative_prompt": "leave all other text untouched",
+        "dashscope_edit_seed": "7",
+    }
+    plan["scenes"][0]["image_path"] = str(source)
+
+    edited = project_dir / "images" / ".scene_000_edited.png"
+    edited.write_bytes(b"\x89PNG\r\n\x1a\n" + b"\x00" * 32)
+    mock_edit.return_value = edited
+
+    with (
+        patch("server.routers.scenes.PROJECTS_DIR", tmp_path),
+        patch("server.routers.scenes.load_plan", return_value=plan),
+        patch("server.routers.scenes.save_plan", side_effect=lambda d, p: p),
+    ):
+        resp = client.post(
+            "/api/projects/demo/scenes/abc1/image-edit",
+            json={"feedback": ' Change   "teh"   to   "the" '},
+        )
+
+    assert resp.status_code == 200
+    assert mock_edit.call_args.args[0] == 'change "teh" to "the"'
+    kwargs = mock_edit.call_args.kwargs
+    assert kwargs["model"] == "qwen-image-edit-plus"
+    assert kwargs["n"] == 1
+    assert kwargs["prompt_extend"] is False
+    assert kwargs["negative_prompt"] == " "
+    assert kwargs["seed"] == 7
+    history = resp.json()["meta"]["image_action_history"]
+    assert history[0]["request"]["feedback"] == 'change "teh" to "the"'
+    assert history[0]["request"]["dashscope_edit_n"] == 1
+    assert history[0]["request"]["dashscope_edit_prompt_extend"] is False
+    assert history[0]["request"]["dashscope_edit_negative_prompt"] == " "
+    assert resp.json()["scenes"][0]["image_path"] == str(source.resolve())
 
 
 def test_image_edit_requires_existing_image(client, tmp_path):
@@ -328,7 +384,7 @@ def test_image_edit_heals_same_project_absolute_path(mock_edit, client, tmp_path
     }
     (project_dir / "plan.json").write_text(json.dumps(raw_plan))
 
-    edited = images_dir / "image_abc1_edited.png"
+    edited = images_dir / ".scene_000_edited.png"
     edited.write_bytes(b"\x89PNG\r\n\x1a\n" + b"\x00" * 32)
     mock_edit.return_value = edited
 
@@ -340,8 +396,9 @@ def test_image_edit_heals_same_project_absolute_path(mock_edit, client, tmp_path
 
     assert resp.status_code == 200
     scene = resp.json()["scenes"][0]
-    assert scene["image_path"] == str(edited.resolve())
+    assert scene["image_path"] == str(real_image.resolve())
     assert mock_edit.call_args.args[1] == str(real_image.resolve())
+    assert not edited.exists()
 
 
 @patch("server.routers.scenes.generate_scene_image")
@@ -375,6 +432,35 @@ def test_image_generate(mock_gen, client, tmp_path):
     assert history[0]["action"] == "generate"
     assert history[0]["status"] == "succeeded"
     assert history[0]["request"] == {"provider": "replicate", "model": "qwen/qwen-image-2512"}
+
+
+def test_image_generate_rejects_native_remotion_scenes(client, tmp_path):
+    (tmp_path / "demo").mkdir()
+    plan = _fresh_plan()
+    plan["scenes"][0]["scene_type"] = "image"
+    plan["scenes"][0]["composition"] = {
+        "family": "three_data_stage",
+        "mode": "native",
+        "props": {},
+        "transition_after": None,
+        "data": {},
+        "render_path": None,
+        "preview_path": None,
+        "rationale": "",
+    }
+
+    with (
+        patch("server.routers.scenes.PROJECTS_DIR", tmp_path),
+        patch("server.routers.scenes.load_plan", return_value=plan),
+        patch(
+            "server.routers.scenes.resolve_image_profile",
+            return_value={"provider": "replicate", "generation_model": "qwen/qwen-image-2512"},
+        ),
+    ):
+        resp = client.post("/api/projects/demo/scenes/abc1/image-generate", json={})
+
+    assert resp.status_code == 400
+    assert "native Remotion path" in resp.json()["detail"]
 
 
 @patch(

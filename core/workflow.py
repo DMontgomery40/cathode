@@ -20,6 +20,7 @@ from .project_schema import (
     normalize_brief,
     normalize_scene,
     sanitize_project_name,
+    scene_composition_payload,
 )
 from .voice_gen import DEFAULT_ELEVENLABS_VOICE, DEFAULT_VOICE, ELEVENLABS_VOICES
 
@@ -35,7 +36,9 @@ def _motion_scene_defaults(scene: dict[str, Any]) -> dict[str, Any]:
     motion = scene.get("motion") if isinstance(scene.get("motion"), dict) else {}
     props = motion.get("props") if isinstance(motion.get("props"), dict) else {}
     return {
-        "template_id": str(motion.get("template_id") or "").strip() or infer_motion_template(scene),
+        # Keep the initial motion seed intentionally neutral so composition_planner
+        # can make the first real family decision from the scene itself.
+        "template_id": str(motion.get("template_id") or "").strip() or "kinetic_title",
         "props": {
             "headline": str(props.get("headline") or (lines[0] if lines else title) or "Motion beat").strip(),
             "body": str(props.get("body") or "\n".join(lines[1:3]) or narration[:180]).strip(),
@@ -207,11 +210,24 @@ def _apply_composition_mode_to_scenes(
     return transformed
 
 
+def _finalize_scene_manifestations(scenes: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    finalized: list[dict[str, Any]] = []
+    for scene in scenes:
+        item = dict(scene)
+        composition = dict(item.get("composition") or {}) if isinstance(item.get("composition"), dict) else {}
+        composition["manifestation"] = scene_composition_payload(item)["manifestation"]
+        item["composition"] = composition
+        finalized.append(item)
+    return finalized
+
+
 def create_plan_from_brief(
     *,
     project_name: str,
     brief: dict[str, Any],
     provider: str,
+    storyboard_provider: str | None = None,
+    treatment_provider: str | None = None,
     image_model: str = "qwen/qwen-image-2512",
     image_profile: dict[str, Any] | None = None,
     video_profile: dict[str, Any] | None = None,
@@ -219,6 +235,8 @@ def create_plan_from_brief(
     render_profile: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Create a new normalized plan from a user brief."""
+    creative_provider = str(storyboard_provider or provider or "openai").strip() or "openai"
+    machinery_provider = str(treatment_provider or provider or creative_provider).strip() or creative_provider
     normalized_brief = normalize_brief(brief)
     normalized_brief["project_name"] = sanitize_project_name(project_name)
     resolved_image_profile = dict(image_profile or default_image_profile())
@@ -235,15 +253,16 @@ def create_plan_from_brief(
         resolved_tts_profile["provider"] = "elevenlabs"
         resolved_tts_profile["voice"] = DEFAULT_ELEVENLABS_VOICE
 
-    scenes, storyboard_meta = generate_storyboard_with_metadata(normalized_brief, provider=provider)
+    scenes, storyboard_meta = generate_storyboard_with_metadata(normalized_brief, provider=creative_provider)
     scenes = [normalize_scene(scene, i) for i, scene in enumerate(scenes)]
     scenes = _apply_composition_mode_to_scenes(scenes, brief=normalized_brief)
     scenes = plan_scene_compositions(scenes, brief=normalized_brief)
     scenes, treatment_meta = plan_scene_treatments_with_metadata(
         scenes,
         brief=normalized_brief,
-        provider=provider,
+        provider=machinery_provider,
     )
+    scenes = _finalize_scene_manifestations(scenes)
     scenes, resolved_tts_profile = _pick_scene_voice_plan(
         scenes,
         brief=normalized_brief,
@@ -254,7 +273,9 @@ def create_plan_from_brief(
         "meta": {
             "project_name": normalized_brief["project_name"],
             "created_utc": _utc_now(),
-            "llm_provider": provider,
+            "llm_provider": creative_provider,
+            "creative_llm_provider": creative_provider,
+            "treatment_llm_provider": machinery_provider,
             "image_model": resolved_image_profile["generation_model"],
             "image_profile": resolved_image_profile,
             "video_model": str((video_profile or default_video_profile()).get("generation_model") or ""),
@@ -272,6 +293,11 @@ def create_plan_from_brief(
         append_actual_cost_entry(plan, storyboard_meta["actual"])
     if isinstance(storyboard_meta.get("preflight"), dict):
         plan.setdefault("meta", {}).setdefault("cost_actual", {})["llm_preflight"] = storyboard_meta["preflight"]
+    runtime_repair_meta = storyboard_meta.get("runtime_repair") if isinstance(storyboard_meta, dict) else None
+    if isinstance(runtime_repair_meta, dict) and isinstance(runtime_repair_meta.get("actual"), dict):
+        append_actual_cost_entry(plan, runtime_repair_meta["actual"])
+    if isinstance(runtime_repair_meta, dict) and isinstance(runtime_repair_meta.get("preflight"), dict):
+        plan.setdefault("meta", {}).setdefault("cost_actual", {})["llm_preflight_runtime_repair"] = runtime_repair_meta["preflight"]
     if isinstance(treatment_meta.get("actual"), dict):
         append_actual_cost_entry(plan, treatment_meta["actual"])
     if isinstance(treatment_meta.get("preflight"), dict):
@@ -283,6 +309,8 @@ def rebuild_plan_from_meta(
     plan: dict[str, Any],
     *,
     provider: str | None = None,
+    storyboard_provider: str | None = None,
+    treatment_provider: str | None = None,
 ) -> dict[str, Any]:
     """
     Regenerate storyboard scenes from `meta.brief` (or legacy `meta.input_text`).
@@ -293,7 +321,19 @@ def rebuild_plan_from_meta(
     normalized = backfill_plan(plan)
     meta = dict(normalized.get("meta", {}))
 
-    chosen_provider = (provider or meta.get("llm_provider") or "openai").strip()
+    creative_provider = str(
+        storyboard_provider
+        or meta.get("creative_llm_provider")
+        or provider
+        or meta.get("llm_provider")
+        or "openai"
+    ).strip() or "openai"
+    machinery_provider = str(
+        treatment_provider
+        or meta.get("treatment_llm_provider")
+        or provider
+        or creative_provider
+    ).strip() or creative_provider
     source = meta.get("brief") if isinstance(meta.get("brief"), dict) else None
     if not source:
         source = str(meta.get("input_text") or "")
@@ -307,7 +347,7 @@ def rebuild_plan_from_meta(
         next_tts_profile["provider"] = "elevenlabs"
         next_tts_profile["voice"] = DEFAULT_ELEVENLABS_VOICE
 
-    scenes, storyboard_meta = generate_storyboard_with_metadata(source, provider=chosen_provider)
+    scenes, storyboard_meta = generate_storyboard_with_metadata(source, provider=creative_provider)
     normalized_scenes = []
     for i, scene in enumerate(scenes):
         item = normalize_scene(scene, i)
@@ -320,15 +360,18 @@ def rebuild_plan_from_meta(
     normalized_scenes, treatment_meta = plan_scene_treatments_with_metadata(
         normalized_scenes,
         brief=meta.get("brief") or {},
-        provider=chosen_provider,
+        provider=machinery_provider,
     )
+    normalized_scenes = _finalize_scene_manifestations(normalized_scenes)
     normalized_scenes, next_tts_profile = _pick_scene_voice_plan(
         normalized_scenes,
         brief=meta.get("brief") or {},
         tts_profile=next_tts_profile,
     )
 
-    meta["llm_provider"] = chosen_provider
+    meta["llm_provider"] = creative_provider
+    meta["creative_llm_provider"] = creative_provider
+    meta["treatment_llm_provider"] = machinery_provider
     meta["regenerated_utc"] = _utc_now()
     meta["tts_profile"] = next_tts_profile
     if isinstance(storyboard_meta.get("actual"), dict):
@@ -337,6 +380,14 @@ def rebuild_plan_from_meta(
         actual["entries"] = [*entries, storyboard_meta["actual"]]
         if isinstance(storyboard_meta.get("preflight"), dict):
             actual["llm_preflight"] = storyboard_meta["preflight"]
+        meta["cost_actual"] = actual
+    runtime_repair_meta = storyboard_meta.get("runtime_repair") if isinstance(storyboard_meta, dict) else None
+    if isinstance(runtime_repair_meta, dict) and isinstance(runtime_repair_meta.get("actual"), dict):
+        actual = meta.get("cost_actual") if isinstance(meta.get("cost_actual"), dict) else {}
+        entries = actual.get("entries") if isinstance(actual.get("entries"), list) else []
+        actual["entries"] = [*entries, runtime_repair_meta["actual"]]
+        if isinstance(runtime_repair_meta.get("preflight"), dict):
+            actual["llm_preflight_runtime_repair"] = runtime_repair_meta["preflight"]
         meta["cost_actual"] = actual
     if isinstance(treatment_meta.get("actual"), dict):
         actual = meta.get("cost_actual") if isinstance(meta.get("cost_actual"), dict) else {}

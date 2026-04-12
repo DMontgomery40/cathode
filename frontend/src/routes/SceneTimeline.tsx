@@ -30,6 +30,7 @@ import type { ImageActionHistoryEntry, Scene, Plan } from '../lib/schemas/plan.t
 import { ResizeHandle, workspaceLayout } from '../design-system/layout'
 import { getApiErrorMessage } from '../lib/api/errors.ts'
 import { useInvalidateProjectOnJobCompletion } from '../lib/api/project-job-sync.ts'
+import { resolveRenderOutputFilename } from '../lib/render-output.ts'
 import { sceneHasRenderableAudio, sceneHasRenderableVisual } from '../lib/scene-media.ts'
 import { resolveReplicateVideoRoute } from '../lib/video-generation.ts'
 
@@ -415,7 +416,11 @@ export function SceneTimeline() {
   const allReadyToRender = scenes.length > 0 && scenesWithVisual.length === scenes.length && scenesWithAudio.length === scenes.length
   const projectVideoPath = typeof currentPlan?.meta?.video_path === 'string' ? currentPlan.meta.video_path : null
   const projectVideoExists = typeof currentPlan?.meta?.video_exists === 'boolean' ? currentPlan.meta.video_exists : undefined
-  const renderOutputFilename = projectVideoPath?.split('/').pop() ?? 'final_video.mp4'
+  const renderOutputFilename = resolveRenderOutputFilename({
+    videoPath: projectVideoPath,
+    projectName: typeof currentPlan?.meta?.project_name === 'string' ? currentPlan.meta.project_name : null,
+    projectId,
+  })
   const renderReadinessCopy = allReadyToRender
     ? (projectVideoExists ? 'Ready to re-render from the current storyboard.' : 'All visuals and audio are in place. Ready to render.')
     : `${scenesWithVisual.length}/${scenes.length} visuals and ${scenesWithAudio.length}/${scenes.length} audio ready for render.`

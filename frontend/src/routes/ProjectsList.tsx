@@ -1,14 +1,58 @@
+import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { WorkspaceHeader } from '../components/composed/WorkspaceHeader.tsx'
 import { ProjectCard } from '../features/projects/ProjectCard.tsx'
 import { Button } from '../components/primitives/Button.tsx'
+import { Select } from '../components/primitives/Select.tsx'
 import { useProjects } from '../lib/api/hooks.ts'
+import type { ProjectSummary } from '../lib/api/projects.ts'
 import { WorkspaceCanvas, WorkspaceEmptyState, WorkspacePanel } from '../design-system/recipes'
+
+type ProjectSortOrder = 'created-desc' | 'created-asc' | 'updated-desc' | 'name-asc'
+
+const PROJECT_SORT_OPTIONS = [
+  { value: 'created-desc', label: 'Newest first' },
+  { value: 'created-asc', label: 'Oldest first' },
+  { value: 'updated-desc', label: 'Recently updated' },
+  { value: 'name-asc', label: 'A to Z' },
+] as const
+
+function timestampValue(iso?: string | null): number {
+  if (!iso) return 0
+  const timestamp = new Date(iso).valueOf()
+  return Number.isFinite(timestamp) ? timestamp : 0
+}
+
+function sortProjects(projects: ProjectSummary[], order: ProjectSortOrder): ProjectSummary[] {
+  return [...projects].sort((left, right) => {
+    if (order === 'name-asc') {
+      return left.name.localeCompare(right.name)
+    }
+
+    const useCreatedTime = order === 'created-desc' || order === 'created-asc'
+    const leftTime = useCreatedTime
+      ? timestampValue(left.created_utc || left.updated_utc)
+      : timestampValue(left.updated_utc || left.created_utc)
+    const rightTime = useCreatedTime
+      ? timestampValue(right.created_utc || right.updated_utc)
+      : timestampValue(right.updated_utc || right.created_utc)
+    if (leftTime !== rightTime) {
+      return order === 'created-asc' ? leftTime - rightTime : rightTime - leftTime
+    }
+
+    return left.name.localeCompare(right.name)
+  })
+}
 
 export function ProjectsList() {
   const navigate = useNavigate()
   const { data: projects, isLoading } = useProjects()
+  const [sortOrder, setSortOrder] = useState<ProjectSortOrder>('created-desc')
   const projectCount = projects?.length ?? 0
+  const sortedProjects = useMemo(
+    () => sortProjects(projects ?? [], sortOrder),
+    [projects, sortOrder],
+  )
 
   return (
     <div className="flex flex-col h-full">
@@ -46,6 +90,20 @@ export function ProjectsList() {
             </div>
           </div>
         </WorkspacePanel>
+
+        {!isLoading && sortedProjects.length > 0 ? (
+          <div className="flex justify-end">
+            <div className="w-full sm:w-[15rem]">
+              <Select
+                label="Sort projects"
+                value={sortOrder}
+                onChange={(event) => setSortOrder(event.target.value as ProjectSortOrder)}
+                options={PROJECT_SORT_OPTIONS.map((option) => ({ value: option.value, label: option.label }))}
+                hint="Newest first uses project creation time. Recently updated uses the latest plan activity."
+              />
+            </div>
+          </div>
+        ) : null}
 
         {isLoading ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-[var(--space-4)]">
@@ -87,7 +145,7 @@ export function ProjectsList() {
           />
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-[var(--space-4)]">
-            {projects.map((project) => (
+            {sortedProjects.map((project) => (
               <ProjectCard key={project.name} project={project} />
             ))}
           </div>

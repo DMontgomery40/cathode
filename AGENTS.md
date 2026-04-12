@@ -4,7 +4,10 @@ This file is for AI agents working in this repo.
 
 ## Start Here
 
-1. Read `CLAUDE.md` first.
+0. **You MUST read ~/.codex/this/project/MEMORY.md and all links within to understand this repo and it's components**
+   It is CRITICAL AND MANDATORY THAT YOU UPDATE MEMORY.md with anything that a future agent would need to know
+    *The MEMORY.md file for this project should be treated as a TABLE OF CONTENTS, linking to other consisely worded well-named .md files*
+1. Read `CLAUDE.md` 
 2. Treat `projects/<project>/plan.json` as the source of truth for storyboard state.
 3. Keep pipeline behavior generic and product-facing. Do not reintroduce domain-specific workflows.
 
@@ -71,6 +74,7 @@ Both rely on the same underlying pipeline services and project store.
 ## Director Contract Rules
 
 - Claude gets the full normalized brief plus the full raw user input.
+- In Cathode's product workflow, Claude/Anthropic is the creative scene writer. OpenAI may handle downstream deterministic machinery or treatment planning, but should not replace Claude as the scene author.
 - Brief options select capability blocks and examples for the director prompt; they do not replace the core prompt or the raw user dump.
 - Remotion is not “extra UI stuff.” It is Cathode’s deterministic manifestation layer for scenes that Claude dreams up.
 - Pure creative briefs should remain image-first by default. Do not silently drag whimsical, editorial, surreal, or storybook briefs into generic motion treatment unless the brief clearly asks for motion/data/demo structure or a downstream treatment planner has an explicit product reason to do so.
@@ -111,6 +115,20 @@ Do not assume README screenshots exist or are good enough. Fresh captured footag
 The reviewer sub-agent should be given frames and a short gut-check prompt, not a long JSON-heavy briefing.
 Save the raw reviewer reply in the bundle, then have the parent agent translate it into the structured observations/report that Cathode uses for retry logic and handoff.
 Use the packaged `capture_live_demo.py` script for deterministic browser capture and `apply_retry_actions.py` when the review report recommends another bounded attempt.
+
+## Remotion Development Skill
+
+Cathode now ships a packaged Remotion-development skill:
+
+- canonical path: `skills/cathode-remotion-development/`
+- Claude mirror: `.claude/skills/cathode-remotion-development/`
+
+Use it when tracing or extending the Cathode Remotion path so future agents do not have to rediscover:
+
+- the planner -> schema -> treatment -> manifest -> renderer flow
+- the canonical `scene.composition` contract
+- the repo's Remotion family contracts
+- the official Remotion docs that matter first
 
 ## Provider UX
 
@@ -163,3 +181,5 @@ These are intentionally different:
 - Do not add external publish/QC systems or work-specific automations to this fork.
 - Keep reviewed footage plumbing generic. Do not add domain-specific capture or review logic to core Cathode.
 - Do not solve product gaps by manually authoring project-specific output. Solve them in the reusable pipeline.
+
+**It is CRITICAL AND MANDATORY THAT YOU UPDATE MEMORY.md with anything that a future agent would need to know**

@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import os
+from datetime import datetime, timezone
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -178,12 +180,15 @@ _FAKE_PLAN = {
 def test_get_projects(mock_list, mock_load, client, tmp_path):
     project_dir = tmp_path / "project_a"
     project_dir.mkdir()
+    (project_dir / "plan.json").write_text("{}", encoding="utf-8")
     (project_dir / "render.mp4").write_bytes(b"mp4")
     mock_load.return_value = {
         **_FAKE_PLAN,
         "meta": {
             **_FAKE_PLAN["meta"],
             "video_path": "projects/project_a/render.mp4",
+            "created_utc": "2026-03-14T10:00:00Z",
+            "rendered_utc": "2026-03-14T12:30:00Z",
         },
     }
 
@@ -201,8 +206,35 @@ def test_get_projects(mock_list, mock_load, client, tmp_path):
     assert proj["scene_count"] == 2
     assert proj["video_path"] == "render.mp4"
     assert proj["has_video"] is True
+    assert proj["created_utc"] == "2026-03-14T10:00:00Z"
+    assert proj["updated_utc"] == "2026-03-14T12:30:00Z"
     assert proj["image_profile"] == {"provider": "replicate"}
     assert proj["tts_profile"] == {"provider": "kokoro"}
+
+
+def test_get_projects_falls_back_to_plan_timestamp_when_meta_dates_missing(client, tmp_path):
+    project_dir = tmp_path / "project_a"
+    project_dir.mkdir()
+    plan_path = project_dir / "plan.json"
+    plan_path.write_text("{}", encoding="utf-8")
+    fallback_time = datetime(2026, 3, 9, 15, 45, tzinfo=timezone.utc).timestamp()
+    os.utime(plan_path, (fallback_time, fallback_time))
+
+    fake_plan = {
+        "meta": {"video_path": None, "image_profile": None, "tts_profile": None},
+        "scenes": [],
+    }
+
+    with (
+        patch("server.routers.projects.PROJECTS_DIR", tmp_path),
+        patch("server.routers.projects.list_projects", return_value=["project_a"]),
+        patch("server.routers.projects.load_plan", return_value=fake_plan),
+    ):
+        resp = client.get("/api/projects")
+
+    assert resp.status_code == 200
+    assert resp.json()[0]["created_utc"] == "2026-03-09T15:45:00Z"
+    assert resp.json()[0]["updated_utc"] == "2026-03-09T15:45:00Z"
 
 
 def test_get_projects_ignores_cross_project_thumbnail_paths(client, tmp_path):

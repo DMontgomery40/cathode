@@ -18,15 +18,22 @@ import uuid
 from pathlib import Path
 
 import streamlit as st
-from dotenv import load_dotenv
 
 from core.branding import PRODUCT_NAME
 from core.director import analyze_style_references, generate_storyboard, refine_narration, refine_prompt
-from core.image_gen import available_image_edit_models, default_image_edit_model, edit_image, generate_scene_image
+from core.image_gen import (
+    available_image_edit_models,
+    canonicalize_exact_text_edit_prompt,
+    default_image_edit_model,
+    edit_image,
+    generate_scene_image,
+)
 from core.pipeline_service import (
+    _canonical_scene_image_path,
     create_project_from_brief_service,
     generate_project_assets_service,
     process_existing_project_service,
+    replace_scene_image_preserving_identity,
     render_project_service,
     tts_kwargs_from_profile,
 )
@@ -51,6 +58,7 @@ from core.runtime import (
     check_api_keys as _check_api_keys_impl,
     default_local_image_generation_model as _default_local_image_generation_model_impl,
     default_replicate_video_generation_model as _default_replicate_video_generation_model_impl,
+    load_repo_env,
     resolve_image_profile as _resolve_image_profile_impl,
     resolve_video_profile as _resolve_video_profile_impl,
 )
@@ -85,8 +93,8 @@ from core.voice_gen import (
     generate_scene_audio,
 )
 
-# Load environment variables (override shell env vars with .env file)
-load_dotenv(override=True)
+# Load repo-local environment variables (override shell env vars with .env file).
+load_repo_env(override=True)
 
 SOURCE_MODE_LABELS: dict[str, str] = {
     "ideas_notes": "Ideas / Notes (rough notes; AI writes the draft)",
@@ -1450,7 +1458,15 @@ def render_step_2():
                             elif has_image:
                                 with st.spinner("Editing image..."):
                                     try:
-                                        edited_path = project_dir / "images" / f"scene_{scene_id:03d}_edited.png"
+                                        feedback = canonicalize_exact_text_edit_prompt(refinement) or refinement
+                                        canonical_image_path = _canonical_scene_image_path(project_dir, scene)
+                                        edited_path = (
+                                            canonical_image_path.with_name(
+                                                f".{canonical_image_path.stem}_edited{canonical_image_path.suffix}"
+                                            )
+                                            if canonical_image_path is not None
+                                            else project_dir / "images" / f"scene_{scene_id:03d}_edited.png"
+                                        )
                                         edit_kwargs: dict = {"model": st.session_state.image_edit_model}
                                         if str(st.session_state.image_edit_model).startswith("qwen-image-edit"):
                                             edit_kwargs["n"] = int(st.session_state.dashscope_edit_n)
@@ -1462,13 +1478,21 @@ def render_step_2():
                                             seed_str = str(st.session_state.dashscope_edit_seed).strip()
                                             if seed_str.isdigit():
                                                 edit_kwargs["seed"] = int(seed_str)
+                                            if feedback != refinement:
+                                                edit_kwargs["n"] = 1
+                                                edit_kwargs["prompt_extend"] = False
+                                                edit_kwargs["negative_prompt"] = " "
                                         edit_image(
-                                            refinement,
+                                            feedback,
                                             scene["image_path"],
                                             edited_path,
                                             **edit_kwargs,
                                         )
-                                        edited_path.rename(scene["image_path"])
+                                        replace_scene_image_preserving_identity(project_dir, scene, edited_path)
+                                        scene["video_path"] = None
+                                        scene["scene_type"] = "image"
+                                        scene["preview_path"] = None
+                                        save_plan(project_dir, plan)
                                         st.rerun()
                                     except Exception as e:
                                         st.error(f"Error: {e}")

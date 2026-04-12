@@ -89,6 +89,66 @@ test.describe('Projects List', () => {
     await expect(grid).toBeVisible()
   })
 
+  test('project list can switch between newest-first and alphabetical sorting', async ({ page }) => {
+    await page.route('**/api/projects', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([
+          {
+            name: 'zebra_alpha',
+            scene_count: 8,
+            has_video: false,
+            video_path: null,
+            thumbnail_path: null,
+            created_utc: '2026-03-10T08:00:00Z',
+            updated_utc: '2026-03-16T08:00:00Z',
+            image_profile: null,
+            tts_profile: null,
+          },
+          {
+            name: 'moon_archive',
+            scene_count: 4,
+            has_video: true,
+            video_path: null,
+            thumbnail_path: null,
+            created_utc: '2026-03-15T12:00:00Z',
+            updated_utc: '2026-03-15T12:00:00Z',
+            image_profile: null,
+            tts_profile: null,
+          },
+          {
+            name: 'alpha_old',
+            scene_count: 2,
+            has_video: false,
+            video_path: null,
+            thumbnail_path: null,
+            created_utc: '2026-03-01T05:00:00Z',
+            updated_utc: '2026-03-01T05:00:00Z',
+            image_profile: null,
+            tts_profile: null,
+          },
+        ]),
+      })
+    })
+
+    await page.reload()
+
+    const projectTitles = page.locator('button h3')
+    await expect(projectTitles).toHaveCount(3)
+    await expect(page.getByLabel('Sort projects')).toHaveValue('created-desc')
+    await expect(projectTitles).toHaveText(['moon_archive', 'zebra_alpha', 'alpha_old'])
+
+    await page.getByLabel('Sort projects').selectOption('name-asc')
+    await expect(projectTitles).toHaveText(['alpha_old', 'moon_archive', 'zebra_alpha'])
+
+    await page.getByLabel('Sort projects').selectOption('created-asc')
+    await expect(projectTitles).toHaveText(['alpha_old', 'zebra_alpha', 'moon_archive'])
+
+    await page.getByLabel('Sort projects').selectOption('updated-desc')
+    await expect(projectTitles).toHaveText(['zebra_alpha', 'moon_archive', 'alpha_old'])
+  })
+
   test('breadcrumb Home link navigates back', async ({ page }) => {
     const homeLink = page.getByRole('banner').getByRole('navigation', { name: 'Breadcrumb' }).getByRole('link', { name: 'Home' })
     await homeLink.click()

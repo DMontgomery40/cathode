@@ -20,9 +20,9 @@ import type { Job } from '../lib/api/jobs.ts'
 import { WorkspaceCanvas, WorkspaceGrid, WorkspacePanel } from '../design-system/recipes'
 import { sceneHasRenderableAudio, sceneHasRenderableVisual } from '../lib/scene-media.ts'
 import { useInvalidateProjectOnJobCompletion } from '../lib/api/project-job-sync.ts'
+import { resolveRenderOutputFilename } from '../lib/render-output.ts'
 import { PlayerSurface } from '../remotion/PlayerSurface.tsx'
 
-const DEFAULT_OUTPUT_FILENAME = 'final_video.mp4'
 const DEFAULT_FPS = 24
 
 function resolveRenderFps(renderProfile: Record<string, unknown> | null): number {
@@ -51,7 +51,7 @@ export function RenderControl() {
   const cancelJobMut = useCancelJob()
   const savePlan = useSavePlan(projectId)
 
-  const [outputFilename, setOutputFilename] = useState(DEFAULT_OUTPUT_FILENAME)
+  const [outputFilename, setOutputFilename] = useState(() => resolveRenderOutputFilename({ projectId }))
   const [fps, setFps] = useState(DEFAULT_FPS)
   const [outputFilenameDirty, setOutputFilenameDirty] = useState(false)
   const [fpsDirty, setFpsDirty] = useState(false)
@@ -95,9 +95,11 @@ export function RenderControl() {
   const latestRenderJob: Job | null = renderJobs[0] ?? null
 
   const hasActiveJob = activeRenderJob !== null
-  const existingOutputFilename = typeof plan?.meta?.video_path === 'string' && plan.meta.video_path
-    ? plan.meta.video_path.split('/').pop() ?? DEFAULT_OUTPUT_FILENAME
-    : DEFAULT_OUTPUT_FILENAME
+  const existingOutputFilename = resolveRenderOutputFilename({
+    videoPath: typeof plan?.meta?.video_path === 'string' ? plan.meta.video_path : null,
+    projectName: typeof plan?.meta?.project_name === 'string' ? plan.meta.project_name : null,
+    projectId,
+  })
   const renderFps = resolveRenderFps(
     typeof renderProfile === 'object' && renderProfile
       ? renderProfile as Record<string, unknown>
@@ -113,7 +115,7 @@ export function RenderControl() {
   useEffect(() => {
     setOutputFilenameDirty(false)
     setFpsDirty(false)
-    setOutputFilename(DEFAULT_OUTPUT_FILENAME)
+    setOutputFilename(resolveRenderOutputFilename({ projectId }))
     setFps(DEFAULT_FPS)
     setTextRenderModeDirty(false)
     setTextRenderMode('visual_authored')

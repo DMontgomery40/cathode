@@ -13,13 +13,11 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from dotenv import load_dotenv
-
-load_dotenv(override=True)
-
 from core.pipeline_service import process_existing_project_service
 from core.project_store import list_projects, load_plan
-from core.runtime import PROJECTS_DIR
+from core.runtime import PROJECTS_DIR, load_repo_env
+
+load_repo_env(override=True)
 
 
 def regenerate_project(project_dir: Path, dry_run: bool = False) -> bool:
