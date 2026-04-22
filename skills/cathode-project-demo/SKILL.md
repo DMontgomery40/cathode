@@ -1,6 +1,6 @@
 ---
 name: cathode-project-demo
-description: Turn a live product, localhost app, or software repository into a reviewed narrated demo video with Cathode. Use when Codex or Claude needs to demo a real UI or workflow from scratch, capture fresh footage, critique framing and state quality, and feed approved clips into Cathode for final render.
+description: Turn a live product, localhost app, or software repository into a reviewed narrated demo video with Cathode. Use when Codex or Claude needs to demo a real UI or workflow from scratch, drive the real app with desktop-use, critique framing and state quality, and feed approved clips into Cathode for final render.
 ---
 
 # Cathode Project Demo
@@ -9,7 +9,7 @@ Use this skill to build a demo video from a live product, not from README screen
 
 1. inspect the target repo
 2. launch or attach to the app
-3. capture fresh footage
+3. capture fresh footage with desktop-use
 4. run a short-prompt spawned sub-agent review plus deterministic rules
 5. hand approved clips to Cathode
 6. render
@@ -25,11 +25,12 @@ Prefer the MCP path for repeatable agent-driven runs. Use the app only when a hu
 2. Bootstrap Cathode with `scripts/bootstrap_cathode.py`.
 3. Prepare a capture session with `scripts/prepare_live_demo_session.py`.
 4. Launch the target app with `scripts/launch_target_app.py` when the app is local.
-5. Write a capture plan for the walkthrough, then run `scripts/capture_live_demo.py` so the skill keeps real browser video, a trace, screenshots, and a step manifest.
-6. Postprocess the raw capture with `scripts/postprocess_capture.py`.
-7. Extract review frames, send them to a spawned sub-agent with a deliberately short prompt, save its plain-language response, seed an observations template with `scripts/init_review_observations.py`, then turn your structured observations into a report with `scripts/review_bundle.py`.
-8. Build the Cathode `make_video` payload with `scripts/prepare_cathode_handoff.py`.
-9. Call `make_video`, then poll `get_job_status`.
+5. Write a capture plan/checklist for the walkthrough, record the run while driving the app with desktop-use, then run `scripts/build_capture_manifest.py` so the skill keeps raw capture video, screenshots, and a step manifest.
+6. Use `scripts/capture_live_demo.py` only when you specifically need the older Playwright fallback for headed browser automation, selector-driven retries, CI, or trace zips.
+7. Postprocess the raw capture with `scripts/postprocess_capture.py`.
+8. Extract review frames, send them to a spawned sub-agent with a deliberately short prompt, save its plain-language response, seed an observations template with `scripts/init_review_observations.py`, then turn your structured observations into a report with `scripts/review_bundle.py`.
+9. Build the Cathode `make_video` payload with `scripts/prepare_cathode_handoff.py`.
+10. Call `make_video`, then poll `get_job_status`.
 
 Read these references before the first live run:
 
@@ -43,7 +44,7 @@ Read these references before the first live run:
 - Never rely on README screenshots or shipped stills as the default walkthrough source.
 - Set theme explicitly on every attempt. Never trust ambient OS or browser theme.
 - Set viewport explicitly on every attempt. Never use browser zoom as the main framing control.
-- Keep the raw browser video, trace, screenshots, capture manifest, and reviewer report on every attempt.
+- Keep the raw capture video, screenshots, capture manifest, and reviewer report on every attempt. Keep a trace too when the Playwright fallback is used.
 - Use reviewed footage to steer the final storyboard. Clips marked `warn` can support the story, but should not become the hero proof moment without a clear caveat.
 - The reviewer is not an external API distinction. If the skill is running, the reviewer is a spawned Codex/Claude sub-agent looking at extracted images.
 
@@ -64,6 +65,7 @@ Read these references before the first live run:
 
 The session manifest is the source of truth for:
 
+- preferred capture driver
 - explicit theme
 - explicit viewport
 - artifact directories
@@ -78,11 +80,25 @@ The session manifest is the source of truth for:
 
 ### 4. Capture Fresh Footage
 
-- Use the Playwright tool/skill in headed mode. Capture the real product state from scratch.
-- Write a capture plan JSON with explicit actions, focus selectors, and clip metadata.
-- Run `python3 scripts/capture_live_demo.py --session-json /abs/path/to/session.json --capture-plan /abs/path/to/capture_plan.json`.
-- Save raw browser video, screenshots, trace, and a structured step manifest into the session artifact directories.
-- Record the interaction plan as a capture manifest with clip ids, source paths, time spans, text excerpts, and optional focus boxes.
+- Default path: use the desktop-use / Computer Use surface available in Codex or Claude Code to drive the real app in a visible window.
+- Start a local screen recording before the walkthrough so the hero state and interactions are preserved as real proof footage.
+- Capture checkpoint screenshots as you go. Use those screenshots plus your timing notes to build a `clips.json`, then run:
+
+```bash
+python3 scripts/build_capture_manifest.py \
+  --session-json /abs/path/to/session.json \
+  --raw-video-path /abs/path/to/raw_capture.mp4 \
+  --clips-json /abs/path/to/clips.json
+```
+
+- The `clips.json` can be either a raw array or an object with `clips`. Each clip should include:
+  - `id`
+  - `label`
+  - `start_seconds`
+  - `end_seconds`
+  - `screenshot_path`
+  - optional `focus_box`, `text_excerpt`, `notes`, `review_status`
+- Use `python3 scripts/capture_live_demo.py --session-json ... --capture-plan ...` only when you need the Playwright fallback for selector-driven replay, trace capture, or headless/CI execution.
 
 ### 5. Review Before Handoff
 
@@ -123,7 +139,9 @@ python3 scripts/review_bundle.py \
   - `warn`
   - `retry`
 - If the report says `retry`, follow only the bounded retry actions it recommends.
-- Build the next plan with `python3 scripts/apply_retry_actions.py --capture-plan /abs/path/to/capture_plan.json --review-report /abs/path/to/review_report.json --output-json /abs/path/to/capture_plan.retry.json`, then rerun `capture_live_demo.py`.
+- Build the next plan with `python3 scripts/apply_retry_actions.py --capture-plan /abs/path/to/capture_plan.json --review-report /abs/path/to/review_report.json --output-json /abs/path/to/capture_plan.retry.json`.
+- If you are on the Playwright fallback, rerun `capture_live_demo.py`.
+- If you are on the desktop-use path, rerun the walkthrough with a fresh local recording, then rebuild the manifest with `build_capture_manifest.py`.
 - If the best available result is still imperfect, ship `warn` with a concrete heads-up instead of pretending it looks ideal.
 - After the final MP4 is rendered, extract final-render frames and run the same sub-agent review one more time before calling the demo finished.
 
@@ -168,7 +186,8 @@ Use `make_video` with repo context plus reviewed footage. Typical fields:
 - `scripts/bootstrap_cathode.py`: prepare or reuse a Cathode checkout
 - `scripts/prepare_live_demo_session.py`: create a deterministic capture bundle
 - `scripts/launch_target_app.py`: boot or attach to the target app
-- `scripts/capture_live_demo.py`: run the packaged Playwright capture flow from a capture plan
+- `scripts/build_capture_manifest.py`: turn a desktop-use recording plus clip notes into the standard capture manifest
+- `scripts/capture_live_demo.py`: run the packaged Playwright fallback capture flow from a capture plan
 - `scripts/apply_retry_actions.py`: mutate a capture plan using bounded retry actions
 - `scripts/postprocess_capture.py`: trim and crop raw capture clips into Cathode-ready footage
 - `scripts/extract_review_frames.py`: extract review frames for the spawned QC sub-agent

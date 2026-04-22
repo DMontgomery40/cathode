@@ -76,3 +76,24 @@ def test_build_brief_from_intent_resolves_relative_style_reference_paths_from_wo
     )
 
     assert brief["style_reference_paths"] == [str(style_ref.resolve())]
+
+
+def test_build_brief_from_intent_prefers_explicit_source_paths_over_workspace_autodiscovery(tmp_path):
+    readme = tmp_path / "README.md"
+    selected_doc = tmp_path / "docs" / "selected.md"
+    extra_doc = tmp_path / "docs" / "extra.md"
+    selected_doc.parent.mkdir(parents=True)
+    readme.write_text("# Demo Project\n\nThis should not be auto-added when explicit files are provided.\n")
+    selected_doc.write_text("# Selected\n\nUse this file for the video story.\n")
+    extra_doc.write_text("# Extra\n\nThis file should stay out of the brief when source_paths are explicit.\n")
+
+    brief, metadata = build_brief_from_intent(
+        intent="Make a demo video",
+        workspace_path=tmp_path,
+        source_paths=[selected_doc],
+    )
+
+    assert "selected.md" in brief["source_material"]
+    assert "README.md" not in brief["source_material"]
+    assert "extra.md" not in brief["source_material"]
+    assert metadata["workspace_context"]["files"] == [str(selected_doc.resolve())]

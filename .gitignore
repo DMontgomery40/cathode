@@ -73,5 +73,8 @@ Thumbs.db
 *.tmp
 *.temp
 
+# Local operator context
+LOCAL_QEEG_ADMIN_CONTEXT.md
+
 # Experiments
 experiments/

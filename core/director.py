@@ -33,7 +33,10 @@ def _get_anthropic_client():
     """Get or create singleton Anthropic client."""
     global _anthropic_client
     if _anthropic_client is None:
-        _anthropic_client = anthropic.Anthropic()
+        _anthropic_client = anthropic.Anthropic(
+            timeout=_anthropic_timeout_seconds(),
+            max_retries=_DEFAULT_ANTHROPIC_MAX_RETRIES,
+        )
     return _anthropic_client
 
 
@@ -62,6 +65,24 @@ _MANIFESTATION_RISK_LEVELS = {"low", "medium", "high"}
 _OPENAI_DIRECTOR_MODEL = "gpt-5.4"
 _OPENAI_DIRECTOR_REASONING_EFFORT = "xhigh"
 _ANTHROPIC_DIRECTOR_MODEL = "claude-sonnet-4-6"
+_DEFAULT_ANTHROPIC_TIMEOUT_SECONDS = 45.0
+_DEFAULT_ANTHROPIC_MAX_RETRIES = 1
+
+
+def _anthropic_timeout_seconds() -> float:
+    """Return the configured Anthropic request timeout."""
+    raw_value = str(
+        os.getenv("CATHODE_ANTHROPIC_TIMEOUT_SECONDS")
+        or os.getenv("ANTHROPIC_TIMEOUT_SECONDS")
+        or ""
+    ).strip()
+    if not raw_value:
+        return _DEFAULT_ANTHROPIC_TIMEOUT_SECONDS
+    try:
+        value = float(raw_value)
+    except ValueError:
+        return _DEFAULT_ANTHROPIC_TIMEOUT_SECONDS
+    return value if value > 0 else _DEFAULT_ANTHROPIC_TIMEOUT_SECONDS
 
 def _cached_system(text: str) -> list[dict[str, Any]]:
     """Wrap a system prompt string with cache_control for Anthropic prompt caching."""
@@ -1275,22 +1296,16 @@ def _generate_with_anthropic(system_prompt: str, user_prompt: str, *, return_res
     """Generate storyboard using Anthropic Claude Sonnet 4.6 with forced structured tool output."""
     client = _get_anthropic_client()
 
-    # Use streaming to avoid timeout on large storyboard requests
-    collected_content = []
-    final_message = None
-    with client.messages.stream(
-        model="claude-sonnet-4-6",
-        max_tokens=64000,
+    response = client.messages.create(
+        model=_ANTHROPIC_DIRECTOR_MODEL,
+        max_tokens=12000,
         system=_cached_system(system_prompt),
         messages=[
             {"role": "user", "content": user_prompt},
         ],
         tools=[storyboard_tool_schema()],
         tool_choice={"type": "tool", "name": "emit_storyboard"},
-    ) as stream:
-        final_message = stream.get_final_message()
-
-    response = final_message
+    )
     tool_input = extract_storyboard_tool_input(response.content)
     if not tool_input:
         raise ValueError("No structured storyboard tool output from Anthropic")

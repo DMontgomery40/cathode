@@ -15,8 +15,17 @@ if str(REPO_ROOT) not in sys.path:
 from core.demo_session import (
     DEFAULT_VIEWPORT_HEIGHT,
     DEFAULT_VIEWPORT_WIDTH,
+    SUPPORTED_CAPTURE_DRIVERS,
     build_live_demo_session,
 )
+
+
+def _capture_driver_arg(value: str) -> str:
+    normalized = str(value or "").strip().lower().replace("-", "_").replace(" ", "_")
+    if normalized not in SUPPORTED_CAPTURE_DRIVERS:
+        options = ", ".join(sorted(SUPPORTED_CAPTURE_DRIVERS))
+        raise argparse.ArgumentTypeError(f"capture driver must normalize to one of: {options}")
+    return normalized
 
 
 def parse_args() -> argparse.Namespace:
@@ -27,6 +36,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--launch-command", help="Explicit command used to launch the target app locally.")
     parser.add_argument("--expected-url", help="Expected local URL that indicates the app is ready.")
     parser.add_argument("--preferred-theme", default="dark", help="Explicit starting theme: light or dark.")
+    parser.add_argument(
+        "--capture-driver",
+        default="desktop_use",
+        type=_capture_driver_arg,
+        help="Preferred live-capture driver. Default: desktop_use",
+    )
     parser.add_argument("--viewport-width", type=int, default=DEFAULT_VIEWPORT_WIDTH)
     parser.add_argument("--viewport-height", type=int, default=DEFAULT_VIEWPORT_HEIGHT)
     parser.add_argument("--flow-hint", action="append", default=[], help="Optional note about the flow to capture.")
@@ -42,6 +57,7 @@ def main() -> int:
         launch_command=args.launch_command,
         expected_url=args.expected_url,
         preferred_theme=args.preferred_theme,
+        capture_driver=args.capture_driver,
         flow_hints=args.flow_hint,
         viewport_width=args.viewport_width,
         viewport_height=args.viewport_height,

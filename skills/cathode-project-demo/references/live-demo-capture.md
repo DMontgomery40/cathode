@@ -4,11 +4,13 @@ Use this reference when the product story depends on a running app, local URL, o
 
 ## Capture Defaults
 
-- Use a real browser in headed mode.
+- Use desktop-use / Computer Use as the default driver when the agent runtime supports it.
+- Keep the app in a visible real window. Do not fake the walkthrough from static screenshots.
 - Set viewport explicitly for every attempt.
 - Set theme explicitly for every attempt.
-- Record raw browser video, screenshots, and trace.
-- Keep a structured step manifest with timestamps, action notes, and focus selectors.
+- Record raw capture video and checkpoint screenshots on every attempt.
+- Record a trace too when you intentionally use the Playwright fallback.
+- Keep a structured step manifest with timestamps, action notes, and optional focus selectors or focus boxes.
 - Keep the raw artifacts even when the processed clip looks good.
 
 ## Recommended Attempt Order
@@ -54,7 +56,7 @@ After extraction, hand only frames to the reviewer sub-agent. Keep its raw reply
 
 ## Capture Plan Shape
 
-The packaged capture driver expects a plan JSON with:
+The Playwright fallback driver expects a plan JSON with:
 
 - `theme`
 - optional `viewport`
@@ -81,5 +83,26 @@ Use actions like:
 - `wait_for_timeout`
 - `evaluate`
 - `scroll_into_view`
+
+For the default desktop-use path, keep the same capture-plan thinking, but write down timing and evidence in a `clips.json` after the run. That JSON can be a raw array or an object with `clips`, and each clip should usually include:
+
+- `id`
+- `label`
+- `start_seconds`
+- `end_seconds`
+- `screenshot_path`
+- optional `focus_box`
+- optional `text_excerpt`
+- optional `notes`
+- optional `review_status`
+
+Then run:
+
+```bash
+python3 scripts/build_capture_manifest.py \
+  --session-json /abs/path/to/session.json \
+  --raw-video-path /abs/path/to/raw_capture.mp4 \
+  --clips-json /abs/path/to/clips.json
+```
 
 When review says `retry`, mutate the plan with `scripts/apply_retry_actions.py` instead of hand-editing random new attempts.
