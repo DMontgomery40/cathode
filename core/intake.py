@@ -149,7 +149,7 @@ def inspect_workspace(
         if resolved.exists() and resolved.is_file():
             candidates.append(resolved)
 
-    if root and root.exists():
+    if root and root.exists() and not candidates:
         for pattern in AUTO_CANDIDATE_PATTERNS:
             for path in sorted(root.glob(pattern)):
                 if path.is_file() and path not in candidates:

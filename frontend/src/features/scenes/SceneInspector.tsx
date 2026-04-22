@@ -85,6 +85,10 @@ interface SceneInspectorProps {
   project: string
   sceneIndex: number
   actions?: ReactNode
+  onAddSceneBefore: () => void
+  onAddSceneAfter: () => void
+  onDeleteScene: () => void
+  canDeleteScene?: boolean
   onSceneChange: (updated: Scene) => void
   onUploadImage: (file: File) => void
   onUploadVideo: (file: File) => void
@@ -182,10 +186,11 @@ function ActionButton({
   onClick: () => void
   disabled?: boolean
   children: React.ReactNode
-  variant?: 'default' | 'primary'
+  variant?: 'default' | 'primary' | 'danger'
 }) {
   return (
     <button
+      type="button"
       onClick={onClick}
       disabled={disabled}
       className={clsx(
@@ -196,6 +201,8 @@ function ActionButton({
         'disabled:opacity-40 disabled:cursor-not-allowed',
         variant === 'primary'
           ? 'border-[var(--border-accent)] bg-[var(--accent-primary)]/10 text-[var(--accent-primary)] hover:bg-[var(--accent-primary)]/20'
+          : variant === 'danger'
+            ? 'border-[rgba(200,90,90,0.3)] bg-[rgba(200,90,90,0.12)] text-[var(--signal-danger)] hover:bg-[rgba(200,90,90,0.2)]'
           : 'border-[var(--border-subtle)] bg-[var(--surface-panel-glass)] text-[var(--text-secondary)] hover:bg-[var(--surface-elevated)]',
       )}
       style={{
@@ -698,6 +705,10 @@ export function SceneInspector({
   project,
   sceneIndex,
   actions,
+  onAddSceneBefore,
+  onAddSceneAfter,
+  onDeleteScene,
+  canDeleteScene = true,
   onSceneChange,
   onUploadImage,
   onUploadVideo,
@@ -2791,6 +2802,28 @@ export function SceneInspector({
         role="region"
         aria-label="Scene inspector"
       >
+        <GlassPanel variant="inset" padding="sm">
+          <div className="scene-inspector__action-row scene-inspector__action-row--compact">
+            <ActionButton onClick={onAddSceneBefore}>
+              Add Scene Before
+            </ActionButton>
+            <ActionButton onClick={onAddSceneAfter}>
+              Add Scene After
+            </ActionButton>
+            <ActionButton onClick={onDeleteScene} disabled={!canDeleteScene} variant="danger">
+              Delete Scene
+            </ActionButton>
+          </div>
+          {!canDeleteScene ? (
+            <p
+              className="m-0 pt-[var(--space-2)] text-[var(--text-tertiary)]"
+              style={{ fontSize: '10px', fontFamily: 'var(--font-mono)' }}
+            >
+              Cathode keeps at least one scene in the storyboard.
+            </p>
+          ) : null}
+        </GlassPanel>
+
         <GlassPanel variant="inset" padding="sm">
           <div className="scene-inspector__identity flex flex-wrap items-center gap-[var(--space-3)]">
             <input

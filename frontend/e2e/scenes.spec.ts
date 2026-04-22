@@ -8,6 +8,7 @@ const PROJECT = 'bet365_feature_act_01'
 const DISPOSABLE_PROJECT = `e2e_scene_mutation_${Date.now()}`
 const MOTION_PROJECT = `e2e_motion_scene_${Date.now()}`
 const MANUAL_IMAGE_PROJECT = `e2e_manual_image_${Date.now()}`
+const SWITCH_PROJECT = `e2e_scene_switch_${Date.now()}`
 
 test.describe('Scene Timeline', () => {
   function setNarrowInspectorLayout() {
@@ -32,7 +33,8 @@ test.describe('Scene Timeline', () => {
     })
 
     test('renders the real sample project without mutating it', async ({ page }) => {
-      const options = page.getByRole('option')
+      const options = page.getByRole('listbox', { name: 'Scene timeline' }).getByRole('option')
+      const inspector = page.getByRole('region', { name: 'Scene inspector' })
       await expect(options.first()).toBeVisible()
       await expect(page.getByLabel('Scene title')).toBeVisible()
       await expect(page.getByLabel('Narration text')).toBeVisible()
@@ -43,6 +45,9 @@ test.describe('Scene Timeline', () => {
       await expect(page.getByRole('button', { name: 'Generate All Assets' })).toBeVisible()
       await expect(page.getByRole('button', { name: 'Render Video' })).toBeVisible()
       await expect(page.getByLabel('Image editor')).toBeVisible()
+      await expect(inspector.getByRole('button', { name: 'Add Scene Before' })).toBeVisible()
+      await expect(inspector.getByRole('button', { name: 'Add Scene After' })).toBeVisible()
+      await expect(inspector.getByRole('button', { name: 'Delete Scene' })).toBeVisible()
     })
 
     test('project workspace nav keeps render reachable from scenes', async ({ page }) => {
@@ -78,7 +83,7 @@ test.describe('Scene Timeline', () => {
       const titleInput = page.getByLabel('Scene title')
       const firstTitle = await titleInput.inputValue()
 
-      const secondScene = page.getByRole('option').nth(1)
+      const secondScene = page.getByRole('listbox', { name: 'Scene timeline' }).getByRole('option').nth(1)
       await secondScene.click()
       await expect(secondScene).toHaveAttribute('aria-selected', 'true')
 
@@ -99,7 +104,8 @@ test.describe('Scene Timeline', () => {
       await page.setViewportSize({ width: 1280, height: 720 })
       await page.evaluate(setNarrowInspectorLayout)
       await page.reload()
-      await expect(page.getByRole('region', { name: 'Scene inspector' })).toBeVisible()
+      const inspectorRegion = page.getByRole('region', { name: 'Scene inspector' })
+      await expect(inspectorRegion).toBeVisible()
       await page.locator('button[aria-controls="scene-preview-content"]').click()
 
       const layout = await page.evaluate(() => {
@@ -156,6 +162,9 @@ test.describe('Scene Timeline', () => {
       expect(layout?.lowestVisualButtonBottom).toBeLessThanOrEqual((layout?.visualContentBottom ?? 0) + 1)
       expect(layout?.inspectorScrollHeight).toBeGreaterThan(layout?.inspectorClientHeight ?? 0)
       expect(layout?.inspectorScrollTop).toBeGreaterThan(layout?.beforeScrollTop ?? 0)
+      await expect(inspectorRegion.getByRole('button', { name: 'Add Scene Before' })).toBeVisible()
+      await expect(inspectorRegion.getByRole('button', { name: 'Add Scene After' })).toBeVisible()
+      await expect(inspectorRegion.getByRole('button', { name: 'Delete Scene' })).toBeVisible()
       await expect(page.getByLabel('On-screen text 1')).toBeVisible()
       await expect(page.getByRole('button', { name: 'Generate Preview' })).toBeVisible()
     })
@@ -349,6 +358,47 @@ test.describe('Scene Timeline', () => {
       await expect(page.getByRole('region', { name: 'Scene inspector' })).toBeVisible()
       await expect(page.getByRole('button', { name: 'Generate Image' })).toBeDisabled()
       await expect(page.getByText('Manual image mode is upload-first.')).toBeVisible()
+    })
+  })
+
+  test.describe.serial('cross-project scene selection recovery', () => {
+    test.beforeAll(() => {
+      cloneProjectFixture(PROJECT, SWITCH_PROJECT)
+      const planPath = path.resolve(process.cwd(), '..', 'projects', SWITCH_PROJECT, 'plan.json')
+      const plan = JSON.parse(fs.readFileSync(planPath, 'utf8')) as {
+        scenes: Array<Record<string, unknown>>
+      }
+
+      plan.scenes = plan.scenes.map((scene, index) => ({
+        ...scene,
+        uid: `switch_scene_${index + 1}`,
+      }))
+
+      fs.writeFileSync(planPath, `${JSON.stringify(plan, null, 2)}\n`, 'utf8')
+    })
+
+    test.afterAll(() => {
+      cleanupProjectFixture(SWITCH_PROJECT)
+    })
+
+    test('switching projects in-app reselects a valid scene instead of dropping the inspector', async ({ page }) => {
+      await page.goto(`/projects/${PROJECT}/scenes`)
+      await expect(page.getByRole('region', { name: 'Scene inspector' })).toBeVisible()
+
+      await page.getByRole('listbox', { name: 'Scene timeline' }).getByRole('option').nth(1).click()
+      await expect(page.getByLabel('Scene title')).toBeVisible()
+
+      await page.getByRole('navigation', { name: 'Main navigation' }).getByRole('menuitem', { name: 'Projects' }).click()
+      await expect(page).toHaveURL(/\/projects$/)
+
+      await page.getByRole('button', { name: new RegExp(SWITCH_PROJECT) }).click()
+      await expect(page).toHaveURL(new RegExp(`/projects/${SWITCH_PROJECT}/scenes$`))
+
+      const inspector = page.getByRole('region', { name: 'Scene inspector' })
+      await expect(inspector).toBeVisible()
+      await expect(page.getByText('Select a scene to inspect')).toHaveCount(0)
+      await expect(page.getByLabel('Scene title')).toBeVisible()
+      await expect(inspector.getByRole('button', { name: 'Add Scene Before' })).toBeVisible()
     })
   })
 
@@ -677,7 +727,7 @@ test.describe('Scene Timeline', () => {
       const videoScene = (plan.scenes as Array<Record<string, unknown>>)[1]
       const sceneUid = String(videoScene.uid)
 
-      await page.getByRole('option').nth(1).click()
+      await page.getByRole('listbox', { name: 'Scene timeline' }).getByRole('option').nth(1).click()
       await expect(page.getByLabel('Scene type')).toHaveValue('video')
       await expect(page.getByRole('button', { name: 'Generate Video' })).toBeVisible()
       await expect(page.getByRole('button', { name: 'Agent Demo Scene' })).toBeVisible()
@@ -721,6 +771,66 @@ test.describe('Scene Timeline', () => {
       })
 
       await page.getByRole('button', { name: 'Agent Demo Scene' }).click()
+    })
+
+    test('scene management controls insert before and after, then delete the selected scene', async ({ page }) => {
+      const originalPlan = readProjectPlan(DISPOSABLE_PROJECT)
+      const originalScenes = originalPlan.scenes as Array<Record<string, unknown>>
+      const originalCount = originalScenes.length
+      const originalFirstUid = String(originalScenes[0].uid)
+      const inspector = page.getByRole('region', { name: 'Scene inspector' })
+
+      const readSceneUids = () =>
+        (readProjectPlan(DISPOSABLE_PROJECT).scenes as Array<Record<string, unknown>>).map((scene) => String(scene.uid))
+
+      await expect(inspector.getByRole('button', { name: 'Add Scene Before' })).toBeVisible()
+      await expect(inspector.getByRole('button', { name: 'Add Scene After' })).toBeVisible()
+      await expect(inspector.getByRole('button', { name: 'Delete Scene' })).toBeVisible()
+
+      await inspector.getByRole('button', { name: 'Add Scene Before' }).click()
+      await expect.poll(() => readSceneUids().length).toBe(originalCount + 1)
+
+      const uidsAfterBefore = readSceneUids()
+      const insertedBeforeUid = uidsAfterBefore[0]
+      expect(insertedBeforeUid).not.toBe(originalFirstUid)
+      expect(uidsAfterBefore[1]).toBe(originalFirstUid)
+      await expect(page.getByRole('listbox', { name: 'Scene timeline' }).getByRole('option').first()).toHaveAttribute('aria-selected', 'true')
+
+      await inspector.getByRole('button', { name: 'Add Scene After' }).click()
+      await expect.poll(() => readSceneUids().length).toBe(originalCount + 2)
+
+      const uidsAfterAfter = readSceneUids()
+      const insertedAfterUid = uidsAfterAfter[1]
+      expect(insertedAfterUid).not.toBe(originalFirstUid)
+      expect(insertedAfterUid).not.toBe(insertedBeforeUid)
+      expect(uidsAfterAfter[2]).toBe(originalFirstUid)
+      await expect(page.getByRole('listbox', { name: 'Scene timeline' }).getByRole('option').nth(1)).toHaveAttribute('aria-selected', 'true')
+
+      page.once('dialog', async (dialog) => {
+        expect(dialog.message()).toBe('Delete this scene?')
+        await dialog.accept()
+      })
+      await inspector.getByRole('button', { name: 'Delete Scene' }).click()
+      await expect.poll(() => readSceneUids().length).toBe(originalCount + 1)
+
+      const uidsAfterDelete = readSceneUids()
+      expect(uidsAfterDelete[0]).toBe(insertedBeforeUid)
+      expect(uidsAfterDelete[1]).toBe(originalFirstUid)
+      expect(uidsAfterDelete).not.toContain(insertedAfterUid)
+      await expect(page.getByRole('listbox', { name: 'Scene timeline' }).getByRole('option').nth(1)).toHaveAttribute('aria-selected', 'true')
+    })
+
+    test('timeline add card keeps the inspector hidden when the user is in canvas-focus mode', async ({ page }) => {
+      const originalCount = (readProjectPlan(DISPOSABLE_PROJECT).scenes as Array<Record<string, unknown>>).length
+
+      await page.getByRole('button', { name: 'Hide Inspector' }).click()
+      await expect(page.getByRole('region', { name: 'Scene inspector' })).toHaveCount(0)
+
+      await page.getByLabel('Add scene').click()
+
+      await expect.poll(() => (readProjectPlan(DISPOSABLE_PROJECT).scenes as Array<Record<string, unknown>>).length).toBe(originalCount + 1)
+      await expect(page.getByRole('region', { name: 'Scene inspector' })).toHaveCount(0)
+      await expect(page.getByRole('button', { name: 'Show Inspector' })).toBeVisible()
     })
   })
 
@@ -845,7 +955,7 @@ test.describe('Scene Timeline', () => {
     test('metric_improvement editor shows before/after panels and delta', async ({ page }) => {
       await page.goto(`/projects/${CLINICAL_PROJECT}/scenes`)
       await expect(page.getByRole('region', { name: 'Scene inspector' })).toBeVisible()
-      await page.getByRole('option').nth(1).click()
+      await page.getByRole('listbox', { name: 'Scene timeline' }).getByRole('option').nth(1).click()
       await expect(page.getByLabel('Composition family')).toHaveValue('metric_improvement')
       await expect(page.getByLabel('Metric headline')).toHaveValue('Alpha Power')
       await expect(page.getByLabel('Metric name')).toHaveValue('Fz Alpha (8-12 Hz)')
@@ -860,7 +970,7 @@ test.describe('Scene Timeline', () => {
     test('brain_region_focus editor shows headline, regions array, and caption', async ({ page }) => {
       await page.goto(`/projects/${CLINICAL_PROJECT}/scenes`)
       await expect(page.getByRole('region', { name: 'Scene inspector' })).toBeVisible()
-      await page.getByRole('option').nth(2).click()
+      await page.getByRole('listbox', { name: 'Scene timeline' }).getByRole('option').nth(2).click()
       await expect(page.getByLabel('Composition family')).toHaveValue('brain_region_focus')
       await expect(page.getByLabel('Brain region headline')).toHaveValue('Regional Activity')
       await expect(page.getByLabel('Brain region caption')).toHaveValue('Two regions tracked')
@@ -875,7 +985,7 @@ test.describe('Scene Timeline', () => {
     test('timeline_progression editor shows headline, span_label, markers, and caption', async ({ page }) => {
       await page.goto(`/projects/${CLINICAL_PROJECT}/scenes`)
       await expect(page.getByRole('region', { name: 'Scene inspector' })).toBeVisible()
-      await page.getByRole('option').nth(3).click()
+      await page.getByRole('listbox', { name: 'Scene timeline' }).getByRole('option').nth(3).click()
       await expect(page.getByLabel('Composition family')).toHaveValue('timeline_progression')
       await expect(page.getByLabel('Timeline headline')).toHaveValue('Treatment Window')
       await expect(page.getByLabel('Span label')).toHaveValue('6-month protocol')

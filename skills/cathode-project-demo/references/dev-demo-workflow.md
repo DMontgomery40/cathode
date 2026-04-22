@@ -57,10 +57,12 @@ This keeps the story clear while still proving the product is real.
 When the demo depends on showing a running app:
 
 1. Inspect the target repo or running environment first so the walkthrough uses real states.
-2. Capture the strongest interaction path with browser automation in a real browser.
+2. Capture the strongest interaction path with desktop-use in a real visible app window.
 3. Use explicit viewport and explicit theme on every attempt.
 4. Prefer short deliberate beats with meaningful state changes over a long raw session.
-5. Postprocess raw browser video into focused clips, extract review frames, run a short-prompt spawned sub-agent gut check, save that raw reply, then feed only the approved clips into Cathode.
+5. Postprocess raw capture video into focused clips, extract review frames, run a short-prompt spawned sub-agent gut check, save that raw reply, then feed only the approved clips into Cathode.
+
+Use the older Playwright capture flow only when you explicitly need selector-driven replay, a trace zip, or headless/CI coverage.
 
 Use this pattern for flows like:
 
