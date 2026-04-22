@@ -9,6 +9,7 @@ from typing import Any
 
 DEFAULT_VIEWPORT_WIDTH = 1664
 DEFAULT_VIEWPORT_HEIGHT = 928
+SUPPORTED_CAPTURE_DRIVERS = {"desktop_use", "playwright"}
 
 
 def _slugify(value: Any, fallback: str) -> str:
@@ -18,6 +19,13 @@ def _slugify(value: Any, fallback: str) -> str:
     text = re.sub(r"[^a-z0-9]+", "_", text)
     text = re.sub(r"_+", "_", text).strip("_")
     return text or fallback
+
+
+def _normalize_capture_driver(value: Any) -> str:
+    normalized = str(value or "").strip().lower().replace("-", "_").replace(" ", "_")
+    if normalized in SUPPORTED_CAPTURE_DRIVERS:
+        return normalized
+    return "desktop_use"
 
 
 def infer_launch_command(target_repo_path: str | Path) -> str | None:
@@ -61,6 +69,7 @@ def build_live_demo_session(
     launch_command: str | None = None,
     expected_url: str | None = None,
     preferred_theme: str = "dark",
+    capture_driver: str = "desktop_use",
     flow_hints: list[str] | None = None,
     viewport_width: int = DEFAULT_VIEWPORT_WIDTH,
     viewport_height: int = DEFAULT_VIEWPORT_HEIGHT,
@@ -72,6 +81,7 @@ def build_live_demo_session(
 
     session_slug = _slugify(root.name, "demo_target")
     session_id = f"{session_slug}_{uuid.uuid4().hex[:8]}"
+    normalized_capture_driver = _normalize_capture_driver(capture_driver)
     launch = str(launch_command or "").strip()
     if not launch and not str(app_url or "").strip():
         launch = str(infer_launch_command(root) or "").strip()
@@ -111,9 +121,11 @@ def build_live_demo_session(
         "flow_hints": [str(item).strip() for item in (flow_hints or []) if str(item).strip()],
         "viewport": {"width": int(viewport_width), "height": int(viewport_height)},
         "capture_defaults": {
+            "primary_driver": normalized_capture_driver,
+            "fallback_driver": "playwright" if normalized_capture_driver != "playwright" else "",
             "headed": True,
             "record_video": True,
-            "trace": True,
+            "record_trace": normalized_capture_driver == "playwright",
             "explicit_theme": True,
             "explicit_viewport": True,
         },

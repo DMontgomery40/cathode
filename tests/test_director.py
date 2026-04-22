@@ -2,6 +2,8 @@ import base64
 import json
 
 from core.director import (
+    _generate_with_anthropic,
+    _get_anthropic_client,
     _generate_with_openai,
     _build_storyboard_user_prompt_from_brief,
     _validate_scenes,
@@ -535,6 +537,69 @@ def test_analyze_style_references_anthropic_builds_multimodal_request(tmp_path, 
     assert captured["system"] == [{"type": "text", "text": "system prompt", "cache_control": {"type": "ephemeral"}}]
     assert captured["messages"][0]["content"][0]["type"] == "image"
     assert captured["messages"][0]["content"][-1]["type"] == "text"
+
+
+def test_get_anthropic_client_sets_timeout_and_low_retry(monkeypatch):
+    captured = {}
+
+    class FakeAnthropicClient:
+        def __init__(self, **kwargs):
+            captured.update(kwargs)
+
+    monkeypatch.setattr("core.director._anthropic_client", None)
+    monkeypatch.setattr("core.director.anthropic.Anthropic", FakeAnthropicClient)
+    monkeypatch.setenv("CATHODE_ANTHROPIC_TIMEOUT_SECONDS", "45")
+
+    client = _get_anthropic_client()
+
+    assert isinstance(client, FakeAnthropicClient)
+    assert captured["timeout"] == 45.0
+    assert captured["max_retries"] == 1
+
+
+def test_generate_with_anthropic_uses_non_streaming_tool_call(monkeypatch):
+    captured = {}
+
+    class FakeMessages:
+        def create(self, **kwargs):
+            captured.update(kwargs)
+            return type(
+                "Resp",
+                (),
+                {
+                    "content": [
+                        {
+                            "type": "tool_use",
+                            "name": "emit_storyboard",
+                            "input": {
+                                "scenes": [
+                                    {
+                                        "id": 0,
+                                        "title": "Scene 1",
+                                        "narration": "Short narration.",
+                                        "visual_prompt": "Product still.",
+                                    }
+                                ]
+                            },
+                        }
+                    ]
+                },
+            )()
+
+        def stream(self, **kwargs):  # pragma: no cover - should not be called
+            raise AssertionError("Anthropic storyboard generation should not use streaming")
+
+    class FakeClient:
+        messages = FakeMessages()
+
+    monkeypatch.setattr("core.director._get_anthropic_client", lambda: FakeClient())
+
+    scenes = _generate_with_anthropic("system prompt", "user prompt")
+
+    assert scenes[0]["title"] == "Scene 1"
+    assert captured["model"] == "claude-sonnet-4-6"
+    assert captured["max_tokens"] == 12000
+    assert captured["tool_choice"] == {"type": "tool", "name": "emit_storyboard"}
 
 
 def test_validate_scenes_drops_model_supplied_video_path():

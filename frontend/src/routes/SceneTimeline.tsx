@@ -90,13 +90,18 @@ export function SceneTimeline() {
   const latestPlanRef = useRef<Plan | null>(null)
   const [saving, setSaving] = useState(false)
   const [actionTrace, setActionTrace] = useState<SceneActionTrace | null>(null)
+  const currentPlan = latestPlanRef.current ?? plan ?? null
+  const scenes = currentPlan?.scenes ?? EMPTY_SCENES
+  const selectedScene = scenes.find((s) => s.uid === selectedSceneId) ?? null
+  const selectedIndex = scenes.findIndex((s) => s.uid === selectedSceneId)
+  const renderWorkspacePath = `/projects/${encodeURIComponent(projectId)}/render`
 
-  // Auto-select first scene on load
+  // Keep a valid selection when the plan loads or when the user switches projects in-app.
   useEffect(() => {
-    if (plan && plan.scenes.length > 0 && !selectedSceneId) {
-      setSelectedScene(plan.scenes[0].uid)
+    if (scenes.length > 0 && !scenes.some((scene) => scene.uid === selectedSceneId)) {
+      setSelectedScene(scenes[0].uid)
     }
-  }, [plan, selectedSceneId, setSelectedScene])
+  }, [scenes, selectedSceneId, setSelectedScene])
 
   useEffect(() => {
     latestPlanRef.current = plan ?? null
@@ -107,12 +112,6 @@ export function SceneTimeline() {
       clearTimeout(saveTimer.current)
     }
   }, [])
-
-  const currentPlan = latestPlanRef.current ?? plan ?? null
-  const scenes = currentPlan?.scenes ?? EMPTY_SCENES
-  const selectedScene = scenes.find((s) => s.uid === selectedSceneId) ?? null
-  const selectedIndex = scenes.findIndex((s) => s.uid === selectedSceneId)
-  const renderWorkspacePath = `/projects/${encodeURIComponent(projectId)}/render`
 
   const persistPlan = useCallback(async (nextPlan: Plan) => {
     latestPlanRef.current = nextPlan
@@ -201,14 +200,13 @@ export function SceneTimeline() {
     [currentPlan, debouncedSave],
   )
 
-  const handleAddScene = useCallback(() => {
-    if (!currentPlan) return
-    const compositionMode = typeof currentPlan.meta?.brief === 'object' && currentPlan.meta?.brief
+  const buildBlankScene = useCallback((): Scene => {
+    const compositionMode = typeof currentPlan?.meta?.brief === 'object' && currentPlan?.meta?.brief
       ? String((currentPlan.meta.brief as Record<string, unknown>).composition_mode || 'classic')
       : 'classic'
     const sceneType: Scene['scene_type'] = compositionMode === 'motion_only' ? 'motion' : 'image'
     const uid = `scene_${Date.now()}`
-    const newScene: Scene = {
+    return {
       uid,
       id: scenes.length + 1,
       title: '',
@@ -251,15 +249,46 @@ export function SceneTimeline() {
           }
         : null,
     }
-    const updated: Plan = { ...currentPlan, scenes: [...scenes, newScene] }
+  }, [currentPlan, scenes.length])
+
+  const insertSceneAt = useCallback((targetIndex: number, liveMessage: string) => {
+    if (!currentPlan) return
+    const insertIndex = Math.max(0, Math.min(targetIndex, scenes.length))
+    const newScene = buildBlankScene()
+    const nextScenes = [...scenes]
+    nextScenes.splice(insertIndex, 0, newScene)
+    const updated: Plan = {
+      ...currentPlan,
+      scenes: nextScenes.map((scene, index) => ({ ...scene, id: index + 1 })),
+    }
     debouncedSave(updated)
-    setSelectedScene(uid)
-    setLiveMsg('Scene added')
-  }, [currentPlan, scenes, debouncedSave, setSelectedScene])
+    setSelectedScene(newScene.uid)
+    setLiveMsg(liveMessage)
+  }, [buildBlankScene, currentPlan, debouncedSave, scenes, setSelectedScene])
+
+  const handleAddScene = useCallback(() => {
+    insertSceneAt(scenes.length, 'Scene added')
+  }, [insertSceneAt, scenes.length])
+
+  const handleAddSceneBefore = useCallback(() => {
+    if (selectedIndex < 0) return
+    insertSceneAt(selectedIndex, 'Scene added before')
+  }, [insertSceneAt, selectedIndex])
+
+  const handleAddSceneAfter = useCallback(() => {
+    if (selectedIndex < 0) return
+    insertSceneAt(selectedIndex + 1, 'Scene added after')
+  }, [insertSceneAt, selectedIndex])
 
   const handleDeleteScene = useCallback(
     (uid: string) => {
       if (!currentPlan) return
+      const deleteIndex = currentPlan.scenes.findIndex((scene) => scene.uid === uid)
+      if (deleteIndex < 0) return
+      if (currentPlan.scenes.length <= 1) {
+        setLiveMsg('Cannot delete the only scene')
+        return
+      }
       if (!window.confirm('Delete this scene?')) return
       const updated: Plan = {
         ...currentPlan,
@@ -267,7 +296,8 @@ export function SceneTimeline() {
       }
       debouncedSave(updated)
       if (selectedSceneId === uid) {
-        setSelectedScene(updated.scenes[0]?.uid ?? null)
+        const nextSelectedScene = updated.scenes[Math.min(deleteIndex, updated.scenes.length - 1)] ?? null
+        setSelectedScene(nextSelectedScene?.uid ?? null)
       }
       setLiveMsg('Scene deleted')
     },
@@ -838,6 +868,13 @@ export function SceneTimeline() {
                   project={projectId}
                   sceneIndex={selectedIndex}
                   saving={saving || savePlan.isPending}
+                  onAddSceneBefore={handleAddSceneBefore}
+                  onAddSceneAfter={handleAddSceneAfter}
+                  onDeleteScene={() => {
+                    if (!selectedScene) return
+                    handleDeleteScene(selectedScene.uid)
+                  }}
+                  canDeleteScene={scenes.length > 1}
                   actions={
                     <button
                       type="button"

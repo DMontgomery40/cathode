@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run the packaged Playwright-backed live capture workflow."""
+"""Run the packaged Playwright fallback live capture workflow."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ from pathlib import Path
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Capture a live demo walkthrough with Playwright and emit a capture bundle manifest.")
+    parser = argparse.ArgumentParser(description="Capture a live demo walkthrough with the Playwright fallback driver and emit a capture bundle manifest.")
     parser.add_argument("--session-json", required=True, help="Prepared session manifest from prepare_live_demo_session.py.")
     parser.add_argument("--capture-plan", required=True, help="Capture plan JSON describing the real browser walkthrough.")
     parser.add_argument("--output-manifest", help="Optional path for the capture manifest JSON.")
@@ -25,7 +25,7 @@ def parse_args() -> argparse.Namespace:
 def main() -> int:
     args = parse_args()
     if shutil.which("npx") is None:
-        raise SystemExit("npx is required to run the packaged Playwright capture workflow.")
+        raise SystemExit("npx is required to run the packaged Playwright fallback capture workflow.")
 
     script_path = Path(__file__).with_name("capture_live_demo.mjs")
     command = [
