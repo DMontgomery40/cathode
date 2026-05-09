@@ -26,6 +26,21 @@ function mergeImageProfile(defaults: Record<string, unknown> | undefined, persis
   }
 }
 
+function imageProviderDisplayName(provider: string): string {
+  switch (provider) {
+    case 'codex':
+      return 'Codex Exec'
+    case 'replicate':
+      return 'Replicate'
+    case 'local':
+      return 'Local'
+    case 'manual':
+      return 'Manual'
+    default:
+      return provider || 'manual'
+  }
+}
+
 export function Settings() {
   const { data: bootstrap } = useBootstrap()
   const { data: projects } = useProjects()
@@ -188,7 +203,7 @@ export function Settings() {
                       </div>
                       <div>
                         <p className="workspace-eyebrow">Image provider</p>
-                        <div className="workspace-panel-title text-[var(--text-xl)]">{String(imageProfile.provider || 'manual')}</div>
+                        <div className="workspace-panel-title text-[var(--text-xl)]">{imageProviderDisplayName(String(imageProfile.provider || 'manual'))}</div>
                       </div>
                       <div>
                         <p className="workspace-eyebrow">Voice provider</p>
@@ -227,11 +242,12 @@ export function Settings() {
               <WorkspacePanel
                 title="Provider policy"
                 eyebrow="Operating model"
-                copy="This should clarify what the current machine can actually do, not turn into a giant backend cockpit."
+                copy="This should clarify what the current machine can actually do, while making the image-first product stance obvious instead of treating motion and stills like equal defaults."
               >
                 <div className="flex flex-wrap gap-[var(--space-2)]">
                   <Badge variant="success">Env-driven</Badge>
                   <Badge variant="active">Local-first</Badge>
+                  <Badge variant="active">Stills first</Badge>
                   <Badge variant="default">No fake providers</Badge>
                   <Badge variant="default">Capability-gated UI</Badge>
                 </div>
@@ -241,9 +257,9 @@ export function Settings() {
           aside={(
             <div className="workspace-panel-stack">
               <WorkspacePanel
-                title="Environment-driven"
+                title="Image-first policy"
                 eyebrow="Provider UX"
-                copy="Configured capability should influence generation buttons, route affordances, and defaults across the app."
+                copy="Configured capability should influence generation buttons, route affordances, and defaults across the app. Local Codex execution plus GPT Image should be the visible preferred lane for stills when this machine can support it."
               >
                 <div className="workspace-kpi-grid">
                   <div>

@@ -18,7 +18,7 @@ EXPLICIT_COMPOSITION_MODES = ("classic", "motion_only", "hybrid")
 VISUAL_SOURCE_STRATEGIES = ("images_only", "mixed_media", "video_preferred")
 VIDEO_SCENE_STYLE_OPTIONS = ("auto", "cinematic", "speaking", "mixed")
 TEXT_RENDER_MODES = ("visual_authored", "deterministic_overlay")
-IMAGE_PROVIDERS = ("replicate", "local", "manual")
+IMAGE_PROVIDERS = ("codex", "replicate", "local", "manual")
 VIDEO_PROVIDERS = ("manual", "local", "replicate", "agent")
 VIDEO_QUALITY_MODES = ("standard", "pro")
 VIDEO_AUDIO_SOURCES = ("narration", "clip")
@@ -160,8 +160,8 @@ def default_render_profile() -> dict[str, Any]:
 def default_image_profile() -> dict[str, Any]:
     """Default image generation/edit settings persisted in plan metadata."""
     return {
-        "provider": "replicate",
-        "generation_model": "qwen/qwen-image-2512",
+        "provider": "codex",
+        "generation_model": "gpt-image-2",
         "edit_model": "qwen/qwen-image-edit-2511",
         "dashscope_edit_n": 1,
         "dashscope_edit_seed": "",
@@ -187,7 +187,7 @@ def default_tts_profile() -> dict[str, Any]:
         "provider": "kokoro",
         "voice": "af_bella",
         "speed": 1.1,
-        "model_id": "eleven_multilingual_v2",
+        "model_id": "gpt-4o-mini-tts",
         "text_normalization": "auto",
         "stability": 0.38,
         "similarity_boost": 0.8,
@@ -244,7 +244,10 @@ def infer_composition_mode(
 
     normalized_brief = normalize_brief(raw)
     has_footage_manifest = bool(normalized_brief.get("footage_manifest"))
-    if has_agent_demo_context(agent_demo_profile) or has_footage_manifest:
+    prefers_mixed_media = normalized_brief.get("visual_source_strategy") in {"mixed_media", "video_preferred"}
+    if has_footage_manifest:
+        return "hybrid"
+    if has_agent_demo_context(agent_demo_profile) and prefers_mixed_media:
         return "hybrid"
     return "classic"
 
@@ -1223,9 +1226,11 @@ def backfill_plan(
         image_profile["provider"] = str(meta["image_provider"])
     if meta.get("image_model") and "generation_model" not in raw_image_profile:
         image_profile["generation_model"] = str(meta["image_model"])
-    provider = str(image_profile.get("provider") or "replicate").strip().lower()
-    image_profile["provider"] = provider if provider in IMAGE_PROVIDERS else "replicate"
-    image_profile["generation_model"] = str(image_profile.get("generation_model") or "qwen/qwen-image-2512").strip()
+    provider = str(image_profile.get("provider") or default_image_profile()["provider"]).strip().lower()
+    image_profile["provider"] = provider if provider in IMAGE_PROVIDERS else str(default_image_profile()["provider"])
+    image_profile["generation_model"] = str(
+        image_profile.get("generation_model") or default_image_profile()["generation_model"]
+    ).strip()
     image_profile["edit_model"] = str(image_profile.get("edit_model") or "qwen/qwen-image-edit-2511").strip()
 
     raw_video_profile = meta.get("video_profile") if isinstance(meta.get("video_profile"), dict) else {}

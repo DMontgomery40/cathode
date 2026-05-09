@@ -4,11 +4,13 @@ import core.image_gen as image_gen
 import core.runtime as runtime
 from core.image_gen import (
     DASHSCOPE_IMAGE_EDIT_MODELS,
+    DEFAULT_CODEX_IMAGE_MODEL,
     DEFAULT_REPLICATE_IMAGE_EDIT_MODEL,
     available_image_edit_models,
     build_exact_text_edit_prompt,
     canonicalize_exact_text_edit_prompt,
     default_image_edit_model,
+    generate_image_codex_exec,
     generate_image_local,
     generate_scene_image,
 )
@@ -46,24 +48,40 @@ def test_available_image_edit_models_orders_public_default_first():
 
 def test_available_image_generation_providers_includes_local_when_configured(monkeypatch):
     monkeypatch.delenv("REPLICATE_API_TOKEN", raising=False)
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     monkeypatch.setenv("CATHODE_LOCAL_IMAGE_MODEL", "Qwen/Qwen-Image-2512")
     monkeypatch.setattr(runtime, "_local_image_backend_runnable", lambda: True)
+    monkeypatch.setattr(runtime.shutil, "which", lambda value: None)
 
     assert available_image_generation_providers() == ["local", "manual"]
 
 
 def test_available_image_generation_providers_hides_local_when_backend_not_runnable(monkeypatch):
     monkeypatch.delenv("REPLICATE_API_TOKEN", raising=False)
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     monkeypatch.setenv("CATHODE_LOCAL_IMAGE_MODEL", "Qwen/Qwen-Image-2512")
     monkeypatch.setattr(runtime, "_local_image_backend_runnable", lambda: False)
+    monkeypatch.setattr(runtime.shutil, "which", lambda value: None)
 
     assert available_image_generation_providers() == ["manual"]
 
 
-def test_resolve_image_profile_keeps_explicit_local_model_when_backend_is_runnable(monkeypatch):
+def test_available_image_generation_providers_prefers_codex_when_openai_and_cli_are_available(monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
     monkeypatch.delenv("REPLICATE_API_TOKEN", raising=False)
     monkeypatch.delenv("CATHODE_LOCAL_IMAGE_MODEL", raising=False)
+    monkeypatch.setattr(runtime, "_local_image_backend_runnable", lambda: False)
+    monkeypatch.setattr(runtime.shutil, "which", lambda value: "/usr/local/bin/codex" if value == "codex" else None)
+
+    assert available_image_generation_providers() == ["codex", "manual"]
+
+
+def test_resolve_image_profile_keeps_explicit_local_model_when_backend_is_runnable(monkeypatch):
+    monkeypatch.delenv("REPLICATE_API_TOKEN", raising=False)
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("CATHODE_LOCAL_IMAGE_MODEL", raising=False)
     monkeypatch.setattr(runtime, "_local_image_backend_runnable", lambda: True)
+    monkeypatch.setattr(runtime.shutil, "which", lambda value: None)
 
     resolved = resolve_image_profile(
         {"provider": "local", "generation_model": "Qwen/Qwen-Image-2512"}
@@ -75,14 +93,42 @@ def test_resolve_image_profile_keeps_explicit_local_model_when_backend_is_runnab
 
 def test_resolve_image_profile_falls_back_when_local_backend_is_not_runnable(monkeypatch):
     monkeypatch.delenv("REPLICATE_API_TOKEN", raising=False)
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     monkeypatch.delenv("CATHODE_LOCAL_IMAGE_MODEL", raising=False)
     monkeypatch.setattr(runtime, "_local_image_backend_runnable", lambda: False)
+    monkeypatch.setattr(runtime.shutil, "which", lambda value: None)
 
     resolved = resolve_image_profile(
         {"provider": "local", "generation_model": "Qwen/Qwen-Image-2512"}
     )
 
     assert resolved["provider"] == "manual"
+
+
+def test_resolve_image_profile_prefers_codex_defaults_when_available(monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    monkeypatch.delenv("REPLICATE_API_TOKEN", raising=False)
+    monkeypatch.delenv("CATHODE_LOCAL_IMAGE_MODEL", raising=False)
+    monkeypatch.setattr(runtime, "_local_image_backend_runnable", lambda: False)
+    monkeypatch.setattr(runtime.shutil, "which", lambda value: "/usr/local/bin/codex" if value == "codex" else None)
+
+    resolved = resolve_image_profile()
+
+    assert resolved["provider"] == "codex"
+    assert resolved["generation_model"] == "gpt-image-2"
+
+
+def test_resolve_image_profile_falls_back_from_codex_to_replicate(monkeypatch):
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.setenv("REPLICATE_API_TOKEN", "rep-token")
+    monkeypatch.delenv("CATHODE_LOCAL_IMAGE_MODEL", raising=False)
+    monkeypatch.setattr(runtime, "_local_image_backend_runnable", lambda: False)
+    monkeypatch.setattr(runtime.shutil, "which", lambda value: None)
+
+    resolved = resolve_image_profile({"provider": "codex", "generation_model": "gpt-image-2"})
+
+    assert resolved["provider"] == "replicate"
+    assert resolved["generation_model"] == "qwen/qwen-image-2512"
 
 
 def test_generate_scene_image_uses_local_backend(monkeypatch, tmp_path):
@@ -106,6 +152,66 @@ def test_generate_scene_image_uses_local_backend(monkeypatch, tmp_path):
     assert result.exists()
     assert result.read_bytes() == b"fake-local-image"
     assert captured["prompt"] == "A clean product still."
+
+
+def test_generate_scene_image_uses_codex_backend(monkeypatch, tmp_path):
+    captured: dict[str, str] = {}
+
+    def fake_generate_image_codex_exec(prompt, output_path, model, apply_style=True, seed=None, brief=None):
+        captured["prompt"] = prompt
+        captured["model"] = model
+        Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+        Path(output_path).write_bytes(b"fake-codex-image")
+        return Path(output_path)
+
+    monkeypatch.setattr(image_gen, "generate_image_codex_exec", fake_generate_image_codex_exec)
+
+    result = generate_scene_image(
+        {"id": 0, "visual_prompt": "A precise editorial still."},
+        tmp_path,
+        provider="codex",
+        model=DEFAULT_CODEX_IMAGE_MODEL,
+    )
+
+    assert result.exists()
+    assert result.read_bytes() == b"fake-codex-image"
+    assert captured["prompt"] == "A precise editorial still."
+    assert captured["model"] == DEFAULT_CODEX_IMAGE_MODEL
+
+
+def test_generate_image_codex_exec_runs_helper_through_local_codex(monkeypatch, tmp_path):
+    output_path = tmp_path / "scene.png"
+    seen: dict[str, object] = {}
+
+    def fake_run(command, *, input, text, capture_output, check):
+        seen["command"] = command
+        seen["input"] = input
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_bytes(b"fake-codex-image")
+        result_path = Path(command[command.index("-o") + 1])
+        result_path.write_text(
+            '{"status":"succeeded","provider":"codex","model":"gpt-image-2","output_path":"' + str(output_path) + '"}',
+            encoding="utf-8",
+        )
+        return image_gen.subprocess.CompletedProcess(command, 0, stdout="", stderr="")
+
+    monkeypatch.setattr(image_gen.shutil, "which", lambda value: "/usr/local/bin/codex" if value == "codex" else None)
+    monkeypatch.setattr(image_gen.subprocess, "run", fake_run)
+
+    result = generate_image_codex_exec(
+        "A cinematic still of a product reveal.",
+        output_path,
+        model="gpt-image-2",
+    )
+
+    command = seen["command"]
+    assert isinstance(command, list)
+    assert command[:2] == ["/usr/local/bin/codex", "exec"]
+    assert "--ephemeral" in command
+    assert "-o" in command
+    assert "generate_openai_image.py" in str(seen["input"])
+    assert "--model gpt-image-2" in str(seen["input"])
+    assert result == output_path
 
 
 def test_generate_scene_image_preserves_raw_prompt_for_authored_image_scene(monkeypatch, tmp_path):

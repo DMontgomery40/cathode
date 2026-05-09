@@ -13,6 +13,8 @@ def test_frontend_cost_catalog_exposes_versioned_entries():
 
     assert catalog["version"] == COST_CATALOG_VERSION
     assert any(entry["model"] == "gpt-5.4" for entry in catalog["entries"])
+    assert any(entry["model"] == "gpt-4o-mini-tts" for entry in catalog["entries"])
+    assert any(entry["model"] == "gpt-realtime-2" for entry in catalog["entries"])
     assert any(entry["model"] == "qwen/qwen-image-2512" for entry in catalog["entries"])
     assert any(entry["model"] == "kwaivgi/kling-v3-video" for entry in catalog["entries"])
 
@@ -32,7 +34,7 @@ def test_estimate_plan_cost_is_route_aware_and_budget_gated():
                 "quality_mode": "standard",
                 "generate_audio": True,
             },
-            "tts_profile": {"provider": "openai", "model_id": "tts-1", "voice": "nova"},
+            "tts_profile": {"provider": "openai", "model_id": "gpt-4o-mini-tts", "voice": "marin"},
         },
         "scenes": [
             {

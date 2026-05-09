@@ -6,6 +6,7 @@ import base64
 import json
 import mimetypes
 import os
+import subprocess
 import uuid
 from pathlib import Path
 from typing import Any, Literal
@@ -65,8 +66,12 @@ _MANIFESTATION_RISK_LEVELS = {"low", "medium", "high"}
 _OPENAI_DIRECTOR_MODEL = "gpt-5.4"
 _OPENAI_DIRECTOR_REASONING_EFFORT = "xhigh"
 _ANTHROPIC_DIRECTOR_MODEL = "claude-sonnet-4-6"
+_CLAUDE_PRINT_DIRECTOR_MODEL = os.getenv("CATHODE_CLAUDE_PRINT_MODEL", "claude-sonnet-4-6")
+_CLAUDE_PRINT_BINARY = Path(os.getenv("CLAUDE_CODE_BINARY") or "/Users/davidmontgomery/.local/bin/claude").expanduser()
+_CLAUDE_PRINT_TOOLS = os.getenv("CATHODE_CLAUDE_PRINT_TOOLS", "Read,Grep,Glob")
 _DEFAULT_ANTHROPIC_TIMEOUT_SECONDS = 45.0
 _DEFAULT_ANTHROPIC_MAX_RETRIES = 1
+_DEFAULT_CLAUDE_PRINT_MAX_OUTPUT_TOKENS = 64000
 
 
 def _anthropic_timeout_seconds() -> float:
@@ -972,7 +977,7 @@ def _llm_call_metadata(
 
 def generate_storyboard_with_metadata(
     source: str | dict[str, Any],
-    provider: Literal["openai", "anthropic"] = "openai",
+    provider: Literal["openai", "anthropic", "claude_print"] = "openai",
 ) -> tuple[list[dict], dict[str, Any]]:
     """Generate storyboard scenes and return cost-aware LLM metadata."""
     if isinstance(source, dict):
@@ -1025,6 +1030,30 @@ def generate_storyboard_with_metadata(
                 metadata["runtime_repair"] = _llm_call_metadata(
                     provider="anthropic",
                     model=_ANTHROPIC_DIRECTOR_MODEL,
+                    operation="storyboard_runtime_repair",
+                    system_prompt=system_prompt,
+                    user_prompt=repair_prompt,
+                    response=repair_response,
+                )
+        return scenes, metadata
+    if provider == "claude_print":
+        scenes, response = _generate_with_claude_print(system_prompt, user_prompt, return_response=True)
+        metadata = _llm_call_metadata(
+            provider="claude_print",
+            model=_CLAUDE_PRINT_DIRECTOR_MODEL,
+            operation="storyboard",
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            response=response,
+        )
+        if _storyboard_exceeds_runtime_budget(scenes, brief["target_length_minutes"]):
+            repair_prompt = _build_storyboard_runtime_repair_prompt(brief, scenes)
+            repaired_scenes, repair_response = _generate_with_claude_print(system_prompt, repair_prompt, return_response=True)
+            if _runtime_budget_pressure(repaired_scenes, brief["target_length_minutes"]) < _runtime_budget_pressure(scenes, brief["target_length_minutes"]):
+                scenes = repaired_scenes
+                metadata["runtime_repair"] = _llm_call_metadata(
+                    provider="claude_print",
+                    model=_CLAUDE_PRINT_DIRECTOR_MODEL,
                     operation="storyboard_runtime_repair",
                     system_prompt=system_prompt,
                     user_prompt=repair_prompt,
@@ -1310,6 +1339,83 @@ def _generate_with_anthropic(system_prompt: str, user_prompt: str, *, return_res
     if not tool_input:
         raise ValueError("No structured storyboard tool output from Anthropic")
     scenes = _validate_scenes(extract_scenes_array(tool_input))
+    if return_response:
+        return scenes, response
+    return scenes
+
+
+def _claude_print_storyboard_schema() -> dict[str, Any]:
+    return storyboard_tool_schema()["input_schema"]
+
+
+def _claude_print_env() -> dict[str, str]:
+    env = os.environ.copy()
+    env["CLAUDE_CODE_MAX_OUTPUT_TOKENS"] = str(
+        os.getenv("CATHODE_CLAUDE_PRINT_MAX_OUTPUT_TOKENS")
+        or os.getenv("CLAUDE_CODE_MAX_OUTPUT_TOKENS")
+        or _DEFAULT_CLAUDE_PRINT_MAX_OUTPUT_TOKENS
+    )
+    if str(os.getenv("CATHODE_CLAUDE_PRINT_USE_API_KEY") or "").strip().lower() not in {"1", "true", "yes", "on"}:
+        env.pop("ANTHROPIC_API_KEY", None)
+    return env
+
+
+def _build_claude_print_command(schema_json: str) -> list[str]:
+    return [
+        str(_CLAUDE_PRINT_BINARY),
+        "-p",
+        "--model",
+        _CLAUDE_PRINT_DIRECTOR_MODEL,
+        "--output-format",
+        "json",
+        "--json-schema",
+        schema_json,
+        "--tools",
+        _CLAUDE_PRINT_TOOLS,
+        "--add-dir",
+        str(Path(__file__).resolve().parents[1]),
+        "--dangerously-skip-permissions",
+        "--no-session-persistence",
+    ]
+
+
+def _generate_with_claude_print(system_prompt: str, user_prompt: str, *, return_response: bool = False) -> list[dict] | tuple[list[dict], Any]:
+    """Generate storyboard using Claude Code print mode with structured JSON output."""
+    prompt = (
+        f"{system_prompt}\n\n"
+        "LOCAL CLAUDE CODE PRINT-MODE CONTEXT:\n"
+        "- You are running through `claude -p`, not the Anthropic Messages API.\n"
+        "- Return exactly one JSON object matching the provided schema; do not use markdown fences.\n\n"
+        f"{user_prompt}"
+    )
+    schema_json = json.dumps(_claude_print_storyboard_schema(), indent=2)
+    command = _build_claude_print_command(schema_json)
+    completed = subprocess.run(
+        command,
+        cwd=str(Path(__file__).resolve().parents[1]),
+        env=_claude_print_env(),
+        input=prompt,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    response = {
+        "usage": {},
+        "returncode": completed.returncode,
+        "stdout": completed.stdout[-4000:],
+        "stderr": completed.stderr[-4000:],
+    }
+    try:
+        payload = json.loads((completed.stdout or "").strip())
+    except json.JSONDecodeError as exc:
+        raise RuntimeError(f"Claude print storyboard runner did not return JSON: {completed.stderr or completed.stdout}") from exc
+    if completed.returncode != 0 or payload.get("is_error"):
+        message = str(payload.get("result") or completed.stderr or completed.stdout).strip()
+        raise RuntimeError(f"Claude print storyboard runner failed: {message}")
+    structured = payload.get("structured_output")
+    if not isinstance(structured, dict):
+        raise ValueError("Claude print storyboard runner did not return structured_output")
+    scenes = _validate_scenes(extract_scenes_array(structured))
     if return_response:
         return scenes, response
     return scenes

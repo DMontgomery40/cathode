@@ -2,6 +2,15 @@ import { GlassPanel } from '../../components/primitives/GlassPanel.tsx'
 import { Badge } from '../../components/primitives/Badge.tsx'
 import { useBootstrap } from '../../lib/api/hooks.ts'
 
+function displayProviderName(name: string): string {
+  switch (name) {
+    case 'codex':
+      return 'codex exec'
+    default:
+      return name
+  }
+}
+
 export function ProviderMatrix() {
   const { data: bootstrap } = useBootstrap()
 
@@ -62,7 +71,7 @@ export function ProviderMatrix() {
     {
       label: 'Images',
       items: providers.image_providers.map((p) => ({
-        name: p,
+        name: displayProviderName(p),
         available: true,
       })),
     },
@@ -84,7 +93,7 @@ export function ProviderMatrix() {
 
   const summary = [
     { label: 'Text Models', value: providers.llm_provider ? 1 : 0, note: providers.llm_provider || 'Unavailable' },
-    { label: 'Image Engines', value: providers.image_providers.length, note: providers.image_providers[0] || 'Unavailable' },
+    { label: 'Image Engines', value: providers.image_providers.length, note: displayProviderName(providers.image_providers[0] || 'Unavailable') },
     { label: 'Audio Voices', value: Object.keys(providers.tts_providers).length, note: Object.keys(providers.tts_providers)[0] || 'Unavailable' },
     { label: 'Video Engines', value: providers.video_providers.length, note: providers.video_providers[0] || 'Unavailable' },
   ]
@@ -96,7 +105,7 @@ export function ProviderMatrix() {
           <p className="workspace-eyebrow">Capability matrix</p>
           <h3 className="workspace-panel-title">Providers</h3>
           <p className="workspace-panel-copy m-0 mt-[var(--space-1)]">
-            Cathode only surfaces configured or always-available capabilities, so this page mirrors the real machine instead of pretending every backend exists.
+            Cathode only surfaces configured or always-available capabilities, so this page mirrors the real machine instead of pretending every backend exists. For stills, the intended default lane is local Codex execution when it is available.
           </p>
           <p className="workspace-panel-copy m-0 mt-[var(--space-1)]">
             Exact costs are model- and route-specific. Provider badges stay generic; the precise pricing belongs on the model or route choice itself.

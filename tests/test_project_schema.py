@@ -211,7 +211,7 @@ def test_backfill_plan_preserves_thin_motion_directives():
     assert scene["composition"]["family"] == "kinetic_title"
 
 
-def test_infer_composition_mode_defaults_to_hybrid_for_demo_context():
+def test_infer_composition_mode_keeps_demo_context_image_first_without_mixed_media_request():
     mode = infer_composition_mode(
         {
             "project_name": "demo_run",
@@ -220,10 +220,10 @@ def test_infer_composition_mode_defaults_to_hybrid_for_demo_context():
         agent_demo_profile={"workspace_path": "/tmp/workspace"},
     )
 
-    assert mode == "hybrid"
+    assert mode == "classic"
 
 
-def test_infer_composition_mode_treats_auto_as_inference():
+def test_infer_composition_mode_treats_auto_as_image_first_without_mixed_media_request():
     mode = infer_composition_mode(
         {
             "project_name": "auto_demo",
@@ -233,7 +233,7 @@ def test_infer_composition_mode_treats_auto_as_inference():
         agent_demo_profile={"workspace_path": "/tmp/workspace"},
     )
 
-    assert mode == "hybrid"
+    assert mode == "classic"
 
 
 def test_backfill_plan_heals_same_project_absolute_asset_paths(tmp_path):
@@ -373,7 +373,7 @@ def test_backfill_plan_preserves_motion_scene_metadata():
     assert plan["meta"]["render_profile"]["render_backend"] == "remotion"
 
 
-def test_infer_composition_mode_defaults_to_hybrid_for_demo_context():
+def test_infer_composition_mode_defaults_to_classic_for_demo_context_without_mixed_media_request():
     mode = infer_composition_mode(
         {
             "project_name": "demo_run",
@@ -382,7 +382,7 @@ def test_infer_composition_mode_defaults_to_hybrid_for_demo_context():
         agent_demo_profile={"workspace_path": "/tmp/workspace"},
     )
 
-    assert mode == "hybrid"
+    assert mode == "classic"
 
 
 def test_backfill_plan_heals_same_project_absolute_asset_paths(tmp_path):
@@ -496,7 +496,7 @@ def test_backfill_plan_adds_image_profile_defaults_and_compatibility():
 
     image_profile = plan["meta"]["image_profile"]
 
-    assert image_profile["provider"] == "replicate"
+    assert image_profile["provider"] == "codex"
     assert image_profile["generation_model"] == "custom/model"
     assert image_profile["edit_model"] == "qwen/qwen-image-edit-2511"
     assert plan["meta"]["image_model"] == "custom/model"

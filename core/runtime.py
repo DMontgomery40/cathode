@@ -15,7 +15,35 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 PROJECTS_DIR = REPO_ROOT / "projects"
 PROJECTS_DIR.mkdir(exist_ok=True)
 _KOKORO_VOICE_PATTERN = re.compile(r"^[ab][fm]_[a-z0-9]+$")
-_OPENAI_TTS_VOICES = {"alloy", "ash", "ballad", "coral", "echo", "fable", "nova", "onyx", "sage", "shimmer"}
+_OPENAI_TTS_DEFAULT_VOICE = "marin"
+_OPENAI_REALTIME_DEFAULT_MODEL = "gpt-realtime-2"
+_OPENAI_TTS_VOICES = {
+    "alloy",
+    "ash",
+    "ballad",
+    "cedar",
+    "coral",
+    "echo",
+    "fable",
+    "marin",
+    "nova",
+    "onyx",
+    "sage",
+    "shimmer",
+    "verse",
+}
+_OPENAI_REALTIME_VOICES = {
+    "alloy",
+    "ash",
+    "ballad",
+    "cedar",
+    "coral",
+    "echo",
+    "marin",
+    "sage",
+    "shimmer",
+    "verse",
+}
 DEFAULT_REPLICATE_VIDEO_MODEL = "kwaivgi/kling-v3-video"
 
 
@@ -66,6 +94,7 @@ def available_tts_providers(keys: dict[str, bool] | None = None) -> dict[str, st
     elif keys.get("replicate"):
         providers["elevenlabs"] = "ElevenLabs (Replicate)"
     if keys.get("openai"):
+        providers["openai_realtime"] = "OpenAI Realtime Voice (GPT-Realtime-2)"
         providers["openai"] = "OpenAI TTS (Cloud)"
     return providers
 
@@ -73,12 +102,21 @@ def available_tts_providers(keys: dict[str, bool] | None = None) -> dict[str, st
 def available_image_generation_providers(keys: dict[str, bool] | None = None) -> list[str]:
     """Return supported image-generation providers in UI preference order."""
     keys = keys or check_api_keys()
-    providers = ["manual"]
+    providers: list[str] = []
+    if codex_image_generation_available(keys):
+        providers.append("codex")
     if local_image_generation_available():
-        providers.insert(0, "local")
+        providers.append("local")
     if keys.get("replicate"):
-        providers.insert(0, "replicate")
+        providers.append("replicate")
+    providers.append("manual")
     return providers
+
+
+def codex_image_generation_available(keys: dict[str, bool] | None = None) -> bool:
+    """Return whether the local Codex image-generation lane can run here."""
+    keys = keys or check_api_keys()
+    return bool(keys.get("openai")) and bool(shutil.which("codex"))
 
 
 def _module_available(module_name: str) -> bool:
@@ -205,6 +243,8 @@ def choose_llm_provider(preferred: str | None = None) -> str:
     """Choose the best available storyboard LLM provider for the current environment."""
     keys = check_api_keys()
     candidate = str(preferred or "").strip().lower()
+    if candidate == "claude_print" and shutil.which(os.getenv("CLAUDE_CODE_BINARY") or "claude"):
+        return candidate
     if candidate and keys.get(candidate):
         return candidate
 
@@ -222,7 +262,10 @@ def resolve_workflow_llm_roles(preferred: str | None = None) -> tuple[str, str]:
     too so the one-click flow cannot drift back onto an incompatible OpenAI
     Responses path.
     """
-    _ = preferred
+    requested = str(preferred or "").strip().lower()
+    if requested == "claude_print":
+        return "claude_print", "anthropic"
+
     keys = check_api_keys()
     if not keys.get("anthropic"):
         raise ValueError(
@@ -242,20 +285,33 @@ def resolve_image_profile(profile: dict | None = None) -> dict:
         resolved.update(raw_profile)
 
     keys = check_api_keys()
-    provider = str(resolved.get("provider") or "replicate").strip().lower()
+    provider = str(resolved.get("provider") or default_image_profile()["provider"]).strip().lower()
+    requested_provider = provider
     raw_generation_model = str(raw_profile.get("generation_model") or "").strip()
     local_model = raw_generation_model
     if not local_model or local_model == default_image_profile()["generation_model"]:
         local_model = default_local_image_generation_model()
+    if provider == "codex" and not codex_image_generation_available(keys):
+        provider = ""
     if provider == "replicate" and not keys.get("replicate"):
-        provider = "manual"
+        provider = ""
     if provider == "local" and not _local_image_provider_available_for_model(local_model):
-        provider = "manual"
-    if provider not in {"replicate", "local", "manual"}:
-        provider = "manual"
+        provider = ""
+    if provider not in {"codex", "replicate", "local", "manual"}:
+        provider = ""
+    if not provider:
+        provider = available_image_generation_providers(keys)[0]
     resolved["provider"] = provider
     if provider == "local":
         resolved["generation_model"] = local_model
+    elif provider == "replicate":
+        resolved["generation_model"] = (
+            raw_generation_model if requested_provider == "replicate" and raw_generation_model else "qwen/qwen-image-2512"
+        )
+    else:
+        resolved["generation_model"] = str(
+            resolved.get("generation_model") or default_image_profile()["generation_model"]
+        ).strip()
     return resolved
 
 
@@ -275,8 +331,17 @@ def resolve_tts_profile(profile: dict | None = None) -> dict:
         resolved["voice"] = voice if _KOKORO_VOICE_PATTERN.match(voice) else str(default_tts_profile()["voice"])
     elif provider == "elevenlabs":
         resolved["voice"] = "Bella" if not voice or _KOKORO_VOICE_PATTERN.match(voice) else voice
+        model_id = str(resolved.get("model_id") or "").strip()
+        if not model_id or model_id.startswith("tts-") or model_id.startswith("gpt-"):
+            resolved["model_id"] = "eleven_multilingual_v2"
     elif provider == "openai":
-        resolved["voice"] = voice if voice in _OPENAI_TTS_VOICES else "nova"
+        resolved["voice"] = voice if voice in _OPENAI_TTS_VOICES else _OPENAI_TTS_DEFAULT_VOICE
+        model_id = str(resolved.get("model_id") or "").strip()
+        resolved["model_id"] = model_id if model_id.startswith(("gpt-", "tts-")) else "gpt-4o-mini-tts"
+    elif provider == "openai_realtime":
+        resolved["voice"] = voice if voice in _OPENAI_REALTIME_VOICES else _OPENAI_TTS_DEFAULT_VOICE
+        model_id = str(resolved.get("model_id") or "").strip()
+        resolved["model_id"] = model_id if model_id.startswith("gpt-realtime") else _OPENAI_REALTIME_DEFAULT_MODEL
     return resolved
 
 

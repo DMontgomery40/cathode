@@ -1,4 +1,8 @@
+import base64
+import json
+import wave
 from pathlib import Path
+from types import SimpleNamespace
 
 import core.voice_gen as voice_gen
 
@@ -187,3 +191,96 @@ def test_normalize_voice_for_replicate_elevenlabs_maps_curated_names():
     assert voice_gen._normalize_voice_for_replicate_elevenlabs("Bella") == "Sarah"
     assert voice_gen._normalize_voice_for_replicate_elevenlabs("Domi") == "Domi"
     assert voice_gen._normalize_voice_for_replicate_elevenlabs("Unknown Voice") == "Rachel"
+
+
+def test_openai_tts_defaults_to_current_model_and_recommended_voice(monkeypatch, tmp_path):
+    captured = {}
+
+    class FakeSpeech:
+        def create(self, **kwargs):
+            captured.update(kwargs)
+
+            class Response:
+                def stream_to_file(self, path):
+                    Path(path).write_bytes(b"mp3")
+
+            return Response()
+
+    class FakeClient:
+        audio = SimpleNamespace(speech=FakeSpeech())
+
+    monkeypatch.setattr(voice_gen.openai_limiter, "call_with_retry", lambda func: func())
+    monkeypatch.setattr("openai.OpenAI", lambda: FakeClient())
+    monkeypatch.setattr(voice_gen, "_convert_mp3_to_wav", lambda mp3_path, wav_path: Path(wav_path).write_bytes(b"wav"))
+
+    path = voice_gen.generate_audio(
+        "Hello world",
+        tmp_path / "scene.wav",
+        tts_provider="openai",
+    )
+
+    assert path.exists()
+    assert captured["model"] == "gpt-4o-mini-tts"
+    assert captured["voice"] == "marin"
+    assert captured["response_format"] == "mp3"
+
+
+def test_openai_realtime_voice_uses_gpt_realtime_2_websocket(monkeypatch, tmp_path):
+    sent_events = []
+    pcm_chunk = (0).to_bytes(2, "little", signed=True) * 240
+
+    class FakeRealtimeConnection:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def send(self, payload):
+            sent_events.append(json.loads(payload))
+
+        def recv(self, timeout=None):
+            return json.dumps(self._events.pop(0))
+
+        _events = [
+            {"type": "session.updated"},
+            {"type": "response.output_audio.delta", "delta": base64.b64encode(pcm_chunk).decode("ascii")},
+            {"type": "response.done"},
+        ]
+
+    captured_connect = {}
+
+    def fake_connect(url, **kwargs):
+        captured_connect["url"] = url
+        captured_connect["kwargs"] = kwargs
+        return FakeRealtimeConnection()
+
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    monkeypatch.setattr(voice_gen.openai_limiter, "call_with_retry", lambda func: func())
+    monkeypatch.setattr("websockets.sync.client.connect", fake_connect)
+
+    result = voice_gen.generate_audio_result(
+        "Read this narration.",
+        tmp_path / "scene.wav",
+        tts_provider="openai_realtime",
+        voice="nova",
+        openai_model_id="gpt-4o-mini-tts",
+    )
+
+    assert result["provider"] == "openai"
+    assert result["model"] == "gpt-realtime-2"
+    assert result["voice"] == "marin"
+    assert "model=gpt-realtime-2" in captured_connect["url"]
+    assert captured_connect["kwargs"]["additional_headers"]["Authorization"] == "Bearer test-key"
+    assert sent_events[0]["type"] == "session.update"
+    assert sent_events[0]["session"]["model"] == "gpt-realtime-2"
+    assert sent_events[0]["session"]["audio"]["output"]["voice"] == "marin"
+    assert sent_events[0]["session"]["audio"]["output"]["format"] == {"type": "audio/pcm", "rate": 24000}
+    assert sent_events[1]["type"] == "conversation.item.create"
+    assert sent_events[2]["response"]["output_modalities"] == ["audio"]
+
+    with wave.open(str(result["path"]), "rb") as wav_file:
+        assert wav_file.getframerate() == 24000
+        assert wav_file.getnchannels() == 1
+        assert wav_file.getsampwidth() == 2
+        assert wav_file.readframes(240) == pcm_chunk

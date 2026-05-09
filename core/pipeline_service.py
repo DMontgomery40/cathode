@@ -38,7 +38,7 @@ from .project_store import copy_external_files, ensure_project_dir, load_plan, s
 from .remotion_render import build_remotion_manifest, render_manifest_with_remotion, scene_has_renderable_visual
 from .scene_review import default_scene_review_candidates, review_project_scenes
 from .runtime import resolve_workflow_llm_roles, resolve_image_profile, resolve_tts_profile, resolve_video_profile
-from .video_assembly import assemble_video, compress_video_if_oversized
+from .video_assembly import assemble_video, compress_video_if_oversized, scene_uses_clip_audio
 from .video_gen import generate_scene_video_result
 from .voice_gen import generate_scene_audio_result
 from .workflow import create_plan_from_brief, rebuild_plan_from_meta
@@ -100,7 +100,7 @@ def tts_kwargs_from_profile(profile: dict | None) -> dict[str, Any]:
     provider = str(profile.get("provider") or "kokoro")
     kwargs: dict[str, Any] = {"tts_provider": provider}
 
-    if provider in {"kokoro", "elevenlabs"}:
+    if provider in {"kokoro", "elevenlabs", "openai", "openai_realtime"}:
         kwargs["voice"] = str(profile.get("voice") or "")
         kwargs["speed"] = float(profile.get("speed") or 1.1)
     if provider == "elevenlabs":
@@ -118,7 +118,7 @@ def tts_kwargs_from_profile(profile: dict | None) -> dict[str, Any]:
             kwargs["elevenlabs_use_speaker_boost"] = bool(profile["use_speaker_boost"])
     if provider == "chatterbox" and profile.get("exaggeration") is not None:
         kwargs["exaggeration"] = float(profile["exaggeration"])
-    if provider == "openai" and profile.get("model_id"):
+    if provider in {"openai", "openai_realtime"} and profile.get("model_id"):
         kwargs["openai_model_id"] = str(profile["model_id"])
     return kwargs
 
@@ -388,6 +388,15 @@ def _path_is_within(path: Path, root: Path) -> bool:
 def _canonical_scene_image_path(project_dir: Path, scene: dict[str, Any]) -> Path | None:
     if scene_primary_manifestation(scene) != "authored_image":
         return None
+    existing_path = _resolve_project_path(project_dir, scene.get("image_path"))
+    images_dir = (Path(project_dir) / "images").resolve()
+    if (
+        existing_path is not None
+        and existing_path.exists()
+        and _path_is_within(existing_path, images_dir)
+        and existing_path.name.startswith("scene_")
+    ):
+        return existing_path
     try:
         scene_id = int(scene.get("id"))
     except (TypeError, ValueError):
@@ -1245,7 +1254,8 @@ def render_project_service(
     missing_audio = [
         int(scene.get("id", 0))
         for scene in scenes
-        if not (scene.get("audio_path") and Path(str(scene["audio_path"])).exists())
+        if not scene_uses_clip_audio(scene)
+        and not (scene.get("audio_path") and Path(str(scene["audio_path"])).exists())
     ]
     if missing_visuals or missing_audio:
         return {

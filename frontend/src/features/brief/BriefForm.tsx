@@ -28,10 +28,10 @@ const VIDEO_SCENE_STYLE_OPTIONS = [
 ]
 
 const SCENE_ENGINE_OPTIONS = [
-  { value: 'auto', label: 'I Trust Claude to Decide' },
-  { value: 'classic', label: 'Classic Stills' },
-  { value: 'hybrid', label: 'Hybrid' },
-  { value: 'motion_only', label: 'Motion Only' },
+  { value: 'auto', label: 'Image-First Auto' },
+  { value: 'classic', label: 'Still-Image Focus' },
+  { value: 'hybrid', label: 'Mixed Media' },
+  { value: 'motion_only', label: 'Motion System' },
 ]
 
 const TEXT_RENDER_MODE_OPTIONS = [
@@ -204,6 +204,29 @@ export function BriefForm({
               Style
             </legend>
             <div className="flex flex-col gap-[var(--space-4)]">
+              <div
+                className="rounded-[var(--radius-lg)] border p-[var(--space-4)]"
+                style={{
+                  borderColor: 'rgba(214, 118, 88, 0.26)',
+                  background: 'linear-gradient(135deg, rgba(255,245,232,0.92), rgba(245,229,214,0.56))',
+                }}
+              >
+                <p
+                  className="m-0 uppercase tracking-[0.22em] text-[var(--text-tertiary)]"
+                  style={{ fontSize: '10px', fontFamily: 'var(--font-mono)', fontWeight: 700 }}
+                >
+                  Default lane
+                </p>
+                <div
+                  className="mt-[var(--space-2)] text-[var(--text-primary)]"
+                  style={{ fontSize: 'clamp(1.4rem, 3vw, 2.2rem)', lineHeight: 0.92, fontWeight: 700, letterSpacing: '-0.04em' }}
+                >
+                  Author the stills first.
+                </div>
+                <p className="m-0 mt-[var(--space-2)] text-[var(--text-secondary)]" style={{ fontSize: 'var(--text-sm)' }}>
+                  Cathode now treats GPT Image stills as the primary visual path. Mixed-media and motion should be deliberate choices for scenes that truly need them, not the default posture of the whole storyboard.
+                </p>
+              </div>
               <TextInput
                 label="Tone"
                 placeholder="e.g. professional, friendly, dramatic"
@@ -235,7 +258,7 @@ export function BriefForm({
                     Paid media path
                   </div>
                   <p className="m-0 mt-[var(--space-1)] text-[var(--text-secondary)]" style={{ fontSize: 'var(--text-xs)' }}>
-                    Use this only for image/video generation spend such as Qwen Image or Kling-style clips. TTS is intentionally left out here because the spend is usually too small to budget separately.
+                    Use this only for image/video generation spend such as GPT Image stills or generated video clips. TTS is intentionally left out here because the spend is usually too small to budget separately.
                   </p>
                   <div className="mt-[var(--space-3)]">
                     <TextInput
@@ -321,7 +344,7 @@ export function BriefForm({
                   options={sceneEngineOptions}
                   hint={remotionAvailable === false
                     ? 'Auto and Classic stay available. Hybrid and Motion Only need the local Remotion toolchain.'
-                    : 'Auto lets Cathode stay image-first by default, while still allowing hybrid or motion-first overrides when you really want them.'}
+                    : 'Auto keeps Cathode image-first by default. Mixed Media and Motion System are explicit specialist overrides when you truly want them.'}
                   error={errors.composition_mode?.message}
                   {...register('composition_mode')}
                 />

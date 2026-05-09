@@ -1,9 +1,14 @@
-"""Image generation/editing using Replicate, local Hugging Face Qwen Image, and DashScope."""
+"""Image generation/editing using local Codex exec, Replicate, local models, and DashScope."""
 
+import json
 from pathlib import Path
 import base64
 import os
 import re
+import shlex
+import shutil
+import subprocess
+import tempfile
 import traceback
 import sys
 from contextlib import ExitStack
@@ -19,14 +24,46 @@ from core.rate_limiter import image_limiter
 TARGET_WIDTH = 1664
 TARGET_HEIGHT = 928
 TARGET_SIZE_DASHSCOPE = f"{TARGET_WIDTH}*{TARGET_HEIGHT}"
+TARGET_SIZE_OPENAI = f"{TARGET_WIDTH}x{TARGET_HEIGHT}"
 DEFAULT_IMAGE_MODEL = "qwen/qwen-image-2512"
+DEFAULT_CODEX_IMAGE_MODEL = "gpt-image-2"
+DEFAULT_CODEX_IMAGE_QUALITY = "medium"
 DEFAULT_REPLICATE_IMAGE_EDIT_MODEL = "qwen/qwen-image-edit-2511"
 DASHSCOPE_IMAGE_EDIT_MODELS = ("qwen-image-edit-plus", "qwen-image-edit")
+REPO_ROOT = Path(__file__).resolve().parents[1]
+CODEX_IMAGE_SCRIPT = REPO_ROOT / "scripts" / "generate_openai_image.py"
 
 
 def _log(msg):
     """Debug logging to stderr (visible in Streamlit terminal)."""
     print(f"[IMAGE_GEN] {msg}", file=sys.stderr, flush=True)
+
+
+def _extract_json_object(text: str) -> dict[str, object] | None:
+    candidate = str(text or "").strip()
+    if not candidate:
+        return None
+    try:
+        parsed = json.loads(candidate)
+    except json.JSONDecodeError:
+        start = candidate.find("{")
+        end = candidate.rfind("}")
+        if start < 0 or end <= start:
+            return None
+        try:
+            parsed = json.loads(candidate[start : end + 1])
+        except json.JSONDecodeError:
+            return None
+    return parsed if isinstance(parsed, dict) else None
+
+
+def _codex_image_quality() -> str:
+    value = str(os.getenv("CATHODE_CODEX_IMAGE_QUALITY") or DEFAULT_CODEX_IMAGE_QUALITY).strip().lower()
+    return value if value in {"low", "medium", "high"} else DEFAULT_CODEX_IMAGE_QUALITY
+
+
+def _codex_exec_model() -> str:
+    return str(os.getenv("CATHODE_CODEX_EXEC_MODEL") or "").strip()
 
 
 # Replicate client with timeout to prevent indefinite hangs
@@ -451,6 +488,109 @@ def generate_image_local(
     )
 
 
+def generate_image_codex_exec(
+    prompt: str,
+    output_path: str | Path,
+    model: str = DEFAULT_CODEX_IMAGE_MODEL,
+    apply_style: bool = True,
+    seed: int | None = None,
+    brief: dict | None = None,
+) -> Path:
+    """Generate an image by asking the local Codex CLI to run the checked-in GPT Image helper."""
+    del apply_style, seed, brief
+
+    codex_path = shutil.which("codex")
+    if not codex_path:
+        raise ValueError("codex is not available in PATH, so the local Codex image lane cannot run.")
+    if not CODEX_IMAGE_SCRIPT.exists():
+        raise ValueError(f"Missing Codex image helper script: {CODEX_IMAGE_SCRIPT}")
+
+    output_path = Path(output_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    resolved_model = str(model or DEFAULT_CODEX_IMAGE_MODEL).strip() or DEFAULT_CODEX_IMAGE_MODEL
+    resolved_quality = _codex_image_quality()
+
+    with tempfile.TemporaryDirectory(prefix="cathode-codex-image-") as tmp_dir:
+        temp_root = Path(tmp_dir)
+        prompt_path = temp_root / "prompt.txt"
+        prompt_path.write_text(str(prompt or ""), encoding="utf-8")
+        result_path = temp_root / "result.json"
+        workdir = temp_root / "workdir"
+        workdir.mkdir(parents=True, exist_ok=True)
+
+        helper_command = " ".join(
+            [
+                "python3",
+                shlex.quote(str(CODEX_IMAGE_SCRIPT)),
+                "--prompt-file",
+                shlex.quote(str(prompt_path)),
+                "--output",
+                shlex.quote(str(output_path.resolve())),
+                "--model",
+                shlex.quote(resolved_model),
+                "--size",
+                shlex.quote(TARGET_SIZE_OPENAI),
+                "--quality",
+                shlex.quote(resolved_quality),
+                "--output-format",
+                "png",
+            ]
+        )
+        agent_prompt = (
+            "You are Cathode's local Codex image-generation lane.\n"
+            "Run the exact command below once, do not rewrite it, and do not modify any files except the requested output image.\n\n"
+            f"{helper_command}\n\n"
+            f"After it finishes, verify the file exists at {output_path.resolve()} and return one JSON object only.\n"
+            "Success shape:\n"
+            f'{{"status":"succeeded","provider":"codex","model":"{resolved_model}","output_path":"{output_path.resolve()}"}}\n'
+            "Failure shape:\n"
+            f'{{"status":"failed","provider":"codex","model":"{resolved_model}","output_path":"","error":"short reason"}}\n'
+            "Do not add markdown or commentary."
+        )
+
+        command = [
+            codex_path,
+            "exec",
+            "--dangerously-bypass-approvals-and-sandbox",
+            "--skip-git-repo-check",
+            "--ephemeral",
+            "-C",
+            str(workdir),
+            "--add-dir",
+            str(REPO_ROOT),
+            "--add-dir",
+            str(output_path.parent.resolve()),
+            "-o",
+            str(result_path),
+            "-",
+        ]
+        configured_model = _codex_exec_model()
+        if configured_model:
+            command.extend(["-m", configured_model])
+
+        completed = subprocess.run(
+            command,
+            input=agent_prompt,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+
+        response_payload = (
+            _extract_json_object(result_path.read_text(encoding="utf-8"))
+            if result_path.exists()
+            else _extract_json_object(completed.stdout)
+        ) or {}
+
+        if output_path.exists() and output_path.stat().st_size > 0:
+            return output_path
+
+        error = str(response_payload.get("error") or "").strip()
+        detail = error or completed.stderr.strip() or completed.stdout.strip() or "Codex image generation failed."
+        raise RuntimeError(detail)
+
+
 def edit_image(
     prompt: str,
     input_image_path: str | Path | list[str | Path],
@@ -554,12 +694,14 @@ def generate_scene_image(
     normalized_provider = str(provider).strip().lower()
     if normalized_provider == "manual":
         raise ValueError(
-            "AI image generation is disabled for this project because it is set to local/manual visuals. Upload a still image instead."
+            "AI image generation is disabled for this project. Upload a still image instead, or switch the image provider back to Cathode's Codex Exec still-image lane."
         )
 
     try:
         if normalized_provider == "local":
             result = generate_image_local(prompt, output_path, model=model, brief=brief)
+        elif normalized_provider == "codex":
+            result = generate_image_codex_exec(prompt, output_path, model=model, brief=brief)
         else:
             result = generate_image(prompt, output_path, model=model, brief=brief)
         _log(f"=== generate_scene_image() SUCCESS: {result} ===")

@@ -32,7 +32,10 @@ function asBool(value: unknown, fallback = false): boolean {
 function providerModelHint(provider: string, currentModelId: unknown): string {
   const value = typeof currentModelId === 'string' ? currentModelId.trim() : ''
   if (provider === 'openai') {
-    return value.startsWith('tts-') ? value : 'tts-1'
+    return value.startsWith('gpt-') || value.startsWith('tts-') ? value : 'gpt-4o-mini-tts'
+  }
+  if (provider === 'openai_realtime') {
+    return value.startsWith('gpt-realtime') ? value : 'gpt-realtime-2'
   }
   if (provider === 'elevenlabs') {
     return value && !value.startsWith('tts-') ? value : 'eleven_multilingual_v2'
@@ -47,6 +50,7 @@ function providerCostHint(provider: string): string {
   if (provider === 'kokoro') return 'free/local'
   if (provider === 'elevenlabs') return 'paid, model-specific'
   if (provider === 'openai') return 'paid, model-specific'
+  if (provider === 'openai_realtime') return 'paid, model-specific'
   if (provider === 'chatterbox') return 'paid, model-specific'
   return ''
 }
@@ -86,7 +90,7 @@ export function TtsProfilePanel({
   const providerModel = providerModelHint(provider, currentProfile.model_id)
   const providerCostEntry = provider === 'kokoro' ? null : findCostEntry(costCatalog ?? null, {
     kind: 'tts',
-    provider: provider === 'chatterbox' ? 'replicate' : provider,
+    provider: provider === 'chatterbox' ? 'replicate' : provider === 'openai_realtime' ? 'openai' : provider,
     model: providerModel,
   })
   const providerExactCost = entryDisplayPrice(providerCostEntry)
@@ -251,10 +255,29 @@ export function TtsProfilePanel({
             />
             <TextInput
               label="Model"
-              value={asString(currentProfile.model_id, 'tts-1')}
+              value={asString(currentProfile.model_id, 'gpt-4o-mini-tts')}
               onChange={(event) => onProfileChange({ model_id: event.target.value })}
               disabled={disabled}
               hint={providerExactCost ? `Optional override if you want a specific OpenAI TTS model. Current model rate: ${providerExactCost}.` : 'Optional override if you want a specific OpenAI TTS model.'}
+            />
+          </>
+        )}
+
+        {provider === 'openai_realtime' && (
+          <>
+            <Select
+              label="Voice"
+              value={voice}
+              onChange={(event) => onProfileChange({ voice: event.target.value })}
+              options={providerVoiceOptions}
+              disabled={disabled}
+            />
+            <TextInput
+              label="Model"
+              value={asString(currentProfile.model_id, 'gpt-realtime-2')}
+              onChange={(event) => onProfileChange({ model_id: event.target.value })}
+              disabled={disabled}
+              hint={providerExactCost ? `Server-side Realtime voice output. Current model rate: ${providerExactCost}.` : 'Server-side Realtime voice output for GPT-Realtime-2.'}
             />
           </>
         )}

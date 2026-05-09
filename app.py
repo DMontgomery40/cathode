@@ -86,10 +86,15 @@ from core.voice_gen import (
     DEFAULT_ELEVENLABS_USE_SPEAKER_BOOST,
     DEFAULT_ELEVENLABS_VOICE,
     DEFAULT_EXAGGERATION,
+    DEFAULT_OPENAI_REALTIME_MODEL,
+    DEFAULT_OPENAI_TTS_MODEL,
+    DEFAULT_OPENAI_TTS_VOICE,
     DEFAULT_SPEED,
     DEFAULT_VOICE,
     ELEVENLABS_VOICES,
     KOKORO_VOICES,
+    OPENAI_REALTIME_VOICES,
+    OPENAI_TTS_VOICES,
     generate_scene_audio,
 )
 
@@ -271,6 +276,12 @@ def init_session_state():
         st.session_state.tts_provider = "kokoro"  # Default to free local TTS
     if "tts_exaggeration" not in st.session_state:
         st.session_state.tts_exaggeration = DEFAULT_EXAGGERATION
+    if "tts_openai_voice" not in st.session_state:
+        st.session_state.tts_openai_voice = DEFAULT_OPENAI_TTS_VOICE
+    if "tts_openai_model_id" not in st.session_state:
+        st.session_state.tts_openai_model_id = DEFAULT_OPENAI_TTS_MODEL
+    if "tts_openai_realtime_model_id" not in st.session_state:
+        st.session_state.tts_openai_realtime_model_id = DEFAULT_OPENAI_REALTIME_MODEL
     if "image_provider" not in st.session_state:
         st.session_state.image_provider = default_image_profile()["provider"]
     if "image_generation_model" not in st.session_state:
@@ -378,7 +389,17 @@ def _tts_kwargs_from_profile(profile: dict | None) -> dict:
         )
         return kwargs
 
-    # OpenAI (voice is handled in core/voice_gen.py for this provider path).
+    if provider == "openai":
+        kwargs["voice"] = str(profile.get("voice") or st.session_state.tts_openai_voice)
+        kwargs["speed"] = float(profile.get("speed") or 1.0)
+        kwargs["openai_model_id"] = str(profile.get("model_id") or st.session_state.tts_openai_model_id)
+        return kwargs
+    if provider == "openai_realtime":
+        kwargs["voice"] = str(profile.get("voice") or st.session_state.tts_openai_voice)
+        kwargs["speed"] = float(profile.get("speed") or 1.0)
+        kwargs["openai_model_id"] = str(profile.get("model_id") or st.session_state.tts_openai_realtime_model_id)
+        return kwargs
+
     return kwargs
 
 
@@ -412,8 +433,15 @@ def _tts_profile_from_state() -> dict:
         }
     return {
         "provider": provider,
-        "voice": "",
+        "voice": str(st.session_state.tts_openai_voice) if provider in {"openai", "openai_realtime"} else "",
         "speed": 1.0,
+        "model_id": (
+            str(st.session_state.tts_openai_realtime_model_id)
+            if provider == "openai_realtime"
+            else str(st.session_state.tts_openai_model_id)
+            if provider == "openai"
+            else ""
+        ),
     }
 
 
@@ -451,7 +479,7 @@ def _sync_provider_state_from_plan(plan: dict | None) -> None:
     video_profile = meta.get("video_profile") if isinstance(meta.get("video_profile"), dict) else {}
 
     provider = str(tts_profile.get("provider") or "kokoro")
-    if provider in {"kokoro", "elevenlabs", "chatterbox", "openai"}:
+    if provider in {"kokoro", "elevenlabs", "chatterbox", "openai", "openai_realtime"}:
         st.session_state.tts_provider = provider
     if tts_profile.get("voice"):
         voice = str(tts_profile["voice"])
@@ -459,6 +487,8 @@ def _sync_provider_state_from_plan(plan: dict | None) -> None:
             st.session_state.tts_voice = voice
         elif provider == "elevenlabs":
             st.session_state.tts_elevenlabs_voice = voice
+        elif provider in {"openai", "openai_realtime"}:
+            st.session_state.tts_openai_voice = voice
     if provider == "kokoro" and tts_profile.get("speed") is not None:
         st.session_state.tts_speed = float(tts_profile["speed"])
     if provider == "elevenlabs":
@@ -478,6 +508,10 @@ def _sync_provider_state_from_plan(plan: dict | None) -> None:
             st.session_state.tts_elevenlabs_use_speaker_boost = bool(tts_profile["use_speaker_boost"])
     if provider == "chatterbox" and tts_profile.get("exaggeration") is not None:
         st.session_state.tts_exaggeration = float(tts_profile["exaggeration"])
+    if provider == "openai" and tts_profile.get("model_id"):
+        st.session_state.tts_openai_model_id = str(tts_profile["model_id"])
+    if provider == "openai_realtime" and tts_profile.get("model_id"):
+        st.session_state.tts_openai_realtime_model_id = str(tts_profile["model_id"])
 
     image_provider = str(image_profile.get("provider") or default_image_profile()["provider"])
     if image_provider in IMAGE_PROVIDER_LABELS:
@@ -994,6 +1028,32 @@ def render_sidebar():
                 ),
                 key="elevenlabs_text_normalization",
             )
+        elif selected_provider in {"openai", "openai_realtime"}:
+            voice_options = sorted(OPENAI_REALTIME_VOICES if selected_provider == "openai_realtime" else OPENAI_TTS_VOICES)
+            current_voice = (
+                st.session_state.tts_openai_voice
+                if st.session_state.tts_openai_voice in voice_options
+                else DEFAULT_OPENAI_TTS_VOICE
+            )
+            st.session_state.tts_openai_voice = st.selectbox(
+                "Voice",
+                options=voice_options,
+                index=voice_options.index(current_voice),
+                key=f"{selected_provider}_voice_selector",
+            )
+            if selected_provider == "openai":
+                st.session_state.tts_openai_model_id = st.text_input(
+                    "Model",
+                    value=str(st.session_state.tts_openai_model_id or DEFAULT_OPENAI_TTS_MODEL),
+                    key="openai_tts_model_id",
+                )
+            else:
+                st.session_state.tts_openai_realtime_model_id = st.text_input(
+                    "Model",
+                    value=str(st.session_state.tts_openai_realtime_model_id or DEFAULT_OPENAI_REALTIME_MODEL),
+                    key="openai_realtime_model_id",
+                    help="Uses a server-side Realtime voice session and writes the returned audio into the project.",
+                )
 
         _persist_sidebar_profiles_to_plan()
 

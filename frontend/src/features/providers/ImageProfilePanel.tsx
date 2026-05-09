@@ -28,6 +28,8 @@ function asBool(value: unknown, fallback = false): boolean {
 
 function providerLabel(provider: string): string {
   switch (provider) {
+    case 'codex':
+      return 'Codex Exec'
     case 'replicate':
       return 'Replicate'
     case 'manual':
@@ -41,8 +43,12 @@ function providerLabel(provider: string): string {
 
 function providerHint(provider: string, generationModel: string): string {
   switch (provider) {
+    case 'codex':
+      return generationModel
+        ? `Cathode will ask the local Codex CLI to run the checked-in GPT Image helper with ${generationModel}. This is the preferred still-image lane now.`
+        : 'Cathode will ask the local Codex CLI to run the checked-in GPT Image helper. This is the preferred still-image lane now.'
     case 'replicate':
-      return 'Cloud image generation stays enabled. Generate and Regenerate Image will use the generation model shown here.'
+      return 'Cloud image generation stays available as a fallback. Generate and Regenerate Image will use the model shown here only when you keep Replicate selected.'
     case 'local':
       return generationModel
         ? `Local image generation will use ${generationModel} on this machine.`
@@ -79,7 +85,7 @@ export function ImageProfilePanel({
 }: ImageProfilePanelProps) {
   const currentProfile = profile ?? {}
   const provider = asString(currentProfile.provider, imageProviders[0] ?? 'manual')
-  const generationModel = asString(currentProfile.generation_model, 'qwen/qwen-image-2512')
+  const generationModel = asString(currentProfile.generation_model, 'gpt-image-2')
   const editModel = asString(currentProfile.edit_model, editModels[0] ?? '')
   const dashscopeN = asNumber(currentProfile.dashscope_edit_n, 1)
   const dashscopeSeed = asString(currentProfile.dashscope_edit_seed)
@@ -106,6 +112,7 @@ export function ImageProfilePanel({
   const effectiveGenerateRequest = {
     provider,
     model: generationModel || null,
+    route: provider === 'codex' ? 'local codex exec -> checked-in GPT Image helper' : 'direct provider call',
   }
   const effectiveEditRequest = {
     backend: editorBackendLabel(editModel),
@@ -123,7 +130,7 @@ export function ImageProfilePanel({
           <p className="workspace-eyebrow">Streamlit parity</p>
           <h3 className="workspace-panel-title">Image profile</h3>
           <p className="workspace-panel-copy m-0 mt-[var(--space-1)]">
-            Project-level generation and edit defaults. This is where the React app should let you choose the actual image editor before scene edits happen.
+            Project-level generation and edit defaults. Cathode is image-first now: local Codex execution plus GPT Image is the primary still-building lane, while motion stays a specialist override.
           </p>
         </div>
         <span
@@ -135,6 +142,72 @@ export function ImageProfilePanel({
       </div>
 
       <div className="flex flex-col gap-[var(--space-4)]">
+        <div
+          className="relative overflow-hidden rounded-[var(--radius-xl)] border"
+          style={{
+            borderColor: 'rgba(218, 126, 94, 0.28)',
+            background: 'linear-gradient(135deg, rgba(245, 233, 219, 0.9) 0%, rgba(255, 244, 230, 0.72) 45%, rgba(231, 121, 87, 0.12) 100%)',
+            boxShadow: '0 24px 70px rgba(42, 27, 21, 0.12)',
+            padding: 'var(--space-5)',
+          }}
+        >
+          <div
+            aria-hidden="true"
+            className="absolute inset-y-0 right-0 w-[38%] opacity-80"
+            style={{
+              background: 'repeating-linear-gradient(135deg, rgba(78, 39, 27, 0.06) 0px, rgba(78, 39, 27, 0.06) 10px, transparent 10px, transparent 22px)',
+            }}
+          />
+          <div className="relative grid gap-[var(--space-4)] lg:grid-cols-[1.4fr_0.9fr] lg:items-end">
+            <div>
+              <p
+                className="m-0 uppercase tracking-[0.24em] text-[var(--text-secondary)]"
+                style={{ fontSize: '10px', fontFamily: 'var(--font-mono)', fontWeight: 700 }}
+              >
+                First-Class Lane
+              </p>
+              <div
+                className="mt-[var(--space-2)] text-[var(--text-primary)]"
+                style={{
+                  fontSize: 'clamp(1.8rem, 4vw, 3rem)',
+                  lineHeight: 0.95,
+                  fontWeight: 700,
+                  letterSpacing: '-0.04em',
+                }}
+              >
+                Stills First.
+              </div>
+              <p
+                className="m-0 mt-[var(--space-3)] text-[var(--text-secondary)]"
+                style={{ fontSize: 'var(--text-sm)', maxWidth: '46ch' }}
+              >
+                Use local Codex execution to drive GPT Image for authored stills. Keep motion and deterministic renderer work for the scenes that truly need it, not as the default posture of the whole product.
+              </p>
+            </div>
+            <div className="grid gap-[var(--space-2)]">
+              {[
+                'Codex Exec -> GPT Image',
+                'Motion is opt-in now',
+                'Replicate stays fallback-only',
+              ].map((line) => (
+                <div
+                  key={line}
+                  className="rounded-[var(--radius-lg)] border px-[var(--space-3)] py-[var(--space-2)] text-[var(--text-primary)]"
+                  style={{
+                    borderColor: 'rgba(78, 39, 27, 0.14)',
+                    background: 'rgba(255,255,255,0.56)',
+                    fontSize: '12px',
+                    fontWeight: 600,
+                    letterSpacing: '0.02em',
+                  }}
+                >
+                  {line}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
         <div className="workspace-kpi-grid">
           <div>
             <p className="workspace-eyebrow">Generator</p>
@@ -171,7 +244,11 @@ export function ImageProfilePanel({
                 value={generationModel}
                 onChange={(event) => onProfileChange({ generation_model: event.target.value })}
                 disabled={disabled}
-                hint={generationCost ? `Used by Generate and Regenerate Image. Current catalog rate: ${generationCost}.` : 'Used by Generate and Regenerate Image.'}
+                hint={provider === 'codex'
+                  ? 'Used by the local Codex Exec still-image lane. GPT Image pricing varies by requested size and quality.'
+                  : generationCost
+                    ? `Used by Generate and Regenerate Image. Current catalog rate: ${generationCost}.`
+                    : 'Used by Generate and Regenerate Image.'}
               />
             </div>
           </GlassPanel>

@@ -1,7 +1,10 @@
 """Text-to-speech generation using Kokoro, ElevenLabs, Chatterbox, or OpenAI."""
 
+import base64
+import json
 import os
 import re
+import wave
 from pathlib import Path
 from typing import Literal
 
@@ -92,9 +95,39 @@ KOKORO_VOICES = {
 DEFAULT_VOICE = "af_bella"  # More upbeat than af_heart
 DEFAULT_SPEED = 1.1  # Slightly faster than normal
 DEFAULT_EXAGGERATION = 0.6  # Slightly more expressive than neutral (0.5)
+DEFAULT_OPENAI_TTS_MODEL = "gpt-4o-mini-tts"
+DEFAULT_OPENAI_REALTIME_MODEL = "gpt-realtime-2"
+DEFAULT_OPENAI_TTS_VOICE = "marin"
+OPENAI_TTS_VOICES = {
+    "alloy",
+    "ash",
+    "ballad",
+    "cedar",
+    "coral",
+    "echo",
+    "fable",
+    "marin",
+    "nova",
+    "onyx",
+    "sage",
+    "shimmer",
+    "verse",
+}
+OPENAI_REALTIME_VOICES = {
+    "alloy",
+    "ash",
+    "ballad",
+    "cedar",
+    "coral",
+    "echo",
+    "marin",
+    "sage",
+    "shimmer",
+    "verse",
+}
 
 # TTS Provider type
-TTSProvider = Literal["kokoro", "elevenlabs", "chatterbox", "openai"]
+TTSProvider = Literal["kokoro", "elevenlabs", "chatterbox", "openai", "openai_realtime"]
 
 
 def _safe_float(value, fallback: float) -> float:
@@ -112,7 +145,9 @@ def _normalize_voice_for_provider(provider: str, voice: str) -> str:
     if provider_name == "elevenlabs":
         return voice_name or DEFAULT_ELEVENLABS_VOICE
     if provider_name == "openai":
-        return voice_name or "nova"
+        return voice_name if voice_name in OPENAI_TTS_VOICES else DEFAULT_OPENAI_TTS_VOICE
+    if provider_name == "openai_realtime":
+        return voice_name if voice_name in OPENAI_REALTIME_VOICES else DEFAULT_OPENAI_TTS_VOICE
     return voice_name
 
 
@@ -162,7 +197,7 @@ def generate_audio(
     speed: float = DEFAULT_SPEED,
     tts_provider: TTSProvider = "kokoro",
     exaggeration: float = DEFAULT_EXAGGERATION,
-    openai_model_id: str = "tts-1",
+    openai_model_id: str = DEFAULT_OPENAI_TTS_MODEL,
     # ElevenLabs settings (used when tts_provider=="elevenlabs")
     elevenlabs_model_id: str = DEFAULT_ELEVENLABS_MODEL,
     elevenlabs_apply_text_normalization: ElevenLabsTextNormalization = DEFAULT_ELEVENLABS_TEXT_NORMALIZATION,
@@ -220,7 +255,7 @@ def generate_audio_result(
     speed: float = DEFAULT_SPEED,
     tts_provider: TTSProvider = "kokoro",
     exaggeration: float = DEFAULT_EXAGGERATION,
-    openai_model_id: str = "tts-1",
+    openai_model_id: str = DEFAULT_OPENAI_TTS_MODEL,
     elevenlabs_model_id: str = DEFAULT_ELEVENLABS_MODEL,
     elevenlabs_apply_text_normalization: ElevenLabsTextNormalization = DEFAULT_ELEVENLABS_TEXT_NORMALIZATION,
     elevenlabs_stability: float = DEFAULT_ELEVENLABS_STABILITY,
@@ -239,8 +274,13 @@ def generate_audio_result(
             return {"path": path, "provider": "kokoro", "model": "kokoro-local", "voice": voice}
         except Exception as e:
             print(f"Kokoro TTS failed ({e}), falling back to OpenAI...")
-            path = _generate_with_openai(text, output_path, voice="nova", model_id=openai_model_id)
-            return {"path": path, "provider": "openai", "model": openai_model_id, "voice": "nova"}
+            path = _generate_with_openai(text, output_path, voice=DEFAULT_OPENAI_TTS_VOICE, model_id=openai_model_id)
+            return {
+                "path": path,
+                "provider": "openai",
+                "model": openai_model_id,
+                "voice": DEFAULT_OPENAI_TTS_VOICE,
+            }
     if tts_provider == "elevenlabs":
         try:
             path = _generate_with_elevenlabs(
@@ -280,8 +320,14 @@ def generate_audio_result(
         path = _generate_with_chatterbox(text, output_path, exaggeration)
         return {"path": path, "provider": "replicate", "model": "resemble-ai/chatterbox", "voice": voice}
     if tts_provider == "openai":
-        path = _generate_with_openai(text, output_path, voice=voice, model_id=openai_model_id)
-        return {"path": path, "provider": "openai", "model": openai_model_id, "voice": voice}
+        resolved_voice = _normalize_voice_for_provider("openai", voice)
+        path = _generate_with_openai(text, output_path, voice=resolved_voice, model_id=openai_model_id)
+        return {"path": path, "provider": "openai", "model": openai_model_id, "voice": resolved_voice}
+    if tts_provider == "openai_realtime":
+        resolved_voice = _normalize_voice_for_provider("openai_realtime", voice)
+        model_id = openai_model_id if str(openai_model_id or "").startswith("gpt-realtime") else DEFAULT_OPENAI_REALTIME_MODEL
+        path = _generate_with_openai_realtime(text, output_path, voice=resolved_voice, model_id=model_id)
+        return {"path": path, "provider": "openai", "model": model_id, "voice": resolved_voice}
     raise ValueError(f"Unknown TTS provider: {tts_provider}")
 
 
@@ -498,7 +544,12 @@ def _generate_with_elevenlabs(
     return mp3_path
 
 
-def _generate_with_openai(text: str, output_path: Path, voice: str = "nova", model_id: str = "tts-1") -> Path:
+def _generate_with_openai(
+    text: str,
+    output_path: Path,
+    voice: str = DEFAULT_OPENAI_TTS_VOICE,
+    model_id: str = DEFAULT_OPENAI_TTS_MODEL,
+) -> Path:
     """Generate audio using OpenAI TTS with rate limiting."""
     import openai
 
@@ -506,7 +557,7 @@ def _generate_with_openai(text: str, output_path: Path, voice: str = "nova", mod
 
     def _call_openai():
         return client.audio.speech.create(
-            model=str(model_id or "tts-1"),
+            model=str(model_id or DEFAULT_OPENAI_TTS_MODEL),
             voice=voice,
             input=text,
             response_format="mp3",
@@ -525,6 +576,114 @@ def _generate_with_openai(text: str, output_path: Path, voice: str = "nova", mod
         return output_path
 
     return mp3_path
+
+
+def _generate_with_openai_realtime(
+    text: str,
+    output_path: Path,
+    voice: str = DEFAULT_OPENAI_TTS_VOICE,
+    model_id: str = DEFAULT_OPENAI_REALTIME_MODEL,
+) -> Path:
+    """Generate narration audio through a server-side Realtime voice session."""
+    from websockets.sync.client import connect
+
+    api_key = (os.getenv("OPENAI_API_KEY") or "").strip()
+    if not api_key:
+        raise RuntimeError("OPENAI_API_KEY is not set. Add it to your .env to use OpenAI Realtime Voice.")
+
+    resolved_voice = _normalize_voice_for_provider("openai_realtime", voice)
+    resolved_model = str(model_id or DEFAULT_OPENAI_REALTIME_MODEL).strip()
+    if not resolved_model.startswith("gpt-realtime"):
+        resolved_model = DEFAULT_OPENAI_REALTIME_MODEL
+
+    audio_chunks: list[bytes] = []
+    url = f"wss://api.openai.com/v1/realtime?model={resolved_model}"
+    headers = {"Authorization": f"Bearer {api_key}"}
+
+    def _call_realtime() -> Path:
+        with connect(url, additional_headers=headers, open_timeout=20, close_timeout=10, max_size=None) as ws:
+            ws.send(
+                json.dumps(
+                    {
+                        "type": "session.update",
+                        "session": {
+                            "type": "realtime",
+                            "model": resolved_model,
+                            "instructions": (
+                                "You are a narration voice for a rendered video. Read the user's text exactly, "
+                                "without adding greetings, commentary, labels, or extra words."
+                            ),
+                            "audio": {
+                                "output": {
+                                    "voice": resolved_voice,
+                                    "format": {"type": "audio/pcm", "rate": 24000},
+                                    "speed": float(1.0),
+                                }
+                            },
+                            "reasoning": {"effort": "low"},
+                        },
+                    }
+                )
+            )
+            ws.send(
+                json.dumps(
+                    {
+                        "type": "conversation.item.create",
+                        "item": {
+                            "type": "message",
+                            "role": "user",
+                            "content": [{"type": "input_text", "text": text}],
+                        },
+                    }
+                )
+            )
+            ws.send(
+                json.dumps(
+                    {
+                        "type": "response.create",
+                        "response": {
+                            "output_modalities": ["audio"],
+                            "audio": {
+                                "output": {
+                                    "voice": resolved_voice,
+                                    "format": {"type": "audio/pcm", "rate": 24000},
+                                }
+                            },
+                        },
+                    }
+                )
+            )
+
+            while True:
+                message = ws.recv(timeout=180)
+                event = json.loads(message)
+                event_type = str(event.get("type") or "")
+                if event_type in {"response.output_audio.delta", "response.audio.delta"}:
+                    delta = event.get("delta")
+                    if isinstance(delta, str) and delta:
+                        audio_chunks.append(base64.b64decode(delta))
+                elif event_type == "error":
+                    error = event.get("error") or event
+                    raise RuntimeError(f"OpenAI Realtime voice failed: {error}")
+                elif event_type == "response.done":
+                    break
+
+        if not audio_chunks:
+            raise RuntimeError("OpenAI Realtime voice returned no audio chunks.")
+
+        wav_path = output_path.with_suffix(".wav")
+        wav_path.parent.mkdir(parents=True, exist_ok=True)
+        with wave.open(str(wav_path), "wb") as wav_file:
+            wav_file.setnchannels(1)
+            wav_file.setsampwidth(2)
+            wav_file.setframerate(24000)
+            wav_file.writeframes(b"".join(audio_chunks))
+
+        if output_path.suffix == ".wav":
+            return wav_path
+        return wav_path
+
+    return openai_limiter.call_with_retry(_call_realtime)
 
 
 def _convert_mp3_to_wav(mp3_path: Path, wav_path: Path) -> None:
@@ -550,7 +709,7 @@ def generate_scene_audio(
     voice: str = DEFAULT_VOICE,
     speed: float = DEFAULT_SPEED,
     exaggeration: float = DEFAULT_EXAGGERATION,
-    openai_model_id: str = "tts-1",
+    openai_model_id: str = DEFAULT_OPENAI_TTS_MODEL,
     # ElevenLabs passthrough
     elevenlabs_model_id: str = DEFAULT_ELEVENLABS_MODEL,
     elevenlabs_apply_text_normalization: ElevenLabsTextNormalization = DEFAULT_ELEVENLABS_TEXT_NORMALIZATION,
@@ -654,7 +813,7 @@ def generate_scene_audio_result(
     voice: str = DEFAULT_VOICE,
     speed: float = DEFAULT_SPEED,
     exaggeration: float = DEFAULT_EXAGGERATION,
-    openai_model_id: str = "tts-1",
+    openai_model_id: str = DEFAULT_OPENAI_TTS_MODEL,
     elevenlabs_model_id: str = DEFAULT_ELEVENLABS_MODEL,
     elevenlabs_apply_text_normalization: ElevenLabsTextNormalization = DEFAULT_ELEVENLABS_TEXT_NORMALIZATION,
     elevenlabs_stability: float = DEFAULT_ELEVENLABS_STABILITY,
@@ -726,7 +885,7 @@ def generate_scene_audio_result(
         speed=resolved_speed,
         tts_provider=resolved_provider,
         exaggeration=exaggeration,
-        openai_model_id=str(scene.get("model_id") or openai_model_id or "tts-1"),
+        openai_model_id=str(scene.get("model_id") or openai_model_id or DEFAULT_OPENAI_TTS_MODEL),
         elevenlabs_model_id=resolved_elevenlabs_model_id,
         elevenlabs_apply_text_normalization=resolved_elevenlabs_text_normalization,  # type: ignore[arg-type]
         elevenlabs_stability=resolved_elevenlabs_stability,
