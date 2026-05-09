@@ -27,7 +27,7 @@ if str(REPO_ROOT) not in sys.path:
 import core.pipeline_service as pipeline_service
 from core.pipeline_service import create_project_from_brief_service, process_existing_project_service
 from core.project_store import load_plan, save_plan
-from core.runtime import PROJECTS_DIR, load_repo_env
+from core.runtime import PROJECTS_DIR, codex_image_generation_available, load_repo_env
 
 DEFAULT_PATIENTS = [
     "12-20-1975-0",
@@ -102,6 +102,14 @@ def write_json_atomic(path: Path, payload: dict[str, Any]) -> None:
     tmp = path.with_suffix(path.suffix + ".tmp")
     tmp.write_text(json.dumps(payload, indent=2, default=str), encoding="utf-8")
     tmp.replace(path)
+
+
+def require_locked_image_generation_lane() -> None:
+    if not codex_image_generation_available():
+        raise RuntimeError(
+            "qEEG video queue is locked to Codex Exec + gpt-image-2 stills, but that lane is unavailable. "
+            "Set OPENAI_API_KEY and ensure the `codex` CLI is on PATH before running the queue."
+        )
 
 
 def qeeg_portal_patient_dir(patient: str) -> Path:
@@ -324,6 +332,7 @@ def force_static_image_plan(plan: dict[str, Any]) -> dict[str, Any]:
 
 def run_queue(args: argparse.Namespace) -> int:
     load_repo_env(override=True)
+    require_locked_image_generation_lane()
     if args.skip_scene_review:
         def _skip_review(*_args: Any, **_kwargs: Any) -> dict[str, Any]:
             return {

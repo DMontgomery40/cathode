@@ -3,6 +3,7 @@ import json
 
 from core.director import (
     _build_claude_print_command,
+    _claude_print_binary_path,
     _generate_with_claude_print,
     _generate_with_anthropic,
     _get_anthropic_client,
@@ -110,6 +111,22 @@ def test_claude_print_command_uses_structured_output_flags():
     assert "claude-sonnet-4-6" in command
     assert "--json-schema" in command
     assert "--no-session-persistence" in command
+
+
+def test_claude_print_binary_prefers_configured_env(monkeypatch):
+    monkeypatch.setenv("CLAUDE_CODE_BINARY", "~/tools/claude")
+    monkeypatch.setattr("core.director.shutil.which", lambda _name: "/usr/local/bin/claude")
+
+    command = _build_claude_print_command('{"type":"object"}')
+
+    assert command[0].endswith("/tools/claude")
+
+
+def test_claude_print_binary_falls_back_to_path(monkeypatch):
+    monkeypatch.delenv("CLAUDE_CODE_BINARY", raising=False)
+    monkeypatch.setattr("core.director.shutil.which", lambda name: "/opt/homebrew/bin/claude" if name == "claude" else None)
+
+    assert _claude_print_binary_path() == "/opt/homebrew/bin/claude"
 
 
 def test_generate_with_claude_print_parses_structured_output(monkeypatch):

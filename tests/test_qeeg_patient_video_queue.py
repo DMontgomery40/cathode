@@ -43,6 +43,18 @@ def test_qeeg_queue_refreshes_older_image_or_story_provider(monkeypatch, tmp_pat
     assert queue.plan_needs_storyboard_refresh(project_dir, minimum_target_minutes=6.5) is True
 
 
+def test_qeeg_queue_fails_closed_when_codex_image_lane_unavailable(monkeypatch):
+    monkeypatch.setattr(queue, "codex_image_generation_available", lambda: False)
+
+    try:
+        queue.require_locked_image_generation_lane()
+    except RuntimeError as exc:
+        assert "Codex Exec + gpt-image-2" in str(exc)
+        assert "OPENAI_API_KEY" in str(exc)
+    else:
+        raise AssertionError("qEEG queue did not fail closed when Codex image generation was unavailable")
+
+
 def test_force_static_image_plan_removes_video_and_native_render_paths():
     plan = {
         "meta": {},
