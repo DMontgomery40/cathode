@@ -3,7 +3,7 @@ from __future__ import annotations
 import copy
 from pathlib import Path
 
-from core.pipeline_service import render_project_service
+from core.pipeline_service import normalize_authored_image_scene_identities, render_project_service
 
 
 def test_render_project_service_persists_video_compression_metadata(monkeypatch, tmp_path):
@@ -67,6 +67,104 @@ def test_render_project_service_persists_video_compression_metadata(monkeypatch,
     assert saved_plans
     assert saved_plans[-1]["meta"]["video_path"] == str(rendered_video_path)
     assert saved_plans[-1]["meta"]["video_compression"] == compression_payload
+
+
+def test_render_project_service_allows_clip_audio_video_without_audio_path(monkeypatch, tmp_path):
+    project_dir = tmp_path / "render_project"
+    project_dir.mkdir(parents=True, exist_ok=True)
+    clip_path = project_dir / "clips" / "scene_000.mp4"
+    clip_path.parent.mkdir(parents=True, exist_ok=True)
+    clip_path.write_bytes(b"mp4")
+
+    plan = {
+        "meta": {
+            "render_profile": {
+                "render_backend": "ffmpeg",
+                "fps": 24,
+            }
+        },
+        "scenes": [
+            {
+                "id": 1,
+                "scene_type": "video",
+                "video_path": str(clip_path),
+                "video_audio_source": "clip",
+                "audio_path": None,
+            }
+        ],
+    }
+    rendered_video_path = project_dir / "rendered.mp4"
+    rendered_video_path.write_bytes(b"mp4")
+    saved_plans: list[dict] = []
+
+    monkeypatch.setattr("core.pipeline_service.load_plan", lambda _: plan)
+    monkeypatch.setattr("core.pipeline_service._scene_has_primary_visual", lambda *args, **kwargs: True)
+    monkeypatch.setattr("core.pipeline_service.assemble_video", lambda *args, **kwargs: rendered_video_path)
+    monkeypatch.setattr(
+        "core.pipeline_service.compress_video_if_oversized",
+        lambda *args, **kwargs: {"path": str(rendered_video_path), "compressed": False},
+    )
+    monkeypatch.setattr(
+        "core.pipeline_service.save_plan",
+        lambda _project_dir, updated_plan: saved_plans.append(updated_plan) or updated_plan,
+    )
+    monkeypatch.setattr(
+        "core.pipeline_service.review_project_scenes",
+        lambda *_args, **_kwargs: {"provider": "codex", "scene_count": 1, "review_dir": "/tmp/review"},
+    )
+
+    result = render_project_service(project_dir)
+
+    assert result["status"] == "succeeded"
+    assert result["video_path"] == str(rendered_video_path)
+
+
+def test_normalize_authored_image_scene_identities_preserves_existing_mixed_timeline_paths(tmp_path):
+    project_dir = tmp_path / "mixed_project"
+    images_dir = project_dir / "images"
+    clips_dir = project_dir / "clips"
+    images_dir.mkdir(parents=True)
+    clips_dir.mkdir(parents=True)
+    first_image = images_dir / "scene_000.png"
+    second_image = images_dir / "scene_001.png"
+    clip_path = clips_dir / "intro.mp4"
+    first_image.write_bytes(b"first")
+    second_image.write_bytes(b"second")
+    clip_path.write_bytes(b"clip")
+
+    plan = {
+        "scenes": [
+            {
+                "id": 0,
+                "uid": "cover",
+                "scene_type": "image",
+                "image_path": str(first_image),
+                "composition": {"manifestation": "authored_image"},
+            },
+            {
+                "id": 1,
+                "uid": "intro_clip",
+                "scene_type": "video",
+                "video_path": str(clip_path),
+                "video_audio_source": "clip",
+                "composition": {"manifestation": "source_video"},
+            },
+            {
+                "id": 2,
+                "uid": "next_slide",
+                "scene_type": "image",
+                "image_path": str(second_image),
+                "composition": {"manifestation": "authored_image"},
+            },
+        ],
+    }
+
+    updated, changed = normalize_authored_image_scene_identities(project_dir, plan)
+
+    assert changed is False
+    assert updated["scenes"][2]["image_path"] == str(second_image)
+    assert second_image.read_bytes() == b"second"
+    assert not (images_dir / "scene_002.png").exists()
 
 
 def test_render_project_service_scopes_exact_repairs_and_preserves_canonical_slide_path(monkeypatch, tmp_path):

@@ -325,7 +325,7 @@ def test_generate_project_assets_service_skips_final_audio_when_replicate_clip_a
                 "quality_mode": "standard",
                 "generate_audio": True,
             },
-            "tts_profile": {"provider": "openai", "model_id": "tts-1", "voice": "nova", "speed": 1.0},
+            "tts_profile": {"provider": "openai", "model_id": "gpt-4o-mini-tts", "voice": "marin", "speed": 1.0},
         },
         "scenes": [
             {
@@ -364,7 +364,7 @@ def test_generate_project_assets_service_skips_final_audio_when_replicate_clip_a
             "reference_image_generated": True,
             "reference_audio_generated": True,
             "reference_audio_provider": "openai",
-            "reference_audio_model": "tts-1",
+            "reference_audio_model": "gpt-4o-mini-tts",
         },
     )
     (tmp_path / "scene_001.mp4").write_bytes(b"mp4")

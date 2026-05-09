@@ -236,7 +236,7 @@ def build_output(
 
     notes = [
         "Set OPENAI_API_KEY or ANTHROPIC_API_KEY before calling make_video.",
-        "Set REPLICATE_API_TOKEN for built-in image generation; otherwise keep the workflow manual for visuals.",
+        "Cathode now prefers the local Codex Exec + GPT Image lane for stills when codex and OPENAI_API_KEY are available. REPLICATE_API_TOKEN remains a fallback image path.",
     ]
     if missing:
         notes.append(f"Missing system dependencies: {', '.join(missing)}. Suggested install: {install_hint()}")

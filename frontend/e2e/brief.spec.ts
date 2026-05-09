@@ -231,7 +231,7 @@ test.describe('Brief Studio', () => {
       await expect(select).toHaveValue('visual_authored')
     })
 
-    test('Scene Engine select has all options, including trust-claude auto', async ({ page }) => {
+    test('Scene Engine select has all options, including image-first auto', async ({ page }) => {
       await openAdvancedCreativeControls(page)
       const select = page.getByLabel('Scene Engine')
       const options = select.locator('option')
@@ -261,7 +261,7 @@ test.describe('Brief Studio', () => {
       await openAdvancedCreativeControls(page)
       const select = page.getByLabel('Scene Engine')
       await expect(select.locator('option')).toHaveCount(4)
-      await expect(select.locator('option[value="auto"]')).toHaveText('I Trust Claude to Decide')
+      await expect(select.locator('option[value="auto"]')).toHaveText('Image-First Auto')
     })
 
     test('Scene Engine shows disabled Remotion-only modes when bootstrap says Remotion is unavailable', async ({ page }) => {

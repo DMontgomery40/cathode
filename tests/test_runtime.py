@@ -39,6 +39,56 @@ def test_resolve_tts_profile_rewrites_non_kokoro_voice_for_kokoro_provider(monke
     assert profile["voice"] == "af_bella"
 
 
+def test_resolve_tts_profile_defaults_openai_to_current_tts_model_and_voice(monkeypatch):
+    monkeypatch.setattr(
+        "core.runtime.available_tts_providers",
+        lambda keys=None: {"kokoro": "Kokoro (Local)", "openai": "OpenAI TTS (Cloud)"},
+    )
+
+    profile = resolve_tts_profile({"provider": "openai", "voice": "nova", "model_id": "tts-1"})
+
+    assert profile["provider"] == "openai"
+    assert profile["voice"] == "nova"
+    assert profile["model_id"] == "tts-1"
+
+
+def test_resolve_tts_profile_repairs_openai_voice_and_model(monkeypatch):
+    monkeypatch.setattr(
+        "core.runtime.available_tts_providers",
+        lambda keys=None: {"kokoro": "Kokoro (Local)", "openai": "OpenAI TTS (Cloud)"},
+    )
+
+    profile = resolve_tts_profile({"provider": "openai", "voice": "af_bella", "model_id": "eleven_multilingual_v2"})
+
+    assert profile["voice"] == "marin"
+    assert profile["model_id"] == "gpt-4o-mini-tts"
+
+
+def test_available_tts_providers_exposes_openai_realtime_voice_when_openai_is_configured():
+    providers = available_tts_providers(
+        {"openai": True, "anthropic": False, "replicate": False, "dashscope": False, "elevenlabs": False}
+    )
+
+    assert providers["openai_realtime"] == "OpenAI Realtime Voice (GPT-Realtime-2)"
+    assert providers["openai"] == "OpenAI TTS (Cloud)"
+
+
+def test_resolve_tts_profile_repairs_openai_realtime_voice_and_model(monkeypatch):
+    monkeypatch.setattr(
+        "core.runtime.available_tts_providers",
+        lambda keys=None: {
+            "kokoro": "Kokoro (Local)",
+            "openai_realtime": "OpenAI Realtime Voice (GPT-Realtime-2)",
+        },
+    )
+
+    profile = resolve_tts_profile({"provider": "openai_realtime", "voice": "nova", "model_id": "gpt-4o-mini-tts"})
+
+    assert profile["provider"] == "openai_realtime"
+    assert profile["voice"] == "marin"
+    assert profile["model_id"] == "gpt-realtime-2"
+
+
 def test_available_tts_providers_exposes_elevenlabs_when_only_replicate_is_configured():
     providers = available_tts_providers(
         {"openai": False, "anthropic": False, "replicate": True, "dashscope": False, "elevenlabs": False}
@@ -144,4 +194,16 @@ def test_resolve_workflow_llm_roles_keeps_product_pipeline_on_anthropic(monkeypa
     creative_provider, treatment_provider = resolve_workflow_llm_roles("openai")
 
     assert creative_provider == "anthropic"
+    assert treatment_provider == "anthropic"
+
+
+def test_resolve_workflow_llm_roles_allows_claude_print_story_writer(monkeypatch):
+    monkeypatch.setattr(
+        "core.runtime.check_api_keys",
+        lambda: {"openai": True, "anthropic": True, "replicate": False, "dashscope": False, "elevenlabs": False},
+    )
+
+    creative_provider, treatment_provider = resolve_workflow_llm_roles("claude_print")
+
+    assert creative_provider == "claude_print"
     assert treatment_provider == "anthropic"
