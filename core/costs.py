@@ -187,6 +187,28 @@ _ENTRY_DEFS: list[dict[str, Any]] = [
     {
         "kind": "tts",
         "provider": "openai",
+        "model": "gpt-4o-mini-tts",
+        "label": "OpenAI GPT-4o mini TTS",
+        "pricing_type": "per_million_characters",
+        "unit_amount": 15.0,
+        "currency": _USD,
+        "source_url": "https://developers.openai.com/api/docs/guides/text-to-speech",
+        "gating": True,
+    },
+    {
+        "kind": "tts",
+        "provider": "openai",
+        "model": "gpt-realtime-2",
+        "label": "OpenAI GPT-Realtime-2 voice",
+        "pricing_type": "variable",
+        "unit_amount": None,
+        "currency": _USD,
+        "source_url": "https://developers.openai.com/api/docs/models/gpt-realtime-2",
+        "gating": True,
+    },
+    {
+        "kind": "tts",
+        "provider": "openai",
         "model": "tts-1",
         "label": "OpenAI TTS-1",
         "pricing_type": "per_million_characters",
@@ -236,6 +258,8 @@ def _display_amount(entry: dict[str, Any]) -> str:
     unit_amount = entry.get("unit_amount")
     if pricing_type == "per_million_tokens":
         return f"${entry['input_unit_amount']:.2f}/M input, ${entry['output_unit_amount']:.2f}/M output"
+    if pricing_type == "per_million_audio_tokens":
+        return f"${entry['input_unit_amount']:.2f}/M audio input, ${entry['output_unit_amount']:.2f}/M audio output"
     if unit_amount in (None, ""):
         return "Pricing varies"
     symbol = "$" if currency == _USD else "¥"
@@ -247,6 +271,8 @@ def _display_amount(entry: dict[str, Any]) -> str:
         return f"{symbol}{float(unit_amount):.3f} / 1K chars"
     if pricing_type == "per_million_characters":
         return f"{symbol}{float(unit_amount):.2f} / 1M chars"
+    if pricing_type == "per_minute":
+        return f"{symbol}{float(unit_amount):.3f} / min"
     return f"{symbol}{float(unit_amount):.3f}"
 
 
@@ -580,7 +606,7 @@ def tts_entry(
                 "unit_amount": 0.06,
             }
     elif provider_name == "openai":
-        model_name = model_name or "tts-1"
+        model_name = model_name or "gpt-4o-mini-tts"
         entry = _find_entry(kind="tts", provider="openai", model=model_name)
     elif provider_name == "chatterbox":
         entry = _find_entry(kind="tts", provider="replicate", model="resemble-ai/chatterbox")
@@ -688,7 +714,7 @@ def estimate_plan_cost(plan: dict[str, Any]) -> dict[str, Any]:
     provider = str(tts_profile.get("provider") or "kokoro").strip().lower()
     tts_model = (
         str(tts_profile.get("model_id") or "")
-        if provider in {"elevenlabs", "openai"}
+        if provider in {"elevenlabs", "openai", "openai_realtime"}
         else "resemble-ai/chatterbox"
         if provider == "chatterbox"
         else ""

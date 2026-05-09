@@ -31,7 +31,36 @@ def _tts_voice_options() -> dict[str, list[dict[str, str]]]:
         ],
         "openai": [
             {"value": voice, "label": voice, "description": "OpenAI TTS voice"}
-            for voice in ("alloy", "ash", "ballad", "coral", "echo", "fable", "nova", "onyx", "sage", "shimmer")
+            for voice in (
+                "alloy",
+                "ash",
+                "ballad",
+                "cedar",
+                "coral",
+                "echo",
+                "fable",
+                "marin",
+                "nova",
+                "onyx",
+                "sage",
+                "shimmer",
+                "verse",
+            )
+        ],
+        "openai_realtime": [
+            {"value": voice, "label": voice, "description": "OpenAI Realtime voice"}
+            for voice in (
+                "alloy",
+                "ash",
+                "ballad",
+                "cedar",
+                "coral",
+                "echo",
+                "marin",
+                "sage",
+                "shimmer",
+                "verse",
+            )
         ],
         "chatterbox": [],
     }

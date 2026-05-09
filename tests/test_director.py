@@ -2,6 +2,8 @@ import base64
 import json
 
 from core.director import (
+    _build_claude_print_command,
+    _generate_with_claude_print,
     _generate_with_anthropic,
     _get_anthropic_client,
     _generate_with_openai,
@@ -97,6 +99,53 @@ def test_director_system_prompt_includes_official_remotion_stack_for_anthropic_o
     assert "Cathode supported-family registry constraints." in anthropic_prompt
     assert "# About Remotion" not in openai_prompt
     assert "Cathode manifestation-path contract." not in openai_prompt
+
+
+def test_claude_print_command_uses_structured_output_flags():
+    command = _build_claude_print_command('{"type":"object"}')
+
+    assert command[0].endswith("claude")
+    assert "-p" in command
+    assert "--model" in command
+    assert "claude-sonnet-4-6" in command
+    assert "--json-schema" in command
+    assert "--no-session-persistence" in command
+
+
+def test_generate_with_claude_print_parses_structured_output(monkeypatch):
+    captured = {}
+
+    class Completed:
+        returncode = 0
+        stderr = ""
+        stdout = json.dumps(
+            {
+                "structured_output": {
+                    "scenes": [
+                        {
+                            "id": 1,
+                            "title": "Opening",
+                            "narration": "A clear patient-friendly opening.",
+                            "visual_prompt": "Warm clinical illustration.",
+                        }
+                    ]
+                }
+            }
+        )
+
+    def fake_run(command, **kwargs):
+        captured["command"] = command
+        captured["kwargs"] = kwargs
+        return Completed()
+
+    monkeypatch.setattr("core.director.subprocess.run", fake_run)
+
+    scenes, response = _generate_with_claude_print("system", "user", return_response=True)
+
+    assert scenes[0]["title"] == "Opening"
+    assert response["returncode"] == 0
+    assert "--json-schema" in captured["command"]
+    assert "LOCAL CLAUDE CODE PRINT-MODE CONTEXT" in captured["kwargs"]["input"]
 
 
 def test_director_system_prompt_selects_clinical_data_authored_stills_capability():

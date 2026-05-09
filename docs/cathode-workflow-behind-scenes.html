@@ -1,0 +1,1320 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cathode — the dark factory</title>
+<style>
+  :root {
+    --ivory:    #FAF9F5;
+    --paper:    #FFFFFF;
+    --slate:    #141413;
+    --clay:     #D97757;
+    --clay-d:   #B85C3E;
+    --oat:      #E3DACC;
+    --olive:    #788C5D;
+    --rust:     #B04A3F;
+    --g100:     #F0EEE6;
+    --g150:     #ECEAE0;
+    --g200:     #E6E3DA;
+    --g300:     #D1CFC5;
+    --g500:     #87867F;
+    --g700:     #3D3D3A;
+    --serif: ui-serif, Georgia, "Times New Roman", Times, serif;
+    --sans:  system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --mono:  ui-monospace, "SF Mono", Menlo, Monaco, Consolas, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body {
+    background: var(--ivory);
+    color: var(--g700);
+    font-family: var(--sans);
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 0 32px 140px; }
+  code { font-family: var(--mono); font-size: 0.92em; color: var(--slate); }
+  a { color: var(--clay); text-decoration-color: var(--oat); text-underline-offset: 3px; }
+  a:hover { text-decoration-color: var(--clay); }
+
+  /* ── operator legend (used everywhere) ─ */
+  .op {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--g700);
+  }
+  .op .swatch {
+    width: 10px; height: 10px; border-radius: 999px;
+    border: 1.5px solid var(--g300);
+    background: var(--paper);
+  }
+  .op.agent .swatch { background: rgba(217,119,87,0.18); border-color: var(--clay); }
+  .op.model .swatch { background: rgba(120,140,93,0.20); border-color: var(--olive); }
+  .op.code  .swatch { background: var(--g150); border-color: var(--g500); }
+
+  /* ── masthead ────────────────────────── */
+  header.masthead {
+    padding: 80px 0 48px;
+    border-bottom: 1.5px solid var(--g300);
+    margin-bottom: 12px;
+  }
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--g500);
+    margin-bottom: 18px;
+    display: flex; align-items: center; gap: 12px;
+  }
+  .eyebrow::before {
+    content: "";
+    width: 24px; height: 1.5px;
+    background: var(--clay);
+  }
+  h1 {
+    font-family: var(--serif);
+    font-weight: 500;
+    font-size: clamp(38px, 5.4vw, 60px);
+    line-height: 1.06;
+    letter-spacing: -0.018em;
+    color: var(--slate);
+    max-width: 19ch;
+    margin-bottom: 22px;
+  }
+  h1 em { font-style: italic; color: var(--clay); }
+  .intro {
+    font-size: 16.5px;
+    color: var(--g700);
+    max-width: 64ch;
+  }
+  .intro strong { color: var(--slate); font-weight: 500; }
+
+  .hero-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 320px;
+    gap: 56px;
+    align-items: end;
+  }
+  @media (max-width: 880px) { .hero-grid { grid-template-columns: 1fr; } }
+
+  /* hero figure: agent → prompt slip → agent → prompt slip → agent */
+  .factory {
+    border: 1.5px solid var(--g300);
+    border-radius: 14px;
+    background: var(--paper);
+    padding: 18px 14px 16px;
+    box-shadow: 0 12px 32px rgba(20,20,19,.06);
+  }
+  .factory svg { display: block; width: 100%; height: auto; }
+  .factory .cap {
+    font-family: var(--serif);
+    font-style: italic;
+    font-size: 12px;
+    color: var(--g500);
+    text-align: center;
+    margin-top: 8px;
+  }
+
+  .legend {
+    display: flex; flex-wrap: wrap; gap: 16px;
+    margin-top: 22px;
+  }
+
+  /* ── toc pills ───────────────────────── */
+  nav.toc {
+    display: flex; flex-wrap: wrap; gap: 8px;
+    padding: 22px 0 0;
+  }
+  nav.toc a {
+    font-size: 12.5px;
+    padding: 7px 14px;
+    border: 1.5px solid var(--g300);
+    border-radius: 999px;
+    text-decoration: none;
+    color: var(--g700);
+    background: var(--paper);
+    transition: border-color 120ms, color 120ms;
+    display: inline-flex; align-items: center; gap: 7px;
+  }
+  nav.toc a .n {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--g500);
+  }
+  nav.toc a:hover { border-color: var(--slate); color: var(--slate); }
+  nav.toc a:hover .n { color: var(--clay); }
+
+  /* ── section chrome ──────────────────── */
+  section { margin-top: 76px; scroll-margin-top: 28px; }
+  .sec-head {
+    display: flex; align-items: baseline; gap: 16px;
+    margin-bottom: 10px;
+  }
+  .sec-head .idx {
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--clay);
+    font-weight: 600;
+    width: 34px;
+    flex-shrink: 0;
+  }
+  .sec-head h2 {
+    font-family: var(--serif);
+    font-weight: 500;
+    font-size: 27px;
+    color: var(--slate);
+    letter-spacing: -0.012em;
+  }
+  .sec-head .count {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--g500);
+    background: var(--g100);
+    padding: 2px 8px;
+    border-radius: 999px;
+  }
+  .sec-intro {
+    font-size: 14.5px;
+    color: var(--g700);
+    max-width: 700px;
+    margin: 0 0 28px 50px;
+  }
+  @media (max-width: 640px) {
+    .sec-intro { margin-left: 0; }
+    .sec-head .idx { width: 28px; }
+  }
+  .sec-body { margin-left: 50px; }
+  @media (max-width: 640px) { .sec-body { margin-left: 0; } }
+
+  /* ── operator stations (was: lanes) ─── */
+  .stations {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(232px, 1fr));
+    gap: 18px;
+  }
+  .station {
+    background: var(--paper);
+    border: 1.5px solid var(--g300);
+    border-radius: 14px;
+    overflow: hidden;
+    transition: border-color 150ms, transform 150ms, box-shadow 150ms;
+    display: flex; flex-direction: column;
+  }
+  .station:hover {
+    transform: translateY(-2px);
+    border-color: var(--slate);
+    box-shadow: 0 10px 28px rgba(20,20,19,.08);
+  }
+  .station .head {
+    height: 96px;
+    background: var(--g100);
+    border-bottom: 1.5px solid var(--g200);
+    display: flex; align-items: center; justify-content: center;
+    padding: 12px;
+    transition: background 150ms;
+  }
+  .station:hover .head { background: var(--oat); }
+  .station .head svg { width: 100%; height: 100%; overflow: visible; }
+  .station .head svg .st { stroke: var(--g500); fill: none; stroke-width: 2.2; stroke-linecap: round; }
+  .station .head svg .lc { stroke: var(--clay); fill: none; stroke-width: 2.2; stroke-linecap: round; }
+  .station .head svg .lo { stroke: var(--olive); fill: none; stroke-width: 2.2; stroke-linecap: round; }
+  .station .head svg .fl { fill: var(--g300); }
+  .station .head svg .oa { fill: var(--oat); stroke: var(--g500); stroke-width: 2.2; }
+  .station .head svg .wh { fill: var(--paper); stroke: var(--g500); stroke-width: 2.2; }
+  .station .head svg .da { stroke-dasharray: 4 4; }
+  .station:hover .head svg .oa { fill: var(--paper); }
+  .station .body { padding: 14px 18px 18px; }
+  .station .label { margin-bottom: 8px; }
+  .station h3 {
+    font-family: var(--serif);
+    font-weight: 500;
+    font-size: 18px;
+    line-height: 1.25;
+    color: var(--slate);
+    margin-bottom: 8px;
+    letter-spacing: -0.008em;
+  }
+  .station p {
+    font-size: 13.5px;
+    color: var(--g700);
+    line-height: 1.5;
+  }
+
+  /* ── pipeline canvas ─────────────────── */
+  .canvas {
+    border: 1.5px solid var(--g300);
+    border-radius: 14px;
+    background: var(--paper);
+    padding: 28px 24px 22px;
+    overflow-x: auto;
+  }
+  svg.flow { display: block; width: 100%; min-width: 760px; height: auto; }
+  .flow text { font-family: var(--mono); font-size: 12px; fill: var(--slate); }
+  .flow text.sub { font-size: 10px; fill: var(--g500); }
+  .flow text.who {
+    font-family: var(--mono);
+    font-size: 9.5px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+  .flow .node rect { fill: var(--paper); stroke: var(--g300); stroke-width: 1.5; rx: 8; }
+  .flow .node.agent rect { fill: rgba(217,119,87,0.08); stroke: var(--clay); }
+  .flow .node.model rect { fill: rgba(120,140,93,0.10); stroke: var(--olive); }
+  .flow .edge { stroke: var(--g500); stroke-width: 1.5; fill: none; marker-end: url(#arrow); }
+  .flow .edge.loop { stroke: var(--clay); stroke-dasharray: 4 4; marker-end: url(#arrow-clay); }
+  .flow text.note { font-family: var(--serif); font-style: italic; font-size: 12px; fill: var(--g500); }
+
+  /* ── prompt-handoff chain ────────────── */
+  .chain {
+    display: flex; flex-direction: column;
+    border: 1.5px solid var(--g300);
+    border-radius: 14px;
+    background: var(--paper);
+    overflow: hidden;
+  }
+  .hop {
+    display: grid;
+    grid-template-columns: 168px 1fr;
+    border-bottom: 1.5px dashed var(--g200);
+  }
+  .hop:last-child { border-bottom: 0; }
+  .hop .who {
+    padding: 18px 18px 18px 22px;
+    background: var(--g100);
+    border-right: 1.5px solid var(--g200);
+    display: flex; flex-direction: column; gap: 6px;
+    align-items: flex-start;
+  }
+  .hop .who .role {
+    font-family: var(--serif);
+    font-size: 16px;
+    font-weight: 500;
+    color: var(--slate);
+    letter-spacing: -0.005em;
+  }
+  .hop .who .impl {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--g500);
+  }
+  .hop .what {
+    padding: 18px 22px;
+    display: flex; flex-direction: column; gap: 10px;
+  }
+  .hop .what .arrow-row {
+    display: flex; align-items: center; gap: 10px;
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--g500);
+  }
+  .hop .what .arrow-row::before {
+    content: "›";
+    color: var(--clay);
+    font-size: 14px;
+  }
+  .hop .what .slip {
+    background: var(--ivory);
+    border: 1px solid var(--g300);
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--g700);
+    line-height: 1.5;
+    white-space: pre-wrap;
+  }
+  .hop .what .slip em {
+    font-family: var(--serif);
+    font-style: italic;
+    color: var(--clay);
+    font-size: 12.5px;
+  }
+
+  /* ── milestone timeline ──────────────── */
+  .timeline { display: flex; flex-direction: column; }
+  .stage {
+    display: grid;
+    grid-template-columns: 64px 28px 1fr;
+    gap: 0 18px;
+    padding: 0 0 22px;
+    position: relative;
+  }
+  .stage .num {
+    text-align: right;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--g500);
+    letter-spacing: 0.06em;
+    padding-top: 4px;
+  }
+  .stage .rail { position: relative; }
+  .stage .rail::before {
+    content: "";
+    position: absolute;
+    left: 13px; top: 6px; bottom: -22px;
+    width: 1.5px;
+    background: var(--g300);
+  }
+  .stage:last-child .rail::before { display: none; }
+  .stage .dot {
+    position: absolute;
+    left: 7px; top: 4px;
+    width: 13px; height: 13px;
+    border-radius: 999px;
+    background: var(--paper);
+    border: 1.5px solid var(--g300);
+  }
+  .stage.agent .dot { background: rgba(217,119,87,0.25); border-color: var(--clay); }
+  .stage.model .dot { background: rgba(120,140,93,0.25); border-color: var(--olive); }
+  .stage .body {
+    background: var(--paper);
+    border: 1.5px solid var(--g300);
+    border-radius: 12px;
+    padding: 16px 18px;
+  }
+  .stage .body .row {
+    display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px;
+    margin-bottom: 6px;
+  }
+  .stage h3 {
+    font-family: var(--serif);
+    font-weight: 500;
+    font-size: 18px;
+    color: var(--slate);
+    letter-spacing: -0.008em;
+  }
+  .stage p {
+    font-size: 13.5px;
+    color: var(--g700);
+    margin-bottom: 10px;
+  }
+  .stage .api {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--g700);
+    background: var(--g100);
+    border: 1px solid var(--g200);
+    border-radius: 6px;
+    padding: 7px 10px;
+    overflow-wrap: anywhere;
+  }
+
+  /* ── tabs ────────────────────────────── */
+  .tabs {
+    display: flex; flex-wrap: wrap; gap: 6px;
+    margin-bottom: 16px;
+  }
+  .tab {
+    font-family: var(--sans);
+    font-size: 13px;
+    padding: 8px 14px;
+    border: 1.5px solid var(--g300);
+    background: var(--paper);
+    border-radius: 999px;
+    color: var(--g700);
+    cursor: pointer;
+    transition: border-color 120ms, color 120ms;
+  }
+  .tab:hover { border-color: var(--slate); color: var(--slate); }
+  .tab[aria-selected="true"] {
+    background: var(--slate);
+    color: var(--ivory);
+    border-color: var(--slate);
+  }
+  .panel { display: none; }
+  .panel.active { display: block; }
+  .panel-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 0.42fr) minmax(0, 0.58fr);
+    gap: 22px;
+    background: var(--paper);
+    border: 1.5px solid var(--g300);
+    border-radius: 14px;
+    padding: 22px;
+  }
+  @media (max-width: 760px) { .panel-grid { grid-template-columns: 1fr; } }
+  .panel h3 {
+    font-family: var(--serif);
+    font-weight: 500;
+    font-size: 19px;
+    color: var(--slate);
+    margin-bottom: 8px;
+    letter-spacing: -0.008em;
+  }
+  .panel p { font-size: 14px; color: var(--g700); }
+  pre.code {
+    background: var(--g100);
+    border: 1px solid var(--g200);
+    border-radius: 10px;
+    padding: 14px 16px;
+    font-family: var(--mono);
+    font-size: 12.5px;
+    line-height: 1.6;
+    color: var(--slate);
+    overflow-x: auto;
+    white-space: pre;
+  }
+
+  /* ── cards (disk + contracts) ────────── */
+  .duo {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(248px, 1fr));
+    gap: 16px;
+  }
+  .card {
+    background: var(--paper);
+    border: 1.5px solid var(--g300);
+    border-radius: 14px;
+    padding: 18px 20px 20px;
+  }
+  .card .label-mono {
+    font-family: var(--mono);
+    font-size: 10.5px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--g500);
+    margin-bottom: 6px;
+  }
+  .card h3 {
+    font-family: var(--serif);
+    font-weight: 500;
+    font-size: 17.5px;
+    color: var(--slate);
+    margin-bottom: 8px;
+    letter-spacing: -0.008em;
+  }
+  .card p { font-size: 13.5px; color: var(--g700); }
+  .card ul {
+    margin-top: 10px;
+    padding-left: 0;
+    list-style: none;
+    display: grid;
+    gap: 5px;
+  }
+  .card ul li {
+    font-family: var(--mono);
+    font-size: 12.5px;
+    color: var(--g700);
+  }
+  .card ul li::before {
+    content: "›";
+    color: var(--clay);
+    margin-right: 8px;
+  }
+
+  /* ── source map ──────────────────────── */
+  .files {
+    list-style: none;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 8px;
+  }
+  .files a {
+    display: block;
+    padding: 10px 14px;
+    background: var(--paper);
+    border: 1.5px solid var(--g300);
+    border-radius: 10px;
+    font-family: var(--mono);
+    font-size: 12.5px;
+    color: var(--g700);
+    text-decoration: none;
+    overflow-wrap: anywhere;
+    transition: border-color 120ms, color 120ms;
+  }
+  .files a:hover { border-color: var(--slate); color: var(--slate); }
+  .files a::before { content: "›  "; color: var(--clay); }
+
+  /* ── footer ──────────────────────────── */
+  footer {
+    margin-top: 100px;
+    border-top: 1.5px solid var(--g300);
+    padding-top: 28px;
+    font-family: var(--serif);
+    font-style: italic;
+    font-size: 14px;
+    color: var(--g500);
+    max-width: 720px;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<!-- ── masthead ───────────────────────────────────────────── -->
+<header class="masthead">
+  <div class="hero-grid">
+    <div>
+      <div class="eyebrow">Lights-out video manufacturing</div>
+      <h1>The dark factory: <em>agents prompting agents prompting agents.</em></h1>
+      <p class="intro">
+        Cathode looks like a one-button video maker. Behind the glass it's a
+        delegation chain: one agent calls Cathode's MCP, which spawns a
+        director agent, which writes scenes for image and voice models, whose
+        output is judged by another agent, which prompts more agents to repair
+        what failed — until an MP4 falls out the end. <strong>Almost no human
+        in the loop.</strong> The brief enters as English; the artifact leaves
+        as <code>.mp4</code>. Everything in between is one model talking to
+        the next.
+      </p>
+      <div class="legend">
+        <span class="op agent"><span class="swatch"></span>agent (Claude)</span>
+        <span class="op model"><span class="swatch"></span>model call</span>
+        <span class="op code"><span class="swatch"></span>deterministic code</span>
+      </div>
+      <nav class="toc">
+        <a href="#stations">Stations <span class="n">04</span></a>
+        <a href="#pipeline">The line <span class="n">02</span></a>
+        <a href="#handoffs">Prompt handoffs <span class="n">07</span></a>
+        <a href="#stages">Stage by stage <span class="n">09</span></a>
+        <a href="#internals">Internals <span class="n">04</span></a>
+        <a href="#disk">On disk <span class="n">03</span></a>
+        <a href="#contracts">Contracts <span class="n">06</span></a>
+        <a href="#source">Source map</a>
+      </nav>
+    </div>
+
+    <!-- factory floor: agent → slip → agent → slip → agent -->
+    <div class="factory" aria-hidden="true">
+      <svg viewBox="0 0 280 320">
+        <defs>
+          <marker id="hf-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="#87867F"/>
+          </marker>
+        </defs>
+
+        <!-- Caller agent -->
+        <g>
+          <rect x="80" y="10" width="120" height="56" rx="10" fill="#FAF9F5" stroke="#D97757" stroke-width="1.5"/>
+          <circle cx="108" cy="38" r="11" fill="none" stroke="#D97757" stroke-width="1.5"/>
+          <line x1="120" y1="38" x2="184" y2="38" stroke="#87867F" stroke-width="1.5"/>
+          <line x1="120" y1="46" x2="172" y2="46" stroke="#D1CFC5" stroke-width="1.5"/>
+          <text x="140" y="84" font-family="ui-serif, Georgia, serif" font-style="italic" font-size="11" fill="#3D3D3A" text-anchor="middle">caller agent</text>
+        </g>
+
+        <!-- prompt slip 1 -->
+        <g transform="rotate(-6 140 100)">
+          <rect x="118" y="92" width="44" height="22" rx="3" fill="#FFFFFF" stroke="#D1CFC5" stroke-width="1.2"/>
+          <line x1="124" y1="100" x2="156" y2="100" stroke="#D1CFC5" stroke-width="1"/>
+          <line x1="124" y1="106" x2="148" y2="106" stroke="#D1CFC5" stroke-width="1"/>
+        </g>
+        <line x1="140" y1="72" x2="140" y2="92" stroke="#87867F" stroke-width="1.4" marker-end="url(#hf-arrow)"/>
+        <line x1="140" y1="116" x2="140" y2="132" stroke="#87867F" stroke-width="1.4" marker-end="url(#hf-arrow)"/>
+
+        <!-- Director agent -->
+        <g>
+          <rect x="80" y="134" width="120" height="56" rx="10" fill="#FAF9F5" stroke="#D97757" stroke-width="1.5"/>
+          <circle cx="108" cy="162" r="11" fill="none" stroke="#D97757" stroke-width="1.5"/>
+          <line x1="120" y1="162" x2="184" y2="162" stroke="#87867F" stroke-width="1.5"/>
+          <line x1="120" y1="170" x2="178" y2="170" stroke="#D1CFC5" stroke-width="1.5"/>
+          <text x="140" y="208" font-family="ui-serif, Georgia, serif" font-style="italic" font-size="11" fill="#3D3D3A" text-anchor="middle">director (Claude)</text>
+        </g>
+
+        <!-- prompt slip 2 -->
+        <g transform="rotate(5 140 224)">
+          <rect x="118" y="216" width="44" height="22" rx="3" fill="#FFFFFF" stroke="#D1CFC5" stroke-width="1.2"/>
+          <line x1="124" y1="224" x2="156" y2="224" stroke="#D1CFC5" stroke-width="1"/>
+          <line x1="124" y1="230" x2="152" y2="230" stroke="#D1CFC5" stroke-width="1"/>
+        </g>
+        <line x1="140" y1="196" x2="140" y2="216" stroke="#87867F" stroke-width="1.4" marker-end="url(#hf-arrow)"/>
+        <line x1="140" y1="240" x2="140" y2="256" stroke="#87867F" stroke-width="1.4" marker-end="url(#hf-arrow)"/>
+
+        <!-- Image / voice model -->
+        <g>
+          <rect x="80" y="258" width="120" height="56" rx="10" fill="#FAF9F5" stroke="#788C5D" stroke-width="1.5"/>
+          <path d="M 96 286 L 108 274 L 120 282 L 132 270 L 148 290 L 168 278 L 184 286"
+                fill="none" stroke="#788C5D" stroke-width="1.5" stroke-linecap="round"/>
+        </g>
+
+        <!-- repair loop -->
+        <path d="M 80 286 Q 30 286 30 162 Q 30 38 80 38" fill="none" stroke="#D97757"
+              stroke-width="1.4" stroke-dasharray="4 4" marker-end="url(#hf-arrow)"/>
+        <text x="22" y="160" font-family="ui-serif, Georgia, serif" font-style="italic" font-size="10"
+              fill="#87867F" transform="rotate(-90 22 160)">reviewer says: redo</text>
+      </svg>
+      <div class="cap">brief in › prompt › prompt › prompt › mp4 out</div>
+    </div>
+  </div>
+</header>
+
+<!-- ── stations ────────────────────────────────────────────── -->
+<section id="stations">
+  <div class="sec-head">
+    <span class="idx">01</span>
+    <h2>Who staffs each station</h2>
+    <span class="count">4 operators</span>
+  </div>
+  <p class="sec-intro">
+    Every box on Cathode's floor is run by either a Claude agent, a model
+    call, or deterministic code. The same pipeline can be entered by a human
+    or, more interestingly, by another agent — at which point the chain has
+    no human at any point, just delegation all the way down.
+  </p>
+  <div class="sec-body">
+    <div class="stations">
+
+      <article class="station">
+        <div class="head"><svg viewBox="0 0 120 80">
+          <rect class="wh" x="8" y="14" width="46" height="40" rx="4"/>
+          <circle cx="22" cy="28" r="3" class="fl"/>
+          <line class="st" x1="30" y1="28" x2="46" y2="28"/>
+          <line class="st" x1="14" y1="38" x2="46" y2="38"/>
+          <path class="lc" d="M 60 34 L 90 34"/>
+          <path class="lc" d="M 84 28 L 90 34 L 84 40"/>
+          <rect class="oa" x="94" y="20" width="20" height="28" rx="3"/>
+        </svg></div>
+        <div class="body">
+          <div class="label"><span class="op agent"><span class="swatch"></span>caller agent</span></div>
+          <h3>External agent calls in</h3>
+          <p>Another Claude (or any MCP client) invokes <code>make_video</code> with intent, sources, footage, and depth. From here, the brief is now flowing through agents who haven't met the human.</p>
+        </div>
+      </article>
+
+      <article class="station">
+        <div class="head"><svg viewBox="0 0 120 80">
+          <rect class="wh" x="8" y="12" width="104" height="56" rx="6"/>
+          <circle cx="26" cy="32" r="9" class="lc" fill="none"/>
+          <line class="lc" x1="40" y1="32" x2="74" y2="32"/>
+          <path class="lc" d="M 68 26 L 74 32 L 68 38"/>
+          <rect class="oa" x="78" y="22" width="28" height="20" rx="3"/>
+          <line class="st" x1="14" y1="50" x2="106" y2="50"/>
+          <line class="st da" x1="14" y1="58" x2="106" y2="58"/>
+        </svg></div>
+        <div class="body">
+          <div class="label"><span class="op agent"><span class="swatch"></span>director agent</span></div>
+          <h3>Claude writes the scenes</h3>
+          <p>The director agent receives the normalized brief, decides composition, drafts narration, and emits a scene list with visual prompts. It is itself a Claude call wrapped in repo prompt scaffolding.</p>
+        </div>
+      </article>
+
+      <article class="station">
+        <div class="head"><svg viewBox="0 0 120 80">
+          <rect class="wh" x="8" y="14" width="48" height="36" rx="4"/>
+          <path class="lo" d="M 14 32 L 24 24 L 32 30 L 42 22 L 50 30"/>
+          <circle cx="42" cy="24" r="3" class="fl"/>
+          <path class="lc" d="M 60 32 L 88 32"/>
+          <path class="lc" d="M 82 26 L 88 32 L 82 38"/>
+          <rect class="oa" x="92" y="18" width="22" height="30" rx="3"/>
+          <path class="st" d="M 60 60 L 88 60"/>
+          <path class="st" d="M 82 54 L 88 60 L 82 66"/>
+          <rect class="wh" x="92" y="48" width="22" height="20" rx="3"/>
+        </svg></div>
+        <div class="body">
+          <div class="label"><span class="op model"><span class="swatch"></span>scene models</span></div>
+          <h3>Image &amp; voice models execute</h3>
+          <p>For every scene the director invented, prompts go out: image gen (local, Replicate, Codex) and TTS (Kokoro, ElevenLabs, OpenAI). They don't reason — they render whatever Claude told them to.</p>
+        </div>
+      </article>
+
+      <article class="station">
+        <div class="head"><svg viewBox="0 0 120 80">
+          <rect class="oa" x="8" y="14" width="48" height="40" rx="4"/>
+          <path class="lc" d="M 16 28 L 26 36 L 50 18" stroke-width="3"/>
+          <path class="lc" d="M 64 34 L 88 34"/>
+          <path class="lc" d="M 82 28 L 88 34 L 82 40"/>
+          <rect class="wh" x="92" y="14" width="24" height="44" rx="3"/>
+          <line class="st" x1="98" y1="24" x2="110" y2="24"/>
+          <line class="st" x1="98" y1="32" x2="110" y2="32"/>
+          <line class="st" x1="98" y1="40" x2="110" y2="40"/>
+        </svg></div>
+        <div class="body">
+          <div class="label"><span class="op agent"><span class="swatch"></span>reviewer agent</span></div>
+          <h3>Another Claude grades the output</h3>
+          <p>A second-pass agent inspects rendered scenes, finds bad text, mismatched visuals, or broken framing — then writes new prompts and sends the work back through the model stations. The factory loops until accepted.</p>
+        </div>
+      </article>
+
+    </div>
+  </div>
+</section>
+
+<!-- ── pipeline ─────────────────────────────────────────────── -->
+<section id="pipeline">
+  <div class="sec-head">
+    <span class="idx">02</span>
+    <h2>The line</h2>
+    <span class="count">linear + repair loop</span>
+  </div>
+  <p class="sec-intro">
+    Read the colors. Clay = a Claude agent is making decisions. Olive = a
+    model is being called and will return bytes. Gray = deterministic code
+    moving artifacts around. This is the call graph of a single run.
+  </p>
+  <div class="sec-body">
+    <div class="canvas">
+      <svg class="flow" viewBox="0 0 920 380">
+        <defs>
+          <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="#87867F"/>
+          </marker>
+          <marker id="arrow-clay" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="#D97757"/>
+          </marker>
+        </defs>
+
+        <!-- top row: caller → queued → director → treatment → plan -->
+        <g class="node agent">
+          <rect x="14" y="40" width="146" height="62"/>
+          <text x="30" y="64" class="who" fill="#B85C3E">caller agent</text>
+          <text x="30" y="82">brief in</text>
+          <text x="30" y="98" class="sub">make_video()</text>
+        </g>
+        <path class="edge" d="M 162 71 L 196 71"/>
+
+        <g class="node">
+          <rect x="198" y="40" width="146" height="62"/>
+          <text x="214" y="64" class="who" fill="#87867F">code</text>
+          <text x="214" y="82">queued job</text>
+          <text x="214" y="98" class="sub">.cathode/jobs/*.json</text>
+        </g>
+        <path class="edge" d="M 346 71 L 380 71"/>
+
+        <g class="node agent">
+          <rect x="382" y="40" width="146" height="62"/>
+          <text x="398" y="64" class="who" fill="#B85C3E">director agent</text>
+          <text x="398" y="82">scene writing</text>
+          <text x="398" y="98" class="sub">Claude</text>
+        </g>
+        <path class="edge" d="M 530 71 L 564 71"/>
+
+        <g class="node">
+          <rect x="566" y="40" width="146" height="62"/>
+          <text x="582" y="64" class="who" fill="#87867F">code</text>
+          <text x="582" y="82">treatment</text>
+          <text x="582" y="98" class="sub">registry-safe staging</text>
+        </g>
+        <path class="edge" d="M 714 71 L 748 71"/>
+
+        <g class="node">
+          <rect x="750" y="40" width="156" height="62"/>
+          <text x="766" y="64" class="who" fill="#87867F">code</text>
+          <text x="766" y="82">plan.json</text>
+          <text x="766" y="98" class="sub">truth file</text>
+        </g>
+
+        <!-- elbow down -->
+        <path class="edge" d="M 828 104 V 156 H 86 V 200"/>
+
+        <!-- bottom row: model assets → reviewer → render → reviewer → mp4 -->
+        <g class="node model">
+          <rect x="14" y="202" width="146" height="62"/>
+          <text x="30" y="226" class="who" fill="#5C6E47">scene models</text>
+          <text x="30" y="244">asset gen</text>
+          <text x="30" y="260" class="sub">image / TTS / video</text>
+        </g>
+        <path class="edge" d="M 162 233 L 196 233"/>
+
+        <g class="node agent">
+          <rect x="198" y="202" width="146" height="62"/>
+          <text x="214" y="226" class="who" fill="#B85C3E">reviewer agent</text>
+          <text x="214" y="244">scene review</text>
+          <text x="214" y="260" class="sub">Claude grades each</text>
+        </g>
+        <path class="edge" d="M 346 233 L 380 233"/>
+
+        <g class="node">
+          <rect x="382" y="202" width="146" height="62"/>
+          <text x="398" y="226" class="who" fill="#87867F">code</text>
+          <text x="398" y="244">render choice</text>
+          <text x="398" y="260" class="sub">ffmpeg / Remotion</text>
+        </g>
+        <path class="edge" d="M 530 233 L 564 233"/>
+
+        <g class="node agent">
+          <rect x="566" y="202" width="146" height="62"/>
+          <text x="582" y="226" class="who" fill="#B85C3E">reviewer agent</text>
+          <text x="582" y="244">post-render review</text>
+          <text x="582" y="260" class="sub">slide-by-slide</text>
+        </g>
+        <path class="edge" d="M 714 233 L 748 233"/>
+
+        <g class="node">
+          <rect x="750" y="202" width="146" height="62"/>
+          <text x="766" y="226" class="who" fill="#87867F">code</text>
+          <text x="766" y="244">final mp4</text>
+          <text x="766" y="260" class="sub">artifact inventory</text>
+        </g>
+
+        <!-- repair loop: reviewer → models -->
+        <path class="edge loop" d="M 270 264 V 322 H 86 V 264"/>
+        <text x="178" y="342" class="note" text-anchor="middle">reviewer rewrites the prompt and sends the scene back to the model</text>
+      </svg>
+    </div>
+  </div>
+</section>
+
+<!-- ── prompt handoffs ──────────────────────────────────────── -->
+<section id="handoffs">
+  <div class="sec-head">
+    <span class="idx">03</span>
+    <h2>What gets passed between agents</h2>
+    <span class="count">7 handoffs</span>
+  </div>
+  <p class="sec-intro">
+    The brief mutates as it travels. Each row below is one agent handing a
+    prompt or artifact to the next. This is the actual shape of an
+    agent-to-agent factory: nobody talks to a human, everybody talks to the
+    next station with a slip of paper that says <em>do this next</em>.
+  </p>
+  <div class="sec-body">
+    <div class="chain">
+
+      <div class="hop">
+        <div class="who">
+          <span class="role">Caller agent</span>
+          <span class="impl">MCP make_video</span>
+        </div>
+        <div class="what">
+          <div class="arrow-row">brief slip ›› cathode</div>
+          <div class="slip">{
+  "intent": "explain how cathode works to engineers",
+  "sources": ["README.md", "core/job_runner.py"],
+  "footage": [],
+  "depth": "review_loop"
+}</div>
+        </div>
+      </div>
+
+      <div class="hop">
+        <div class="who">
+          <span class="role">Job runner</span>
+          <span class="impl">core/job_runner.py</span>
+        </div>
+        <div class="what">
+          <div class="arrow-row">normalized brief ›› director</div>
+          <div class="slip"><em>system:</em> you are Cathode's storyboard director. write 6–10 scenes. each scene needs visual_prompt, on_screen_text, narration. respect the brief's audience and constraints.
+
+<em>user:</em> {normalized_brief_json}</div>
+        </div>
+      </div>
+
+      <div class="hop">
+        <div class="who">
+          <span class="role">Director agent</span>
+          <span class="impl">Claude</span>
+        </div>
+        <div class="what">
+          <div class="arrow-row">scene list ›› treatment planner</div>
+          <div class="slip">[
+  { "scene_type": "image",
+    "visual_prompt": "isometric factory floor, three stations…",
+    "narration": "Behind the glass, Cathode is a delegation chain.",
+    "on_screen_text": "agents prompt agents prompt agents" },
+  …
+]</div>
+        </div>
+      </div>
+
+      <div class="hop">
+        <div class="who">
+          <span class="role">Treatment planner</span>
+          <span class="impl">core/workflow.py</span>
+        </div>
+        <div class="what">
+          <div class="arrow-row">visual prompt ›› image model</div>
+          <div class="slip">isometric editorial illustration, ivory paper, single coral
+accent, three workstations connected by paper slips, hand-drawn,
+no text in image, 16:9</div>
+        </div>
+      </div>
+
+      <div class="hop">
+        <div class="who">
+          <span class="role">Image model</span>
+          <span class="impl">Replicate · Codex · local diffusers</span>
+        </div>
+        <div class="what">
+          <div class="arrow-row">image bytes ›› reviewer</div>
+          <div class="slip"><em>system:</em> you are Cathode's scene reviewer. given the scene
+spec and the rendered image, decide: accept, repair_text,
+or regenerate. if repair, return the new visual_prompt
+verbatim.
+
+<em>user:</em> { scene_spec, image_path }</div>
+        </div>
+      </div>
+
+      <div class="hop">
+        <div class="who">
+          <span class="role">Reviewer agent</span>
+          <span class="impl">Claude</span>
+        </div>
+        <div class="what">
+          <div class="arrow-row">repair prompt ›› image model (loop)</div>
+          <div class="slip">{
+  "verdict": "regenerate",
+  "reason":  "title bar bled into illustration; remove text",
+  "new_visual_prompt":
+    "…same scene, no on-image text, larger negative space top"
+}</div>
+        </div>
+      </div>
+
+      <div class="hop">
+        <div class="who">
+          <span class="role">Renderer</span>
+          <span class="impl">ffmpeg · Remotion</span>
+        </div>
+        <div class="what">
+          <div class="arrow-row">final mp4 ›› caller agent</div>
+          <div class="slip">projects/cathode-factory/cathode-factory.mp4
++ artifact inventory: plan.json, images/, audio/, clips/,
+  previews/, .cathode/jobs/*.json, *.log</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ── stages ───────────────────────────────────────────────── -->
+<section id="stages">
+  <div class="sec-head">
+    <span class="idx">04</span>
+    <h2>Stage by stage</h2>
+    <span class="count">9 checkpoints</span>
+  </div>
+  <p class="sec-intro">
+    The same chain, but this time as the operational checkpoints a real run
+    moves through. Each row tells you who's running it.
+  </p>
+  <div class="sec-body">
+    <div class="timeline">
+
+      <div class="stage">
+        <div class="num">01</div>
+        <div class="rail"><span class="dot"></span></div>
+        <div class="body">
+          <div class="row"><h3>Bootstrap</h3><span class="op code"><span class="swatch"></span>code</span></div>
+          <p>The server loads repo-local environment values, checks configured providers, reports Remotion availability, returns default profiles, and lists existing projects. No agent yet.</p>
+          <div class="api">GET /api/bootstrap  ·  core.runtime.check_api_keys()</div>
+        </div>
+      </div>
+
+      <div class="stage">
+        <div class="num">02</div>
+        <div class="rail"><span class="dot"></span></div>
+        <div class="body">
+          <div class="row"><h3>Queue</h3><span class="op code"><span class="swatch"></span>code</span></div>
+          <p>A make-video request — usually from another agent — reserves a project folder and writes job metadata before spawning a worker process. Logs and job JSON live inside the project.</p>
+          <div class="api">projects/&lt;name&gt;/.cathode/jobs/&lt;id&gt;.json</div>
+        </div>
+      </div>
+
+      <div class="stage agent">
+        <div class="num">03</div>
+        <div class="rail"><span class="dot"></span></div>
+        <div class="body">
+          <div class="row"><h3>Storyboard</h3><span class="op agent"><span class="swatch"></span>agent</span></div>
+          <p>The first agent enters: Claude the director. Brief is normalized, style refs and footage are copied in, scenes are written, and the treatment planner maps them into registry-safe composition data.</p>
+          <div class="api">core.workflow.create_plan_from_brief()</div>
+        </div>
+      </div>
+
+      <div class="stage">
+        <div class="num">04</div>
+        <div class="rail"><span class="dot"></span></div>
+        <div class="body">
+          <div class="row"><h3>Persist</h3><span class="op code"><span class="swatch"></span>code</span></div>
+          <p>The director's output is recorded: source brief, providers, profiles, cost estimates, composition mode, scene list, asset paths, and later render/review metadata. <code>plan.json</code> is the permanent record of every prompt that wins.</p>
+          <div class="api">projects/&lt;name&gt;/plan.json</div>
+        </div>
+      </div>
+
+      <div class="stage model">
+        <div class="num">05</div>
+        <div class="rail"><span class="dot"></span></div>
+        <div class="body">
+          <div class="row"><h3>Asset pass</h3><span class="op model"><span class="swatch"></span>model</span></div>
+          <p>For each scene, the director's prompts are dispatched to image, voice, and video models. Authored-image scenes get images; source-video scenes use supplied clips, local/cloud generation, or agent-captured demo footage.</p>
+          <div class="api">audio/  images/  clips/  previews/</div>
+        </div>
+      </div>
+
+      <div class="stage agent">
+        <div class="num">06</div>
+        <div class="rail"><span class="dot"></span></div>
+        <div class="body">
+          <div class="row"><h3>Review &amp; repair</h3><span class="op agent"><span class="swatch"></span>agent</span></div>
+          <p>A second Claude is called per-scene to grade what the models produced. It can demand exact-text repairs or rewrite the visual prompt and send the scene back to the model. The plan mutates; the rerender fires.</p>
+          <div class="api">core.scene_review  ·  _attempt_text_repairs()</div>
+        </div>
+      </div>
+
+      <div class="stage">
+        <div class="num">07</div>
+        <div class="rail"><span class="dot"></span></div>
+        <div class="body">
+          <div class="row"><h3>Render</h3><span class="op code"><span class="swatch"></span>code</span></div>
+          <p>Classic image/video projects use ffmpeg assembly. Motion, hybrid, native, overlay, or transition scenes use a Remotion manifest. The decision is resolved by code, not chosen by an agent.</p>
+          <div class="api">assemble_video()  ·  render_manifest_with_remotion()</div>
+        </div>
+      </div>
+
+      <div class="stage agent">
+        <div class="num">08</div>
+        <div class="rail"><span class="dot"></span></div>
+        <div class="body">
+          <div class="row"><h3>Post-render review</h3><span class="op agent"><span class="swatch"></span>agent</span></div>
+          <p>Yet another Claude pass watches the assembled video slide by slide. It can still order repairs, which propagate back to the asset stations and rerender. This is the deepest the call stack gets.</p>
+          <div class="api">collect_project_artifacts()</div>
+        </div>
+      </div>
+
+      <div class="stage">
+        <div class="num">09</div>
+        <div class="rail"><span class="dot"></span></div>
+        <div class="body">
+          <div class="row"><h3>Rerun surface</h3><span class="op code"><span class="swatch"></span>code</span></div>
+          <p>An external agent can rerun storyboard, assets, or render without inventing a parallel workflow. The same persisted plan stays the project contract — the factory remembers everything its agents decided.</p>
+          <div class="api">create_rerun_stage_job(stage=...)</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ── internals ────────────────────────────────────────────── -->
+<section id="internals">
+  <div class="sec-head">
+    <span class="idx">05</span>
+    <h2>Click around the internals</h2>
+    <span class="count">4 facets</span>
+  </div>
+  <p class="sec-intro">
+    The important moving parts, without forcing you through a wall of code.
+  </p>
+  <div class="sec-body">
+    <div class="tabs" role="tablist" aria-label="Internals">
+      <button class="tab" role="tab" aria-selected="true" aria-controls="t-plan">Plan contract</button>
+      <button class="tab" role="tab" aria-selected="false" aria-controls="t-prov">Providers</button>
+      <button class="tab" role="tab" aria-selected="false" aria-controls="t-rend">Render decision</button>
+      <button class="tab" role="tab" aria-selected="false" aria-controls="t-fail">Failure shape</button>
+    </div>
+    <article class="panel active" id="t-plan" role="tabpanel">
+      <div class="panel-grid">
+        <div>
+          <h3>Everything orbits <code>plan.json</code></h3>
+          <p>The plan is the persisted record of what every agent decided. Reviewers mutate it; reruns reload it; the next agent down the chain trusts it. Loading or saving also backfills schema and refreshes cost metadata.</p>
+        </div>
+<pre class="code">{
+  "meta": {
+    "brief":          { "source_mode": "ideas_notes" },
+    "image_profile":  { "provider": "codex" },
+    "tts_profile":    { "provider": "kokoro" },
+    "render_profile": { "render_backend": "ffmpeg" },
+    "video_path":     "projects/demo/demo.mp4"
+  },
+  "scenes": [
+    {
+      "scene_type":    "image",
+      "visual_prompt": "...",
+      "audio_path":    "audio/scene_01.wav",
+      "image_path":    "images/scene_01.png"
+    }
+  ]
+}</pre>
+      </div>
+    </article>
+    <article class="panel" id="t-prov" role="tabpanel">
+      <div class="panel-grid">
+        <div>
+          <h3>Provider UI is env-driven</h3>
+          <p>Cathode only surfaces models that are actually configured. Kokoro is always available for local voice. Anthropic is required because Claude is the agent at every reasoning station.</p>
+        </div>
+<pre class="code">OPENAI_API_KEY
+ANTHROPIC_API_KEY
+REPLICATE_API_TOKEN
+ELEVENLABS_API_KEY
+CATHODE_LOCAL_IMAGE_MODEL
+CATHODE_LOCAL_VIDEO_COMMAND
+
+available_image_generation_providers()
+available_tts_providers()
+available_render_backends()</pre>
+      </div>
+    </article>
+    <article class="panel" id="t-rend" role="tabpanel">
+      <div class="panel-grid">
+        <div>
+          <h3>Render backend is resolved, not guessed</h3>
+          <p>Forced strategies win first. Otherwise motion scenes, native treatments, overlays, transitions, or hybrid/motion modes select Remotion. Plain image/video projects stay on ffmpeg. No agent is involved in this step.</p>
+        </div>
+<pre class="code">force_ffmpeg                    -> ffmpeg
+force_remotion                  -> remotion
+motion scene                    -> remotion
+native / overlay / transition   -> remotion
+composition_mode = hybrid       -> remotion
+otherwise                       -> ffmpeg</pre>
+      </div>
+    </article>
+    <article class="panel" id="t-fail" role="tabpanel">
+      <div class="panel-grid">
+        <div>
+          <h3>Failures are meant to be recoverable</h3>
+          <p>Jobs return <code>partial_success</code> with retryable hints so a calling agent knows what to repair. Missing assets block final render honestly. Over-budget runs stop after storyboard and require an explicit rerun the caller has to authorize.</p>
+        </div>
+<pre class="code">status:        queued | running | succeeded |
+               partial_success | failed | cancelled
+
+current_stage: storyboard | assets | render
+
+suggestion:    "Review failed scenes or provider
+                config, then rerun assets."</pre>
+      </div>
+    </article>
+  </div>
+</section>
+
+<!-- ── disk ─────────────────────────────────────────────────── -->
+<section id="disk">
+  <div class="sec-head">
+    <span class="idx">06</span>
+    <h2>What the factory leaves behind</h2>
+    <span class="count">3 buckets</span>
+  </div>
+  <p class="sec-intro">
+    Cathode is local-first. The durable output isn't only an MP4 — it's the
+    paper trail of every prompt that crossed every station, recoverable from
+    disk without rerunning the chain.
+  </p>
+  <div class="sec-body">
+    <div class="duo">
+      <article class="card">
+        <div class="label-mono">Root</div>
+        <h3>Project folder</h3>
+        <p><code>projects/&lt;project&gt;/</code> is the unit of work — the factory floor for one run.</p>
+        <ul>
+          <li>plan.json</li>
+          <li>&lt;project&gt;.mp4</li>
+          <li>.cathode/jobs/</li>
+        </ul>
+      </article>
+      <article class="card">
+        <div class="label-mono">Media</div>
+        <h3>Scene assets</h3>
+        <p>Whatever the model stations produced and the reviewer accepted, beside the plan.</p>
+        <ul>
+          <li>images/</li>
+          <li>clips/</li>
+          <li>audio/</li>
+          <li>previews/</li>
+        </ul>
+      </article>
+      <article class="card">
+        <div class="label-mono">Trace</div>
+        <h3>Agent paper trail</h3>
+        <p>Persisted job requests, progress, logs, and the inventory a calling agent uses to reconstruct state.</p>
+        <ul>
+          <li>*.json job state</li>
+          <li>*.log worker logs</li>
+          <li>cost / review metadata</li>
+        </ul>
+      </article>
+    </div>
+  </div>
+</section>
+
+<!-- ── contracts ────────────────────────────────────────────── -->
+<section id="contracts">
+  <div class="sec-head">
+    <span class="idx">07</span>
+    <h2>Mental model</h2>
+    <span class="count">6 contracts</span>
+  </div>
+  <p class="sec-intro">
+    The useful way to debug Cathode is to ask which contract between adjacent
+    agents has — or hasn't — been satisfied yet.
+  </p>
+  <div class="sec-body">
+    <div class="duo">
+      <article class="card">
+        <h3>Brief contract</h3>
+        <p>Did the caller agent give the director enough audience, source material, and constraints to write scenes without guessing?</p>
+      </article>
+      <article class="card">
+        <h3>Plan contract</h3>
+        <p>Does <code>plan.json</code> have normalized scenes with manifestation, composition, narration, and asset-path fields the next station can consume?</p>
+      </article>
+      <article class="card">
+        <h3>Provider contract</h3>
+        <p>Are the LLM, image, video, voice, and render models the director picked actually reachable in this local environment?</p>
+      </article>
+      <article class="card">
+        <h3>Asset contract</h3>
+        <p>For every scene, did the model station return a usable visual, and does narration exist unless the scene is intentionally clip-audio?</p>
+      </article>
+      <article class="card">
+        <h3>Render contract</h3>
+        <p>Does the chosen backend match the scene requirements, and can it reach all project media through paths or API URLs?</p>
+      </article>
+      <article class="card">
+        <h3>Review contract</h3>
+        <p>Did the reviewer agent leave any unresolved repairs, failed scene-review metadata, or partial-success retry path the caller must handle?</p>
+      </article>
+    </div>
+  </div>
+</section>
+
+<!-- ── source map ───────────────────────────────────────────── -->
+<section id="source">
+  <div class="sec-head">
+    <span class="idx">08</span>
+    <h2>Source map</h2>
+    <span class="count">14 files</span>
+  </div>
+  <p class="sec-intro">
+    Built from these repo files. Open them when you want to verify or chase
+    behavior.
+  </p>
+  <div class="sec-body">
+    <ul class="files">
+      <li><a href="../README.md">README.md</a></li>
+      <li><a href="../AGENTS.md">AGENTS.md</a></li>
+      <li><a href="../start.sh">start.sh</a></li>
+      <li><a href="../server/app.py">server/app.py</a></li>
+      <li><a href="../server/routers/bootstrap.py">server/routers/bootstrap.py</a></li>
+      <li><a href="../server/routers/jobs.py">server/routers/jobs.py</a></li>
+      <li><a href="../cathode_mcp_server.py">cathode_mcp_server.py</a></li>
+      <li><a href="../core/job_runner.py">core/job_runner.py</a></li>
+      <li><a href="../core/pipeline_service.py">core/pipeline_service.py</a></li>
+      <li><a href="../core/workflow.py">core/workflow.py</a></li>
+      <li><a href="../core/project_schema.py">core/project_schema.py</a></li>
+      <li><a href="../core/project_store.py">core/project_store.py</a></li>
+      <li><a href="../core/runtime.py">core/runtime.py</a></li>
+      <li><a href="../core/remotion_render.py">core/remotion_render.py</a></li>
+    </ul>
+  </div>
+</section>
+
+<footer>
+  Generated as a human-facing explanation artifact. The canonical workflow
+  contract remains the repo code, repo docs, and
+  <code>projects/&lt;project&gt;/plan.json</code>.
+</footer>
+
+</div>
+
+<script>
+  const tabs = Array.from(document.querySelectorAll('.tab'));
+  const panels = Array.from(document.querySelectorAll('.panel'));
+  tabs.forEach((tab) => {
+    tab.addEventListener('click', () => {
+      tabs.forEach((t) => t.setAttribute('aria-selected', 'false'));
+      panels.forEach((p) => p.classList.remove('active'));
+      tab.setAttribute('aria-selected', 'true');
+      const target = document.getElementById(tab.getAttribute('aria-controls'));
+      if (target) target.classList.add('active');
+    });
+  });
+</script>
+</body>
+</html>

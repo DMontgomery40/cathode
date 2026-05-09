@@ -2,8 +2,8 @@
 """Sequential qEEG patient-video queue for Cathode.
 
 This is an operator script for urgent qEEG portal video backfills. It creates
-or refreshes Cathode projects from qEEG handoff payloads, generates Qwen image
-assets plus narration, and renders final MP4s one patient at a time.
+or refreshes Cathode projects from qEEG handoff payloads, generates GPT-image-2
+still assets plus narration, and renders final MP4s one patient at a time.
 """
 
 from __future__ import annotations
@@ -12,6 +12,8 @@ import argparse
 import fcntl
 import json
 import os
+import shutil
+import subprocess
 import sys
 import time
 import traceback
@@ -24,7 +26,7 @@ if str(REPO_ROOT) not in sys.path:
 
 import core.pipeline_service as pipeline_service
 from core.pipeline_service import create_project_from_brief_service, process_existing_project_service
-from core.project_store import load_plan
+from core.project_store import load_plan, save_plan
 from core.runtime import PROJECTS_DIR, load_repo_env
 
 DEFAULT_PATIENTS = [
@@ -36,8 +38,8 @@ DEFAULT_PATIENTS = [
 ]
 
 IMAGE_PROFILE = {
-    "provider": "replicate",
-    "generation_model": "qwen/qwen-image-2512",
+    "provider": "codex",
+    "generation_model": "gpt-image-2",
     "edit_model": "qwen/qwen-image-edit-2511",
     "dashscope_edit_n": 1,
     "dashscope_edit_seed": "",
@@ -72,10 +74,10 @@ RENDER_PROFILE = {
     "width": 1664,
     "height": 928,
     "fps": 24,
-    "scene_types": ["image", "video", "motion"],
+    "scene_types": ["image"],
     "render_strategy": "force_ffmpeg",
     "render_backend": "ffmpeg",
-    "render_backend_reason": "All-Qwen static image explainer queue; no generated video/Kling.",
+    "render_backend_reason": "Static GPT-image-2 still-image qEEG explainer queue; no Remotion, overlays, or generated video clips.",
     "text_render_mode": "visual_authored",
     "auto_compress_oversized_video": True,
     "compression_min_size_mb": 150.0,
@@ -83,6 +85,8 @@ RENDER_PROFILE = {
     "compression_target_video_kbps": 2500,
     "compression_target_audio_kbps": 128,
 }
+
+QEEG_REPO = Path(os.getenv("QEEG_ANALYSIS_REPO") or (REPO_ROOT.parent / "qEEG-analysis")).expanduser()
 
 
 def utc_now() -> str:
@@ -98,6 +102,104 @@ def write_json_atomic(path: Path, payload: dict[str, Any]) -> None:
     tmp = path.with_suffix(path.suffix + ".tmp")
     tmp.write_text(json.dumps(payload, indent=2, default=str), encoding="utf-8")
     tmp.replace(path)
+
+
+def qeeg_portal_patient_dir(patient: str) -> Path:
+    configured = (os.getenv("QEEG_PORTAL_PATIENTS_DIR") or "").strip()
+    root = Path(configured).expanduser() if configured else QEEG_REPO / "data" / "portal_patients"
+    return root / patient
+
+
+def sync_video_to_qeeg_portal(patient: str, video_path: str | None) -> dict[str, Any]:
+    if not video_path:
+        return {"status": "skipped", "reason": "render did not report a video_path"}
+    source = Path(video_path).expanduser()
+    if not source.exists() or source.stat().st_size <= 0:
+        return {"status": "skipped", "reason": f"rendered video missing or empty: {source}"}
+
+    patient_dir = qeeg_portal_patient_dir(patient)
+    patient_dir.mkdir(parents=True, exist_ok=True)
+    target = patient_dir / f"{patient}.mp4"
+    shutil.copy2(source, target)
+    meta_path = patient_dir / f"{patient}__cathode_video.json"
+    write_json_atomic(
+        meta_path,
+        {
+            "patient_label": patient,
+            "source_video_path": str(source),
+            "portal_video_path": str(target),
+            "synced_at": utc_now(),
+            "generator": "cathode/scripts/qeeg_patient_video_queue.py",
+            "image_model": IMAGE_PROFILE["generation_model"],
+            "storyboard_provider": "claude_print",
+            "target_minutes": 6.5,
+        },
+    )
+    return {"status": "copied", "portal_video_path": str(target), "meta_path": str(meta_path)}
+
+
+def sync_patient_to_thrylen(patient: str) -> dict[str, Any]:
+    if not (QEEG_REPO / "backend" / "portal_sync.py").exists():
+        return {"status": "skipped", "reason": f"qEEG repo not found at {QEEG_REPO}"}
+    qeeg_python = Path(
+        os.getenv("QEEG_PYTHON")
+        or (str(QEEG_REPO / ".venv" / "bin" / "python") if (QEEG_REPO / ".venv" / "bin" / "python").exists() else sys.executable)
+    ).expanduser()
+    completed = subprocess.run(
+        [
+            str(qeeg_python),
+            "-m",
+            "backend.portal_sync",
+            "--patient-label",
+            patient,
+        ],
+        cwd=str(QEEG_REPO),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return {
+        "status": "complete" if completed.returncode == 0 else "failed",
+        "returncode": completed.returncode,
+        "stdout": completed.stdout[-2000:],
+        "stderr": completed.stderr[-2000:],
+    }
+
+
+def register_video_as_qeeg_patient_file(patient: str, video_path: str | None) -> dict[str, Any]:
+    if not video_path:
+        return {"status": "skipped", "reason": "render did not report a video_path"}
+    register_script = QEEG_REPO / "scripts" / "register_patient_file.py"
+    if not register_script.exists():
+        return {"status": "skipped", "reason": f"register script not found at {register_script}"}
+    qeeg_python = Path(
+        os.getenv("QEEG_PYTHON")
+        or (str(QEEG_REPO / ".venv" / "bin" / "python") if (QEEG_REPO / ".venv" / "bin" / "python").exists() else sys.executable)
+    ).expanduser()
+    completed = subprocess.run(
+        [
+            str(qeeg_python),
+            str(register_script),
+            "--patient-label",
+            patient,
+            "--src",
+            str(Path(video_path).expanduser()),
+            "--filename",
+            f"{patient}.mp4",
+            "--mime-type",
+            "video/mp4",
+        ],
+        cwd=str(QEEG_REPO),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return {
+        "status": "complete" if completed.returncode == 0 else "failed",
+        "returncode": completed.returncode,
+        "stdout": completed.stdout[-2000:],
+        "stderr": completed.stderr[-2000:],
+    }
 
 
 def build_brief(patient: str, project_dir: Path, *, target_minutes: float) -> dict[str, Any]:
@@ -123,16 +225,16 @@ def build_brief(patient: str, project_dir: Path, *, target_minutes: float) -> di
         "target_length_minutes": target_minutes,
         "tone": "warm, clear, reassuring, clinically grounded, and not condescending",
         "visual_style": (
-            "cinematic patient-friendly brain-health explainer with rich Qwen illustrations, "
-            "sparse readable slide text, varied scenes, and no generic chart wallpaper"
+            "cinematic patient-friendly brain-health explainer with rich GPT-image-2 illustrations, "
+            "visual-authored text only when it belongs inside the image, varied scenes, and no generic chart wallpaper"
         ),
         "must_include": (
             "Use the qEEG Council findings as source of truth. Preserve important patient-data numbers, "
-            "explain them simply, include practical caveats, and keep a true six-minute arc with breathing room."
+            "explain them simply, include practical caveats, and keep a true 6.5-minute arc with breathing room."
         ),
         "must_avoid": (
             "Do not invent diagnoses, overstate causality, bury the patient in raw tables, use generated "
-            "video clips, use Kling, or repeat the same visual background across scenes."
+            "video clips, use Kling, use Remotion/native overlays, use Streamlit-era rendering, or repeat the same visual background across scenes."
         ),
         "ending_cta": "Continue Lumen treatment.",
         "paid_media_budget_usd": "",
@@ -145,7 +247,8 @@ def build_brief(patient: str, project_dir: Path, *, target_minutes: float) -> di
         "style_reference_summary": "",
         "style_reference_paths": [],
         "raw_brief": (
-            "Normal qEEG patient explainer. About six minutes. Qwen images only; no generated video clips. "
+            "Normal qEEG patient explainer. Exactly 6.5 minutes target. GPT-image-2 images only; no generated "
+            "video clips, no Remotion, no deterministic overlays. Assemble static image scenes with narration via ffmpeg. "
             "Make it humane, visually rich, accurate, and useful for a patient and family."
         ),
     }
@@ -174,12 +277,49 @@ def plan_needs_storyboard_refresh(project_dir: Path, *, minimum_target_minutes: 
     if target_minutes < minimum_target_minutes:
         return True
     image_profile = (plan.get("meta") or {}).get("image_profile") or {}
+    if str(image_profile.get("provider") or "") != IMAGE_PROFILE["provider"]:
+        return True
     if str(image_profile.get("generation_model") or "") != IMAGE_PROFILE["generation_model"]:
+        return True
+    if str((plan.get("meta") or {}).get("creative_llm_provider") or "") != "claude_print":
         return True
     video_profile = (plan.get("meta") or {}).get("video_profile") or {}
     if str(video_profile.get("provider") or "") != "manual":
         return True
     return False
+
+
+def force_static_image_plan(plan: dict[str, Any]) -> dict[str, Any]:
+    """Clamp generated storyboards to still-image ffmpeg scenes for the qEEG queue."""
+    for scene in plan.get("scenes") or []:
+        if not isinstance(scene, dict):
+            continue
+        scene["scene_type"] = "image"
+        scene["video_path"] = None
+        scene["motion"] = None
+        scene["composition"] = {
+            "family": "",
+            "mode": "none",
+            "props": {},
+            "transition_after": None,
+            "data": {},
+            "rationale": "qEEG queue is locked to GPT-image-2 stills plus ffmpeg assembly.",
+        }
+        manifestation = scene.get("manifestation_plan")
+        if not isinstance(manifestation, dict):
+            manifestation = {}
+        manifestation["primary_path"] = "authored_image"
+        manifestation["fallback_path"] = "authored_image"
+        manifestation["native_family_hint"] = ""
+        manifestation["native_build_prompt"] = ""
+        scene["manifestation_plan"] = manifestation
+    meta = plan.setdefault("meta", {})
+    render_profile = meta.setdefault("render_profile", {})
+    render_profile.update(RENDER_PROFILE)
+    meta["image_profile"] = IMAGE_PROFILE
+    meta["video_profile"] = VIDEO_PROFILE
+    meta["creative_llm_provider"] = "claude_print"
+    return plan
 
 
 def run_queue(args: argparse.Namespace) -> int:
@@ -236,13 +376,14 @@ def run_queue(args: argparse.Namespace) -> int:
                     project_name=patient,
                     project_dir=project_dir,
                     overwrite=True,
-                    provider="anthropic",
+                    provider="claude_print",
                     brief=brief,
                     image_profile=IMAGE_PROFILE,
                     video_profile=VIDEO_PROFILE,
                     tts_profile=TTS_PROFILE,
                     render_profile=RENDER_PROFILE,
                 )
+                plan = save_plan(project_dir, force_static_image_plan(plan))
                 item["storyboard_saved_at"] = utc_now()
                 item["scene_count"] = len(plan.get("scenes") or [])
                 write_json_atomic(status_path, status)
@@ -252,7 +393,7 @@ def run_queue(args: argparse.Namespace) -> int:
                 project_dir,
                 rebuild_storyboard=False,
                 generate_images=True,
-                generate_videos=True,
+                generate_videos=False,
                 generate_audio=True,
                 regenerate_videos=False,
                 regenerate_audio=False,
@@ -264,6 +405,10 @@ def run_queue(args: argparse.Namespace) -> int:
             render = result.get("render") or {}
             item["video_path"] = render.get("video_path")
             item["status"] = "complete" if render.get("status") == "succeeded" else "needs_attention"
+            if item["status"] == "complete":
+                item["portal_video"] = sync_video_to_qeeg_portal(patient, item.get("video_path"))
+                item["patient_file"] = register_video_as_qeeg_patient_file(patient, item.get("video_path"))
+                item["thrylen_sync"] = sync_patient_to_thrylen(patient)
             item["completed_at"] = utc_now()
             if item["status"] != "complete":
                 failures += 1
@@ -291,7 +436,7 @@ def run_queue(args: argparse.Namespace) -> int:
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run sequential qEEG patient video backfills through Cathode.")
     parser.add_argument("--patients", nargs="*", default=None, help="Patient labels to process in order.")
-    parser.add_argument("--target-minutes", type=float, default=6.0)
+    parser.add_argument("--target-minutes", type=float, default=6.5)
     parser.add_argument("--status-path", default=str(PROJECTS_DIR / "qeeg_video_queue_2026-04-17.json"))
     parser.add_argument("--lock-path", default=str(PROJECTS_DIR / ".qeeg_video_queue.lock"))
     parser.add_argument("--rebuild-storyboard", action="store_true")

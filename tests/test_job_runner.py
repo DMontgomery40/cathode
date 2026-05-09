@@ -182,7 +182,7 @@ def test_make_job_response_includes_progress_fields(tmp_path):
     assert response["progress_status"] == "running"
 
 
-def test_create_make_video_job_infers_hybrid_and_agent_provider(monkeypatch, tmp_path):
+def test_create_make_video_job_keeps_demo_context_image_first_without_explicit_mixed_media(monkeypatch, tmp_path):
     project_dir = tmp_path / "demo_project"
     project_dir.mkdir()
 
@@ -207,8 +207,8 @@ def test_create_make_video_job_infers_hybrid_and_agent_provider(monkeypatch, tmp
     job_file = project_dir / ".cathode" / "jobs" / f"{result['job_id']}.json"
     saved = read_job_file(job_file)
 
-    assert saved["request"]["brief"]["composition_mode"] == "hybrid"
-    assert saved["request"]["video_profile"]["provider"] == "agent"
+    assert saved["request"]["brief"]["composition_mode"] == "classic"
+    assert saved["request"]["video_profile"]["provider"] == "manual"
     assert saved["request"]["render_profile"]["render_strategy"] == "auto"
     assert "render_backend" not in saved["request"]["render_profile"]
 
