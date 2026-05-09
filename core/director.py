@@ -6,6 +6,7 @@ import base64
 import json
 import mimetypes
 import os
+import shutil
 import subprocess
 import uuid
 from pathlib import Path
@@ -67,7 +68,6 @@ _OPENAI_DIRECTOR_MODEL = "gpt-5.4"
 _OPENAI_DIRECTOR_REASONING_EFFORT = "xhigh"
 _ANTHROPIC_DIRECTOR_MODEL = "claude-sonnet-4-6"
 _CLAUDE_PRINT_DIRECTOR_MODEL = os.getenv("CATHODE_CLAUDE_PRINT_MODEL", "claude-sonnet-4-6")
-_CLAUDE_PRINT_BINARY = Path(os.getenv("CLAUDE_CODE_BINARY") or "/Users/davidmontgomery/.local/bin/claude").expanduser()
 _CLAUDE_PRINT_TOOLS = os.getenv("CATHODE_CLAUDE_PRINT_TOOLS", "Read,Grep,Glob")
 _DEFAULT_ANTHROPIC_TIMEOUT_SECONDS = 45.0
 _DEFAULT_ANTHROPIC_MAX_RETRIES = 1
@@ -1360,9 +1360,19 @@ def _claude_print_env() -> dict[str, str]:
     return env
 
 
+def _claude_print_binary_path() -> str:
+    configured = str(os.getenv("CLAUDE_CODE_BINARY") or "").strip()
+    if configured:
+        return str(Path(configured).expanduser())
+    discovered = shutil.which("claude")
+    if discovered:
+        return discovered
+    return "claude"
+
+
 def _build_claude_print_command(schema_json: str) -> list[str]:
     return [
-        str(_CLAUDE_PRINT_BINARY),
+        _claude_print_binary_path(),
         "-p",
         "--model",
         _CLAUDE_PRINT_DIRECTOR_MODEL,
