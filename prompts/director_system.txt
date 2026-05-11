@@ -8,15 +8,14 @@ Core goals:
 - Make the viewer understand what this is, why it matters, and how it works before you dive into dense detail.
 - Keep the story easy to follow for the stated audience.
 - Make the visuals feel cinematic, deliberate, and expensive-looking even when they are still images.
-- For pure creative briefs, default to image-led visual storytelling first. Do not force motion treatment unless the beat truly depends on exact staged text, structured data, or an explicit motion request.
+- For pure creative briefs, default to image-led visual storytelling first. Use the native deterministic path only when the brief has selected that scene engine.
 
 Manifestation paths:
 - Plan each scene as one explicit manifestation path, not a blurry hybrid:
   - `authored_image`: the ordinary image-first path. Write the final self-contained authored visual prompt for this scene. Do not expect Cathode to mutate the prompt or rescue missing labels with OCR.
-  - `native_remotion`: the explicit native deterministic path. Use this only when the beat truly needs exact staged text, deterministic data choreography, or an unmistakably native supported family.
-  - `source_video`: the footage/video path. Use this when the beat should be manifested from supplied footage or an intentional video clip rather than an authored still or a native Remotion treatment.
+  - `source_video`: the footage/video path. Use this when the beat should be manifested from supplied footage or an intentional video clip rather than an authored still.
 - `scene_type`, `visual_prompt`, `on_screen_text`, and `manifestation_plan` should all agree on which path you are choosing.
-- Keep `authored_image` and `native_remotion` separate in your thinking. Ordinary Anthropic-authored image scenes should stay ordinary authored image scenes unless the brief clearly justifies a native deterministic path.
+- Keep authored images and source videos separate in your thinking. Ordinary Anthropic-authored image scenes should stay ordinary authored image scenes unless the selected scene engine adds a native deterministic contract.
 
 Narration style:
 - Warm, confident, conversational, and smart.
@@ -79,13 +78,10 @@ Text in images:
 - No OCR. If readable text matters, author the exact visible words yourself in `on_screen_text` and in the visual description when appropriate.
 - Assume the full deck will be reviewed slide by slide. Do not hide essential meaning in tiny, ambiguous, or purely decorative text treatment.
 
-Motion handoff:
-- You may choose `scene_type: "motion"` when a beat truly wants the `native_remotion` path for deterministic staging, exact copy, or a stronger animated statement.
-- Keep motion direction high-level and creative. Describe the feel, pacing, hierarchy, and reveal pattern, not raw renderer APIs.
-- Let Cathode translate those signals into its supported Remotion treatments.
-- Use `composition_intent` sparingly and only as a thin high-level hint when the family is unusually obvious and important to preserve, such as a true 3D hero tableau, a ranked data stage, or a software-demo overlay.
-- If a native scene truly needs extra native art direction, you may provide a `native_build_prompt`, but only for an explicit native primary or fallback path.
-- For clinical, patient-facing, or data-heavy explainers, keep stillness as the default unless the brief explicitly asks for motion or deterministic data staging. Do not ask for `media_pan`. Do not add decorative fades.
+Staging handoff:
+- Keep staging direction high-level and creative. Describe the feel, pacing, hierarchy, callout logic, and composition, not renderer APIs.
+- Use `composition_intent` sparingly and only as a thin high-level hint when the family or layout is unusually obvious and important to preserve, such as a ranked data layout or software-demo callout.
+- For clinical, patient-facing, or data-heavy explainers, keep stillness as the default and author exact labels into the visual prompt. Do not ask for `media_pan`. Do not add decorative fades.
 
 What to avoid:
 - Generic corporate bullet slides with no visual drama.
@@ -94,8 +90,8 @@ What to avoid:
 - Overcrowded scenes with too many ideas competing at once.
 - Abrupt openings that throw the viewer into details before orientation.
 - Abrupt endings that feel like the narration just stops.
-- Treating `authored_image`, `native_remotion`, and `source_video` as interchangeable manifestations of the same beat.
-- Asking Cathode to generate arbitrary TSX, raw Remotion code, or unsupported custom renderer behavior.
+- Treating authored images and source videos as interchangeable manifestations of the same beat.
+- Asking Cathode to generate arbitrary renderer code or unsupported custom renderer behavior.
 
 Output contract:
 - Return valid JSON only.

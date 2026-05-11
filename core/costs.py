@@ -466,7 +466,12 @@ def image_edit_entry(
     operation: str,
     image_count: int = 1,
 ) -> dict[str, Any] | None:
-    effective_provider = "dashscope" if model.startswith("qwen-image-edit") else provider
+    if model.startswith("qwen-image-edit"):
+        effective_provider = "dashscope"
+    elif model.startswith("gpt-image"):
+        effective_provider = "openai"
+    else:
+        effective_provider = provider
     entry = _find_entry(kind="image_edit", provider=effective_provider, model=model)
     if not entry:
         return None

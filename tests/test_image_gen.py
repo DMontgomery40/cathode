@@ -1,15 +1,22 @@
 from pathlib import Path
+import base64
+import shlex
+import sys
+import types
 
 import core.image_gen as image_gen
 import core.runtime as runtime
 from core.image_gen import (
     DASHSCOPE_IMAGE_EDIT_MODELS,
     DEFAULT_CODEX_IMAGE_MODEL,
+    DEFAULT_OPENAI_IMAGE_EDIT_MODEL,
     DEFAULT_REPLICATE_IMAGE_EDIT_MODEL,
     available_image_edit_models,
     build_exact_text_edit_prompt,
     canonicalize_exact_text_edit_prompt,
     default_image_edit_model,
+    edit_image,
+    edit_image_codex_exec,
     generate_image_codex_exec,
     generate_image_local,
     generate_scene_image,
@@ -17,9 +24,22 @@ from core.image_gen import (
 from core.runtime import available_image_generation_providers, resolve_image_profile
 
 
-def test_default_image_edit_model_prefers_replicate_even_when_dashscope_key_exists(monkeypatch):
+def test_default_image_edit_model_prefers_openai_when_configured(monkeypatch):
     monkeypatch.delenv("IMAGE_EDIT_PROVIDER", raising=False)
     monkeypatch.delenv("IMAGE_EDIT_MODEL", raising=False)
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    monkeypatch.setenv("REPLICATE_API_TOKEN", "rep-token")
+    monkeypatch.setenv("DASHSCOPE_API_KEY", "test-key")
+    monkeypatch.delenv("ALIBABA_API_KEY", raising=False)
+
+    assert default_image_edit_model() == DEFAULT_OPENAI_IMAGE_EDIT_MODEL
+
+
+def test_default_image_edit_model_falls_back_to_replicate_without_openai(monkeypatch):
+    monkeypatch.delenv("IMAGE_EDIT_PROVIDER", raising=False)
+    monkeypatch.delenv("IMAGE_EDIT_MODEL", raising=False)
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.setenv("REPLICATE_API_TOKEN", "rep-token")
     monkeypatch.setenv("DASHSCOPE_API_KEY", "test-key")
     monkeypatch.delenv("ALIBABA_API_KEY", raising=False)
 
@@ -34,14 +54,16 @@ def test_default_image_edit_model_respects_explicit_dashscope_provider(monkeypat
 
 
 def test_available_image_edit_models_orders_public_default_first():
-    assert available_image_edit_models(include_replicate=True, include_dashscope=False) == [
+    assert available_image_edit_models(include_openai=True, include_replicate=True, include_dashscope=False) == [
+        DEFAULT_OPENAI_IMAGE_EDIT_MODEL,
         DEFAULT_REPLICATE_IMAGE_EDIT_MODEL
     ]
-    assert available_image_edit_models(include_replicate=True, include_dashscope=True) == [
+    assert available_image_edit_models(include_openai=True, include_replicate=True, include_dashscope=True) == [
+        DEFAULT_OPENAI_IMAGE_EDIT_MODEL,
         DEFAULT_REPLICATE_IMAGE_EDIT_MODEL,
         *DASHSCOPE_IMAGE_EDIT_MODELS,
     ]
-    assert available_image_edit_models(include_replicate=False, include_dashscope=True) == [
+    assert available_image_edit_models(include_openai=False, include_replicate=False, include_dashscope=True) == [
         *DASHSCOPE_IMAGE_EDIT_MODELS
     ]
 
@@ -182,6 +204,7 @@ def test_generate_scene_image_uses_codex_backend(monkeypatch, tmp_path):
 def test_generate_image_codex_exec_runs_helper_through_local_codex(monkeypatch, tmp_path):
     output_path = tmp_path / "scene.png"
     seen: dict[str, object] = {}
+    helper_python = "/opt/cathode python/bin/python3"
 
     def fake_run(command, *, input, text, capture_output, check):
         seen["command"] = command
@@ -196,6 +219,7 @@ def test_generate_image_codex_exec_runs_helper_through_local_codex(monkeypatch, 
         return image_gen.subprocess.CompletedProcess(command, 0, stdout="", stderr="")
 
     monkeypatch.setattr(image_gen.shutil, "which", lambda value: "/usr/local/bin/codex" if value == "codex" else None)
+    monkeypatch.setattr(image_gen.sys, "executable", helper_python)
     monkeypatch.setattr(image_gen.subprocess, "run", fake_run)
 
     result = generate_image_codex_exec(
@@ -209,9 +233,108 @@ def test_generate_image_codex_exec_runs_helper_through_local_codex(monkeypatch, 
     assert command[:2] == ["/usr/local/bin/codex", "exec"]
     assert "--ephemeral" in command
     assert "-o" in command
+    assert str(seen["input"]).splitlines()[3].startswith(shlex.quote(helper_python))
     assert "generate_openai_image.py" in str(seen["input"])
     assert "--model gpt-image-2" in str(seen["input"])
     assert result == output_path
+
+
+def test_edit_image_codex_exec_runs_helper_through_local_codex(monkeypatch, tmp_path):
+    input_path = tmp_path / "input.png"
+    output_path = tmp_path / "scene.png"
+    input_path.write_bytes(b"\x89PNG\r\n\x1a\n" + b"\x00" * 32)
+    seen: dict[str, object] = {}
+    helper_python = "/opt/cathode python/bin/python3"
+
+    def fake_run(command, *, input, text, capture_output, check):
+        seen["command"] = command
+        seen["input"] = input
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_bytes(b"fake-codex-edited-image")
+        result_path = Path(command[command.index("-o") + 1])
+        result_path.write_text(
+            '{"status":"succeeded","provider":"codex","model":"gpt-image-2","output_path":"' + str(output_path) + '"}',
+            encoding="utf-8",
+        )
+        return image_gen.subprocess.CompletedProcess(command, 0, stdout="", stderr="")
+
+    monkeypatch.setattr(image_gen.shutil, "which", lambda value: "/usr/local/bin/codex" if value == "codex" else None)
+    monkeypatch.setattr(image_gen.sys, "executable", helper_python)
+    monkeypatch.setattr(image_gen.subprocess, "run", fake_run)
+
+    result = edit_image_codex_exec(
+        "update the visible treatment name to LUMIT",
+        input_path,
+        output_path,
+        model="gpt-image-2",
+    )
+
+    command = seen["command"]
+    assert isinstance(command, list)
+    assert command[:2] == ["/usr/local/bin/codex", "exec"]
+    assert "--ephemeral" in command
+    assert str(seen["input"]).splitlines()[3].startswith(shlex.quote(helper_python))
+    assert "edit_openai_image.py" in str(seen["input"])
+    assert "--input-image" in str(seen["input"])
+    assert "--model gpt-image-2" in str(seen["input"])
+    assert result == output_path
+
+
+def test_edit_image_gpt_image_prefers_codex_when_available(monkeypatch, tmp_path):
+    input_path = tmp_path / "input.png"
+    output_path = tmp_path / "edited.png"
+    input_path.write_bytes(b"\x89PNG\r\n\x1a\n" + b"\x00" * 32)
+    captured: dict[str, object] = {}
+
+    def fake_codex(prompt, input_image_path, output_path_arg, model):
+        captured["prompt"] = prompt
+        captured["input_image_path"] = input_image_path
+        captured["model"] = model
+        Path(output_path_arg).write_bytes(b"codex-edited")
+        return Path(output_path_arg)
+
+    monkeypatch.setattr(image_gen.shutil, "which", lambda value: "/usr/local/bin/codex" if value == "codex" else None)
+    monkeypatch.setattr(image_gen, "edit_image_codex_exec", fake_codex)
+
+    result = edit_image("make it warmer", input_path, output_path, model="gpt-image-2")
+
+    assert result == output_path
+    assert captured["model"] == "gpt-image-2"
+    assert captured["prompt"] == "make it warmer"
+
+
+def test_edit_image_gpt_image_falls_back_to_openai_api_without_codex(monkeypatch, tmp_path):
+    input_path = tmp_path / "input.png"
+    output_path = tmp_path / "edited.png"
+    input_path.write_bytes(b"\x89PNG\r\n\x1a\n" + b"\x00" * 32)
+    captured: dict[str, object] = {}
+
+    class FakeImages:
+        def edit(self, **kwargs):
+            captured.update(kwargs)
+            return types.SimpleNamespace(
+                data=[
+                    types.SimpleNamespace(
+                        b64_json=base64.b64encode(b"openai-edited").decode("ascii")
+                    )
+                ]
+            )
+
+    class FakeClient:
+        images = FakeImages()
+
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    monkeypatch.setattr(image_gen.shutil, "which", lambda value: None)
+    monkeypatch.setitem(sys.modules, "openai", types.SimpleNamespace(OpenAI=lambda: FakeClient()))
+    monkeypatch.setattr(image_gen.image_limiter, "call_with_retry", lambda callback: callback())
+
+    result = edit_image("make it warmer", input_path, output_path, model="gpt-image-2")
+
+    assert result == output_path
+    assert output_path.read_bytes() == b"openai-edited"
+    assert captured["model"] == "gpt-image-2"
+    assert captured["size"] == image_gen.TARGET_SIZE_OPENAI
+    assert captured["output_format"] == "png"
 
 
 def test_generate_scene_image_preserves_raw_prompt_for_authored_image_scene(monkeypatch, tmp_path):

@@ -498,7 +498,7 @@ def test_backfill_plan_adds_image_profile_defaults_and_compatibility():
 
     assert image_profile["provider"] == "codex"
     assert image_profile["generation_model"] == "custom/model"
-    assert image_profile["edit_model"] == "qwen/qwen-image-edit-2511"
+    assert image_profile["edit_model"] == "gpt-image-2"
     assert plan["meta"]["image_model"] == "custom/model"
 
 
@@ -762,7 +762,7 @@ def test_backfill_plan_preserves_clinical_template_composition_props():
     assert plan["meta"]["render_profile"]["render_backend"] == "remotion"
 
 
-def test_backfill_plan_auto_switches_render_backend_when_scene_requires_remotion():
+def test_backfill_plan_keeps_auto_backend_ffmpeg_for_overlay_metadata():
     plan = backfill_plan(
         {
             "meta": {
@@ -786,8 +786,8 @@ def test_backfill_plan_auto_switches_render_backend_when_scene_requires_remotion
         }
     )
 
-    assert plan["meta"]["render_profile"]["render_backend"] == "remotion"
-    assert "deterministic overlay treatment" in plan["meta"]["render_profile"]["render_backend_reason"]
+    assert plan["meta"]["render_profile"]["render_backend"] == "ffmpeg"
+    assert "overlay metadata" in plan["meta"]["render_profile"]["render_backend_reason"]
 
 
 def test_normalize_brief_preserves_visual_source_strategy_and_footage_notes():

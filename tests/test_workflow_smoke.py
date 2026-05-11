@@ -355,9 +355,9 @@ def test_create_plan_from_brief_prefers_explicit_composition_intent_over_heurist
     )
 
     scene = plan["scenes"][0]
-    assert scene["composition"]["family"] == "three_data_stage"
-    assert scene["composition"]["mode"] == "native"
-    assert scene["composition"]["transition_after"]["kind"] == "fade"
+    assert scene["composition"]["family"] == "media_pan"
+    assert scene["composition"]["mode"] == "none"
+    assert scene["composition"]["transition_after"] is None
     assert scene["composition"]["data"]["data_points"] == ["#3 Services", "#2 Licensing", "#1 Production"]
 
 
@@ -390,9 +390,10 @@ def test_create_plan_from_brief_maps_thin_motion_fields_into_deterministic_compo
     )
 
     scene = plan["scenes"][0]
-    assert scene["composition"]["mode"] == "native"
-    assert scene["composition"]["family"] == "bullet_stack"
-    assert scene["composition"]["transition_after"]["kind"] == "wipe"
+    assert scene["scene_type"] == "image"
+    assert scene["composition"]["mode"] == "none"
+    assert scene["composition"]["family"] == "media_pan"
+    assert scene["composition"]["transition_after"] is None
 
 
 def test_create_plan_from_brief_keeps_whimsical_creative_brief_image_first(monkeypatch):
@@ -455,8 +456,8 @@ def test_create_plan_from_brief_finalizes_native_remotion_manifestation_after_tr
     )
 
     scene = plan["scenes"][0]
-    assert scene["composition"]["manifestation"] == "native_remotion"
-    assert plan["meta"]["render_profile"]["render_backend"] == "remotion"
+    assert scene["composition"]["manifestation"] == "authored_image"
+    assert plan["meta"]["render_profile"]["render_backend"] == "ffmpeg"
 
 
 def test_create_plan_from_brief_keeps_source_video_manifestation_when_treatment_adds_overlay(monkeypatch):
@@ -495,7 +496,7 @@ def test_create_plan_from_brief_keeps_source_video_manifestation_when_treatment_
 
     scene = plan["scenes"][0]
     assert scene["composition"]["manifestation"] == "source_video"
-    assert plan["meta"]["render_profile"]["render_backend"] == "remotion"
+    assert plan["meta"]["render_profile"]["render_backend"] == "ffmpeg"
 
 
 def test_pitch_style_raw_brief_stays_intact_and_yields_multi_voice_motion_capable_plan(monkeypatch):
@@ -561,4 +562,5 @@ def test_pitch_style_raw_brief_stays_intact_and_yields_multi_voice_motion_capabl
     assert plan["scenes"][0]["tts_override_enabled"] is False
     assert plan["scenes"][2]["tts_override_enabled"] is True
     assert plan["scenes"][2]["tts_provider"] == "elevenlabs"
-    assert plan["meta"]["render_profile"]["render_backend"] == "remotion"
+    assert plan["scenes"][1]["scene_type"] == "image"
+    assert plan["meta"]["render_profile"]["render_backend"] == "ffmpeg"

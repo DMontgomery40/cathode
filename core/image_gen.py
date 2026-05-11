@@ -28,10 +28,13 @@ TARGET_SIZE_OPENAI = f"{TARGET_WIDTH}x{TARGET_HEIGHT}"
 DEFAULT_IMAGE_MODEL = "qwen/qwen-image-2512"
 DEFAULT_CODEX_IMAGE_MODEL = "gpt-image-2"
 DEFAULT_CODEX_IMAGE_QUALITY = "medium"
+DEFAULT_OPENAI_IMAGE_EDIT_MODEL = DEFAULT_CODEX_IMAGE_MODEL
+OPENAI_IMAGE_EDIT_MODELS = (DEFAULT_OPENAI_IMAGE_EDIT_MODEL,)
 DEFAULT_REPLICATE_IMAGE_EDIT_MODEL = "qwen/qwen-image-edit-2511"
 DASHSCOPE_IMAGE_EDIT_MODELS = ("qwen-image-edit-plus", "qwen-image-edit")
 REPO_ROOT = Path(__file__).resolve().parents[1]
 CODEX_IMAGE_SCRIPT = REPO_ROOT / "scripts" / "generate_openai_image.py"
+CODEX_IMAGE_EDIT_SCRIPT = REPO_ROOT / "scripts" / "edit_openai_image.py"
 
 
 def _log(msg):
@@ -64,6 +67,13 @@ def _codex_image_quality() -> str:
 
 def _codex_exec_model() -> str:
     return str(os.getenv("CATHODE_CODEX_EXEC_MODEL") or "").strip()
+
+
+def _codex_helper_python_command() -> str:
+    executable = str(sys.executable or "").strip()
+    if executable:
+        return shlex.quote(str(Path(executable).expanduser().resolve()))
+    return "python3"
 
 
 # Replicate client with timeout to prevent indefinite hangs
@@ -204,28 +214,52 @@ def default_image_edit_model() -> str:
     """
     Default selection:
     - If IMAGE_EDIT_MODEL is set, use it verbatim.
+    - If IMAGE_EDIT_PROVIDER is set to openai/codex, default to GPT Image 2.
     - If IMAGE_EDIT_PROVIDER is set to dashscope/alibaba/modelstudio, default to DashScope 'qwen-image-edit-plus'.
-    - Otherwise default to the Replicate-backed Qwen Image Edit model.
+    - Otherwise prefer GPT Image 2 when OPENAI_API_KEY is configured, then Qwen fallbacks.
     """
     provider = (os.getenv("IMAGE_EDIT_PROVIDER") or "").strip().lower()
     env_model = (os.getenv("IMAGE_EDIT_MODEL") or "").strip()
+    if provider in {"openai", "codex", "gpt", "gpt-image"}:
+        return env_model or DEFAULT_OPENAI_IMAGE_EDIT_MODEL
     if provider in {"replicate", "rep"}:
         return env_model or DEFAULT_REPLICATE_IMAGE_EDIT_MODEL
     if provider in {"dashscope", "alibaba", "modelstudio"}:
         return env_model or DASHSCOPE_IMAGE_EDIT_MODELS[0]
     if env_model:
         return env_model
-    return DEFAULT_REPLICATE_IMAGE_EDIT_MODEL
+    if os.getenv("OPENAI_API_KEY"):
+        return DEFAULT_OPENAI_IMAGE_EDIT_MODEL
+    if os.getenv("REPLICATE_API_TOKEN"):
+        return DEFAULT_REPLICATE_IMAGE_EDIT_MODEL
+    if os.getenv("DASHSCOPE_API_KEY") or os.getenv("ALIBABA_API_KEY"):
+        return DASHSCOPE_IMAGE_EDIT_MODELS[0]
+    return DEFAULT_OPENAI_IMAGE_EDIT_MODEL
 
 
-def available_image_edit_models(*, include_replicate: bool, include_dashscope: bool) -> list[str]:
+def available_image_edit_models(
+    *,
+    include_openai: bool,
+    include_replicate: bool,
+    include_dashscope: bool,
+) -> list[str]:
     """Return image edit model options in public-facing preference order."""
     models: list[str] = []
+    if include_openai:
+        models.extend(OPENAI_IMAGE_EDIT_MODELS)
     if include_replicate:
         models.append(DEFAULT_REPLICATE_IMAGE_EDIT_MODEL)
     if include_dashscope:
         models.extend(DASHSCOPE_IMAGE_EDIT_MODELS)
     return models
+
+
+def _openai_image_edit_api_available() -> bool:
+    return bool(os.getenv("OPENAI_API_KEY"))
+
+
+def _openai_image_edit_model(model: str | None) -> bool:
+    return str(model or "").strip().startswith("gpt-image")
 
 
 def _edit_image_replicate(
@@ -363,6 +397,50 @@ def _edit_image_dashscope(
         if not first_written:
             first_written = True
     return output_path
+
+
+def _edit_image_openai_api(
+    *,
+    prompt: str,
+    input_image_paths: list[Path],
+    output_path: Path,
+    model: str,
+) -> Path:
+    if not _openai_image_edit_api_available():
+        raise ValueError("OPENAI_API_KEY is not set, so GPT Image editing cannot use the OpenAI API fallback.")
+
+    import openai
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    client = openai.OpenAI()
+
+    def _call_openai_edit():
+        with ExitStack() as stack:
+            files = [stack.enter_context(open(p, "rb")) for p in input_image_paths]
+            image_arg = files[0] if len(files) == 1 else files
+            return client.images.edit(
+                model=str(model or DEFAULT_OPENAI_IMAGE_EDIT_MODEL).strip() or DEFAULT_OPENAI_IMAGE_EDIT_MODEL,
+                image=image_arg,
+                prompt=prompt,
+                size=TARGET_SIZE_OPENAI,
+                quality=_codex_image_quality(),
+                output_format="png",
+            )
+
+    result = image_limiter.call_with_retry(_call_openai_edit)
+    image_base64 = result.data[0].b64_json if result.data else None
+    if image_base64:
+        output_path.write_bytes(base64.b64decode(image_base64))
+        return output_path
+
+    image_url = getattr(result.data[0], "url", None) if result.data else None
+    if image_url:
+        response = requests.get(str(image_url), timeout=(5, 60))
+        response.raise_for_status()
+        output_path.write_bytes(response.content)
+        _ensure_png(output_path)
+        return output_path
+    raise RuntimeError("OpenAI image edit returned no image payload.")
 
 
 def generate_image(
@@ -521,7 +599,7 @@ def generate_image_codex_exec(
 
         helper_command = " ".join(
             [
-                "python3",
+                _codex_helper_python_command(),
                 shlex.quote(str(CODEX_IMAGE_SCRIPT)),
                 "--prompt-file",
                 shlex.quote(str(prompt_path)),
@@ -591,6 +669,113 @@ def generate_image_codex_exec(
         raise RuntimeError(detail)
 
 
+def edit_image_codex_exec(
+    prompt: str,
+    input_image_path: str | Path | list[str | Path],
+    output_path: str | Path,
+    model: str = DEFAULT_OPENAI_IMAGE_EDIT_MODEL,
+) -> Path:
+    """Edit an image by asking the local Codex CLI to run the checked-in GPT Image edit helper."""
+    if isinstance(input_image_path, (list, tuple)):
+        input_image_paths = [Path(p) for p in input_image_path]
+    else:
+        input_image_paths = [Path(input_image_path)]
+
+    codex_path = shutil.which("codex")
+    if not codex_path:
+        raise ValueError("codex is not available in PATH, so the local Codex image-edit lane cannot run.")
+    if not CODEX_IMAGE_EDIT_SCRIPT.exists():
+        raise ValueError(f"Missing Codex image edit helper script: {CODEX_IMAGE_EDIT_SCRIPT}")
+
+    output_path = Path(output_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    resolved_model = str(model or DEFAULT_OPENAI_IMAGE_EDIT_MODEL).strip() or DEFAULT_OPENAI_IMAGE_EDIT_MODEL
+    resolved_quality = _codex_image_quality()
+
+    with tempfile.TemporaryDirectory(prefix="cathode-codex-image-edit-") as tmp_dir:
+        temp_root = Path(tmp_dir)
+        prompt_path = temp_root / "prompt.txt"
+        prompt_path.write_text(str(prompt or ""), encoding="utf-8")
+        result_path = temp_root / "result.json"
+        workdir = temp_root / "workdir"
+        workdir.mkdir(parents=True, exist_ok=True)
+
+        image_args = []
+        for image_path in input_image_paths:
+            image_args.extend(["--input-image", shlex.quote(str(image_path.expanduser().resolve()))])
+        helper_parts = [
+            _codex_helper_python_command(),
+            shlex.quote(str(CODEX_IMAGE_EDIT_SCRIPT)),
+            "--prompt-file",
+            shlex.quote(str(prompt_path)),
+            *image_args,
+            "--output",
+            shlex.quote(str(output_path.resolve())),
+            "--model",
+            shlex.quote(resolved_model),
+            "--size",
+            shlex.quote(TARGET_SIZE_OPENAI),
+            "--quality",
+            shlex.quote(resolved_quality),
+            "--output-format",
+            "png",
+        ]
+        helper_command = " ".join(helper_parts)
+        agent_prompt = (
+            "You are Cathode's local Codex image-edit lane.\n"
+            "Run the exact command below once, do not rewrite it, and do not modify any files except the requested output image.\n\n"
+            f"{helper_command}\n\n"
+            f"After it finishes, verify the file exists at {output_path.resolve()} and return one JSON object only.\n"
+            "Success shape:\n"
+            f'{{"status":"succeeded","provider":"codex","model":"{resolved_model}","output_path":"{output_path.resolve()}"}}\n'
+            "Failure shape:\n"
+            f'{{"status":"failed","provider":"codex","model":"{resolved_model}","output_path":"","error":"short reason"}}\n'
+            "Do not add markdown or commentary."
+        )
+
+        command = [
+            codex_path,
+            "exec",
+            "--dangerously-bypass-approvals-and-sandbox",
+            "--skip-git-repo-check",
+            "--ephemeral",
+            "-C",
+            str(workdir),
+            "--add-dir",
+            str(REPO_ROOT),
+            "--add-dir",
+            str(output_path.parent.resolve()),
+        ]
+        for image_path in input_image_paths:
+            command.extend(["--add-dir", str(image_path.expanduser().resolve().parent)])
+        command.extend(["-o", str(result_path), "-"])
+        configured_model = _codex_exec_model()
+        if configured_model:
+            command.extend(["-m", configured_model])
+
+        completed = subprocess.run(
+            command,
+            input=agent_prompt,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+
+        response_payload = (
+            _extract_json_object(result_path.read_text(encoding="utf-8"))
+            if result_path.exists()
+            else _extract_json_object(completed.stdout)
+        ) or {}
+
+        if output_path.exists() and output_path.stat().st_size > 0:
+            return output_path
+
+        error = str(response_payload.get("error") or "").strip()
+        detail = error or completed.stderr.strip() or completed.stdout.strip() or "Codex image edit failed."
+        raise RuntimeError(detail)
+
+
 def edit_image(
     prompt: str,
     input_image_path: str | Path | list[str | Path],
@@ -643,6 +828,21 @@ def edit_image(
             negative_prompt=negative_prompt,
             watermark=bool(watermark),
             seed=seed,
+        )
+
+    if _openai_image_edit_model(chosen_model):
+        if shutil.which("codex"):
+            return edit_image_codex_exec(
+                prompt,
+                input_image_paths,
+                output_path,
+                model=chosen_model,
+            )
+        return _edit_image_openai_api(
+            prompt=prompt,
+            input_image_paths=input_image_paths,
+            output_path=output_path,
+            model=chosen_model,
         )
 
     # Otherwise assume Replicate model id (e.g., "qwen/qwen-image-edit-2511")

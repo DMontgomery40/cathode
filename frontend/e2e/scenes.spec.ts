@@ -79,6 +79,107 @@ test.describe('Scene Timeline', () => {
       expect(metrics.headHeight).toBeLessThan(metrics.stripHeight * 0.3)
     })
 
+    test('timeline expands into a full storyboard board without internal scrolling', async ({ page }) => {
+      const boardProject = `e2e_timeline_board_${Date.now()}`
+      cloneProjectFixture(PROJECT, boardProject)
+      const planPath = path.resolve(process.cwd(), '..', 'projects', boardProject, 'plan.json')
+      const plan = JSON.parse(fs.readFileSync(planPath, 'utf8')) as Record<string, any>
+      plan.scenes = plan.scenes.slice(0, 4)
+      fs.writeFileSync(planPath, JSON.stringify(plan, null, 2))
+
+      await page.setViewportSize({ width: 1756, height: 1329 })
+      await page.goto(`/projects/${boardProject}/scenes`)
+      const resizeHandle = page.getByRole('separator', { name: 'Resize scene timeline' })
+
+      await expect(resizeHandle).toHaveAttribute('aria-valuemax', '720')
+      await resizeHandle.focus()
+      await resizeHandle.press('End')
+      await expect(resizeHandle).toHaveAttribute('aria-valuenow', '720')
+
+      const metrics = await page.locator('.scene-timeline-strip__surface').evaluate((element) => ({
+        layout: element.getAttribute('data-layout'),
+        clientHeight: element.clientHeight,
+        scrollHeight: element.scrollHeight,
+        clientWidth: element.clientWidth,
+        scrollWidth: element.scrollWidth,
+      }))
+
+      expect(metrics.layout).toBe('grid')
+      expect(metrics.clientHeight).toBeGreaterThan(560)
+      expect(metrics.scrollHeight).toBeLessThanOrEqual(metrics.clientHeight + 2)
+      expect(metrics.scrollWidth).toBeLessThanOrEqual(metrics.clientWidth + 2)
+
+      cleanupProjectFixture(boardProject)
+    })
+
+    test('legacy motion metadata stays in media controls without explicit native opt-in', async ({ page }) => {
+      const legacyMotionProject = `e2e_legacy_motion_default_${Date.now()}`
+      cloneProjectFixture(PROJECT, legacyMotionProject)
+      const planPath = path.resolve(process.cwd(), '..', 'projects', legacyMotionProject, 'plan.json')
+      const plan = JSON.parse(fs.readFileSync(planPath, 'utf8')) as Record<string, any>
+      const scene = plan.scenes[0]
+      plan.meta = {
+        ...(plan.meta || {}),
+        composition_mode: 'classic',
+        render_profile: {
+          ...(plan.meta?.render_profile || {}),
+          render_strategy: 'auto',
+          render_backend: 'ffmpeg',
+          render_backend_reason: 'Classic image/video assembly has no Remotion-only requirements.',
+        },
+      }
+      scene.scene_type = 'motion'
+      scene.image_path = null
+      scene.motion = {
+        template_id: 'bullet_stack',
+        props: { headline: 'Legacy motion metadata', bullets: ['A', 'B'] },
+        render_path: null,
+        preview_path: null,
+        rationale: 'Old stored native scene',
+      }
+      scene.composition = {
+        family: 'bullet_stack',
+        mode: 'native',
+        manifestation: 'native_remotion',
+        props: scene.motion.props,
+        transition_after: null,
+        data: {},
+        render_path: null,
+        preview_path: null,
+        rationale: scene.motion.rationale,
+      }
+      fs.writeFileSync(planPath, JSON.stringify(plan, null, 2))
+
+      try {
+        await page.goto(`/projects/${legacyMotionProject}/scenes`)
+        const timeline = page.getByRole('listbox', { name: 'Scene timeline' })
+        const firstScene = timeline.getByRole('option').first()
+        await expect(firstScene).toContainText('image')
+        await expect(firstScene).not.toContainText('motion')
+        await expect(page.getByRole('region', { name: 'Media stage' })).toContainText('Visual stage')
+        await expect(page.getByRole('button', { name: 'Generate Motion Preview' })).toHaveCount(0)
+        await expect(page.getByRole('button', { name: /Overlay Text/ })).toHaveCount(0)
+        await expect(page.getByTestId('remotion-player-surface')).toHaveCount(0)
+        await expect(page.getByLabel('Scene type')).toHaveValue('image')
+
+        const sceneTypeOptions = await page.getByLabel('Scene type').locator('option').evaluateAll((options) => (
+          options.map((option) => (option as HTMLOptionElement).value)
+        ))
+        const familyOptions = await page.getByLabel('Composition family').locator('option').evaluateAll((options) => (
+          options.map((option) => (option as HTMLOptionElement).value)
+        ))
+        const modeOptions = await page.getByLabel('Composition mode').locator('option').evaluateAll((options) => (
+          options.map((option) => (option as HTMLOptionElement).value)
+        ))
+
+        expect(sceneTypeOptions).toEqual(['image', 'video'])
+        expect(familyOptions).toEqual(['static_media', 'media_pan'])
+        expect(modeOptions).toEqual(['none'])
+      } finally {
+        cleanupProjectFixture(legacyMotionProject)
+      }
+    })
+
     test('selecting another scene updates the inspector', async ({ page }) => {
       const titleInput = page.getByLabel('Scene title')
       const firstTitle = await titleInput.inputValue()
@@ -165,7 +266,8 @@ test.describe('Scene Timeline', () => {
       await expect(inspectorRegion.getByRole('button', { name: 'Add Scene Before' })).toBeVisible()
       await expect(inspectorRegion.getByRole('button', { name: 'Add Scene After' })).toBeVisible()
       await expect(inspectorRegion.getByRole('button', { name: 'Delete Scene' })).toBeVisible()
-      await expect(page.getByLabel('On-screen text 1')).toBeVisible()
+      await expect(page.getByLabel('On-screen text 1')).toHaveCount(0)
+      await expect(page.getByRole('button', { name: /Overlay Text/ })).toHaveCount(0)
       await expect(page.getByRole('button', { name: 'Generate Preview' })).toBeVisible()
     })
 
@@ -264,6 +366,33 @@ test.describe('Scene Timeline', () => {
       await expect(page.locator('[role="progressbar"]').first()).toHaveAttribute('aria-valuenow', '42')
     })
 
+    test('job dock names the collapsed project job history', async ({ page }) => {
+      await page.route(`**/api/projects/${PROJECT}/jobs`, async (route) => {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify([
+            {
+              job_id: 'completed-job-1',
+              project_name: PROJECT,
+              project_dir: `/tmp/${PROJECT}`,
+              requested_stage: 'render',
+              current_stage: 'done',
+              status: 'succeeded',
+              request: { kind: 'render' },
+              result: {},
+              error: null,
+            },
+          ]),
+        })
+      })
+
+      await page.reload()
+      const dock = page.getByRole('region', { name: 'Project job history' })
+      await expect(dock).toBeVisible()
+      await expect(dock).toContainText('Project job history: 1 recent')
+    })
+
     test('desktop inspector scrolls instead of clipping lower sections', async ({ page }) => {
       await page.setViewportSize({ width: 1756, height: 1329 })
       await page.reload()
@@ -295,14 +424,17 @@ test.describe('Scene Timeline', () => {
       const plan = JSON.parse(fs.readFileSync(planPath, 'utf8')) as Record<string, unknown>
       plan.meta.render_profile = {
         ...(plan.meta.render_profile || {}),
+        render_strategy: 'force_remotion',
         render_backend: 'remotion',
+        render_backend_reason: 'Remotion forced by render_strategy=force_remotion.',
       }
       plan.meta.brief = {
         ...(plan.meta.brief || {}),
-        composition_mode: 'hybrid',
+        composition_mode: 'motion_only',
       }
       const scene = plan.scenes[0]
       scene.scene_type = 'motion'
+      scene.on_screen_text = []
       scene.image_path = null
       scene.video_path = null
       scene.preview_path = null
@@ -317,6 +449,17 @@ test.describe('Scene Timeline', () => {
         preview_path: null,
         rationale: 'Text-first proof beat',
       }
+      scene.composition = {
+        family: 'bullet_stack',
+        mode: 'native',
+        manifestation: 'native_remotion',
+        props: scene.motion.props,
+        transition_after: null,
+        data: {},
+        render_path: null,
+        preview_path: null,
+        rationale: scene.motion.rationale,
+      }
       fs.writeFileSync(planPath, JSON.stringify(plan, null, 2))
     })
 
@@ -328,10 +471,12 @@ test.describe('Scene Timeline', () => {
       await page.goto(`/projects/${MOTION_PROJECT}/scenes`)
       await expect(page.getByRole('region', { name: 'Scene inspector' })).toBeVisible()
       await expect(page.getByLabel('Scene type')).toHaveValue('motion')
-      await expect(page.getByLabel('Motion template')).toHaveValue('bullet_stack')
+      await expect(page.getByLabel('Composition family')).toHaveValue('bullet_stack')
       await expect(page.getByRole('button', { name: 'Generate Motion Preview' })).toBeVisible()
       await expect(page.getByLabel('Motion headline')).toHaveValue('Prompts on prompts')
       await expect(page.getByTestId('remotion-player-surface')).toBeVisible()
+      await expect(page.getByRole('button', { name: /Overlay Text/ })).toBeVisible()
+      await expect(page.getByLabel('Overlay text 1')).toHaveCount(0)
     })
   })
 

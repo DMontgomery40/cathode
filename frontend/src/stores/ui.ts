@@ -48,9 +48,7 @@ export const useUIStore = create<UIState>()(
       }),
       resetSceneTimelineHeight: () => set({ sceneTimelineHeight: workspaceLayout.timeline.default }),
       expandSceneTimeline: () => set({
-        sceneTimelineHeight: Math.round(
-          workspaceLayout.timeline.min + ((workspaceLayout.timeline.max - workspaceLayout.timeline.min) * 0.72),
-        ),
+        sceneTimelineHeight: workspaceLayout.timeline.max,
       }),
       sceneInspectorWidth: workspaceLayout.inspector.default,
       setSceneInspectorWidth: (width) => set({

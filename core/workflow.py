@@ -210,6 +210,57 @@ def _apply_composition_mode_to_scenes(
     return transformed
 
 
+def _brief_allows_native_renderer(brief: dict[str, Any]) -> bool:
+    return (
+        str(brief.get("composition_mode") or "").strip().lower() == "motion_only"
+        or str(brief.get("text_render_mode") or "").strip().lower() == "deterministic_overlay"
+    )
+
+
+def _clamp_native_renderer_scenes(
+    scenes: list[dict[str, Any]],
+    *,
+    brief: dict[str, Any],
+) -> list[dict[str, Any]]:
+    if _brief_allows_native_renderer(brief):
+        return scenes
+
+    clamped: list[dict[str, Any]] = []
+    for scene in scenes:
+        item = dict(scene)
+        if str(item.get("scene_type") or "").strip().lower() == "motion":
+            item["scene_type"] = "image"
+            item["motion"] = None
+        raw_plan = item.get("manifestation_plan")
+        if isinstance(raw_plan, dict):
+            plan = dict(raw_plan)
+            if plan.get("primary_path") == "native_remotion":
+                plan["primary_path"] = "authored_image"
+            if plan.get("fallback_path") == "native_remotion":
+                plan["fallback_path"] = None
+            plan["native_family_hint"] = None
+            plan["native_build_prompt"] = None
+            item["manifestation_plan"] = plan
+        raw_intent = item.get("composition_intent")
+        if isinstance(raw_intent, dict):
+            intent = dict(raw_intent)
+            if intent.get("mode_hint") in {"native", "overlay"}:
+                intent["mode_hint"] = None
+            item["composition_intent"] = intent
+        raw_composition = item.get("composition")
+        if isinstance(raw_composition, dict):
+            composition = dict(raw_composition)
+            if composition.get("mode") in {"native", "overlay"}:
+                composition["mode"] = "none"
+            if composition.get("manifestation") == "native_remotion":
+                composition["manifestation"] = "authored_image"
+            if composition.get("family") not in {"", None, "static_media", "media_pan"}:
+                composition["family"] = "static_media"
+            item["composition"] = composition
+        clamped.append(item)
+    return clamped
+
+
 def _finalize_scene_manifestations(scenes: list[dict[str, Any]]) -> list[dict[str, Any]]:
     finalized: list[dict[str, Any]] = []
     for scene in scenes:
@@ -255,6 +306,7 @@ def create_plan_from_brief(
 
     scenes, storyboard_meta = generate_storyboard_with_metadata(normalized_brief, provider=creative_provider)
     scenes = [normalize_scene(scene, i) for i, scene in enumerate(scenes)]
+    scenes = _clamp_native_renderer_scenes(scenes, brief=normalized_brief)
     scenes = _apply_composition_mode_to_scenes(scenes, brief=normalized_brief)
     scenes = plan_scene_compositions(scenes, brief=normalized_brief)
     scenes, treatment_meta = plan_scene_treatments_with_metadata(
@@ -262,6 +314,7 @@ def create_plan_from_brief(
         brief=normalized_brief,
         provider=machinery_provider,
     )
+    scenes = _clamp_native_renderer_scenes(scenes, brief=normalized_brief)
     scenes = _finalize_scene_manifestations(scenes)
     scenes, resolved_tts_profile = _pick_scene_voice_plan(
         scenes,
@@ -355,6 +408,7 @@ def rebuild_plan_from_meta(
         item["audio_path"] = None
         item["preview_path"] = None
         normalized_scenes.append(item)
+    normalized_scenes = _clamp_native_renderer_scenes(normalized_scenes, brief=meta.get("brief") or {})
     normalized_scenes = _apply_composition_mode_to_scenes(normalized_scenes, brief=meta.get("brief") or {})
     normalized_scenes = plan_scene_compositions(normalized_scenes, brief=meta.get("brief") or {})
     normalized_scenes, treatment_meta = plan_scene_treatments_with_metadata(
@@ -362,6 +416,7 @@ def rebuild_plan_from_meta(
         brief=meta.get("brief") or {},
         provider=machinery_provider,
     )
+    normalized_scenes = _clamp_native_renderer_scenes(normalized_scenes, brief=meta.get("brief") or {})
     normalized_scenes = _finalize_scene_manifestations(normalized_scenes)
     normalized_scenes, next_tts_profile = _pick_scene_voice_plan(
         normalized_scenes,

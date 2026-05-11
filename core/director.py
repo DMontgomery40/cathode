@@ -516,23 +516,32 @@ def _director_capability_prompt_names(brief: dict[str, Any]) -> list[str]:
         names.append("director_capability_video_style_mixed")
 
     text_render_mode = normalized.get("text_render_mode")
+    native_renderer_requested = _brief_explicitly_requests_native_renderer(normalized)
     if text_render_mode == "deterministic_overlay":
         names.append("director_capability_text_render_deterministic_overlay")
     if _brief_wants_clinical_data_authored_stills(normalized):
         names.append("director_capability_clinical_data_authored_stills")
 
     composition_mode = normalized.get("composition_mode")
-    if composition_mode == "hybrid":
+    if composition_mode == "hybrid" and native_renderer_requested:
         names.append("director_capability_composition_hybrid")
     elif composition_mode == "motion_only":
         names.append("director_capability_composition_motion_only")
 
     if _brief_requests_multi_voice(normalized):
         names.append("director_capability_multi_voice")
-    if _brief_wants_data_stage(normalized):
+    if _brief_wants_data_stage(normalized) and native_renderer_requested:
         names.append("director_capability_data_stage")
 
     return names
+
+
+def _brief_explicitly_requests_native_renderer(brief: dict[str, Any]) -> bool:
+    normalized = normalize_brief(brief)
+    return (
+        normalized.get("composition_mode") == "motion_only"
+        or normalized.get("text_render_mode") == "deterministic_overlay"
+    )
 
 
 def _load_director_example_index() -> list[dict[str, Any]]:
@@ -549,6 +558,7 @@ def _load_director_example_index() -> list[dict[str, Any]]:
 
 def _director_example_intents(brief: dict[str, Any]) -> list[str]:
     normalized = normalize_brief(brief)
+    native_renderer_requested = _brief_explicitly_requests_native_renderer(normalized)
     intents: list[str] = []
     if _brief_wants_whimsical_storybook_example(normalized):
         intents.append("whimsical_storybook")
@@ -556,7 +566,7 @@ def _director_example_intents(brief: dict[str, Any]) -> list[str]:
         intents.append("static_image_control")
     if normalized.get("visual_source_strategy") != "images_only" and _brief_wants_software_demo_example(normalized):
         intents.append("software_demo_overlay")
-    if normalized.get("composition_mode") in {"hybrid", "motion_only"} or normalized.get("text_render_mode") == "deterministic_overlay":
+    if native_renderer_requested:
         intents.extend(["kinetic_statement", "bullet_stack"])
     if _brief_requests_multi_voice(normalized):
         intents.append("multi_voice_pitch")
@@ -613,7 +623,8 @@ def build_director_system_prompt(
     """Assemble the director system prompt from the base prompt, capability blocks, and promoted examples."""
     normalized = normalize_brief(brief)
     sections = [load_prompt("director_system").strip()]
-    if provider != "openai":
+    native_renderer_requested = _brief_explicitly_requests_native_renderer(normalized)
+    if provider != "openai" and native_renderer_requested:
         sections.extend(
             [
                 load_prompt("director_official_remotion_system_prompt").strip(),
@@ -625,7 +636,7 @@ def build_director_system_prompt(
         content = load_optional_prompt(name).strip()
         if content:
             sections.append(content)
-    if provider != "openai" and _brief_wants_clinical_data_authored_stills(normalized):
+    if provider != "openai" and native_renderer_requested and _brief_wants_clinical_data_authored_stills(normalized):
         clinical_template_content = load_optional_prompt("director_clinical_template_system_prompt").strip()
         if clinical_template_content:
             sections.append(clinical_template_content)
@@ -766,13 +777,14 @@ def _normalize_manifestation_plan(
 def _build_storyboard_user_prompt_from_brief(brief: dict[str, Any]) -> str:
     """Build the user prompt for storyboard generation from a normalized brief."""
     normalized = _brief_for_prompt(brief)
+    native_renderer_requested = _brief_explicitly_requests_native_renderer(normalized)
     source_mode = normalized["source_mode"]
     behavior = SOURCE_MODE_BEHAVIOR.get(source_mode, SOURCE_MODE_BEHAVIOR["source_text"])
     low_words, high_words = _target_words_from_minutes(normalized["target_length_minutes"])
     scene_count_guidance = _scene_count_guidance_from_minutes(normalized["target_length_minutes"])
     clinical_data_guidance = ""
     if _brief_wants_clinical_data_authored_stills(normalized):
-        if normalized.get("text_render_mode") == "deterministic_overlay":
+        if native_renderer_requested and normalized.get("text_render_mode") == "deterministic_overlay":
             clinical_data_guidance = (
                 '- For patient-facing clinical or results explainers with deterministic overlay active, '
                 'use the clinical template composition families for every structured-information scene. '
@@ -786,6 +798,65 @@ def _build_storyboard_user_prompt_from_brief(brief: dict[str, Any]) -> str:
                 '- For patient-facing clinical or results explainers, prefer calm authored stills with exact labels, charts, '
                 'and comparison layouts rather than camera-pan treatment unless the brief explicitly asks for motion.\n'
             )
+
+    scene_type_contract = (
+        '- "scene_type" ("image", "video", or "motion"; default to "image")'
+        if native_renderer_requested
+        else '- "scene_type" ("image" or "video"; default to "image")'
+    )
+    visual_prompt_contract = (
+        '- "visual_prompt" (for image scenes: a self-contained image prompt; for video scenes: clear footage/clip direction; for motion scenes: an art-direction description of the beat)'
+        if native_renderer_requested
+        else '- "visual_prompt" (for image scenes: a self-contained image prompt; for video scenes: clear footage/clip direction)'
+    )
+    staging_notes_contract = (
+        '  - "staging_notes" (optional freeform note about layout, motion, reveals, callouts, pacing, or why the beat should feel motion-first)'
+        if native_renderer_requested
+        else '  - "staging_notes" (optional freeform note about layout, callouts, pacing, or why the beat needs a richer staged composition)'
+    )
+    composition_intent_contract = (
+        '  - "composition_intent" (optional thin hint object with any of: family_hint, mode_hint, layout, motion_notes, transition_after, data_points)'
+        if native_renderer_requested
+        else '  - "composition_intent" (optional thin hint object with any of: family_hint, layout, data_points)'
+    )
+    native_build_prompt_contract = (
+        '  - "native_build_prompt" (optional top-level alias for `manifestation_plan.native_build_prompt` when a native primary/fallback scene truly needs extra native art direction)'
+        if native_renderer_requested
+        else ''
+    )
+    text_render_contract = (
+        '- Treat text_render_mode as a hard contract:\n'
+        '  - "visual_authored": visible copy may be authored into the generated visual itself, and on_screen_text should stay aligned with that authored text when present.\n'
+        '  - "deterministic_overlay": for scenes Cathode explicitly renders as deterministic overlays or motion templates, reserve on_screen_text as the exact visible copy Cathode should place. Do not treat this as blanket permission to rewrite ordinary authored image scenes away from their intended layout.'
+        if native_renderer_requested
+        else '- Treat text_render_mode as a hard contract: visible copy should be authored into the generated visual itself, and on_screen_text should stay aligned with that authored text when present.'
+    )
+    native_manifestation_contract = (
+        '  - "native_remotion": the deterministic native Cathode/Remotion path. Use it only when exact staged text, deterministic overlays/data staging, or a clearly native supported family is genuinely needed.\n'
+        '- `manifestation_plan.native_build_prompt` is allowed only when `manifestation_plan.primary_path` or `manifestation_plan.fallback_path` is "native_remotion".\n'
+        '- If a scene uses `native_remotion`, keep the request registry-friendly: no arbitrary TSX, no freeform renderer code, no invented family names.\n'
+        '- Use scene_type "motion" when the beat should be deterministically staged as a text-led or data-led Remotion beat instead of relying on authored text inside an image.\n'
+    ) if native_renderer_requested else ""
+    motion_scene_contract = (
+        '- For motion scenes:\n'
+        '  - keep the narration natural and viewer-facing, not like animation instructions\n'
+        '  - use on_screen_text for exact visible copy\n'
+        '  - use staging_notes to describe the motion, reveals, callouts, or camera-feel of the beat\n'
+        '  - use data_points when the beat depends on an ordered comparison, ranking, or structured values\n'
+        '  - use composition_intent only for thin family/mode/layout hints when the scene is unmistakably a specific deterministic treatment, such as `surreal_tableau_3d`\n'
+    ) if native_renderer_requested else ""
+    clinical_native_contract = (
+        '- For patient-facing clinical or data explainers:\n'
+        '  - when text_render_mode is "deterministic_overlay", default to `manifestation_plan.primary_path: "native_remotion"` and set composition.family to the matching clinical template family for each structured scene\n'
+        '  - when text_render_mode is "visual_authored", default to `manifestation_plan.primary_path: "authored_image"` unless deterministic data staging is genuinely necessary\n'
+        '  - do not ask for `media_pan`\n'
+        '  - do not ask for decorative fades\n'
+    ) if native_renderer_requested else (
+        '- For patient-facing clinical or data explainers:\n'
+        '  - default to `manifestation_plan.primary_path: "authored_image"` with exact labels and chart text included in the authored visual prompt\n'
+        '  - do not ask for `media_pan`\n'
+        '  - do not ask for decorative fades\n'
+    )
 
     prompt_payload = json.dumps(normalized, indent=2, ensure_ascii=False)
 
@@ -810,19 +881,19 @@ Output requirements:
   - "id" (integer, zero-based)
   - "title" (short scene title)
   - "narration" (spoken voiceover for this scene)
-  - "visual_prompt" (for image scenes: a self-contained image prompt; for video scenes: clear footage/clip direction; for motion scenes: an art-direction description of the beat)
+  {visual_prompt_contract}
   - "manifestation_plan" (object with `primary_path`, `fallback_path`, `risk_level`, `native_family_hint`, `native_build_prompt`, `failure_notes`, `text_expected`, and `text_critical`)
 - Optional scene fields:
-  - "scene_type" ("image", "video", or "motion"; default to "image")
+  {scene_type_contract}
   - "video_scene_kind" ("cinematic" or "speaking" when scene_type is "video")
   - "speaker_name" (speaker or character label when a scene is voiced by a specific person)
   - "on_screen_text" (array of exact strings intended to be visible on the slide)
   - "footage_asset_id" (string id of a provided footage asset when a scene should use supplied video)
-  - "staging_notes" (optional freeform note about layout, motion, reveals, callouts, pacing, or why the beat should feel motion-first)
+{staging_notes_contract}
   - "data_points" (optional array of ranked items, labels, or values when the scene is data-driven)
   - "transition_hint" (optional outgoing transition hint such as "fade" or "wipe")
-  - "composition_intent" (optional thin hint object with any of: family_hint, mode_hint, layout, motion_notes, transition_after, data_points)
-  - "native_build_prompt" (optional top-level alias for `manifestation_plan.native_build_prompt` when a native primary/fallback scene truly needs extra native art direction)
+{composition_intent_contract}
+{native_build_prompt_contract.rstrip()}
 
 Quality constraints:
 - Keep narration conversational, vivid, and easy to follow for the specified audience.
@@ -850,23 +921,18 @@ Quality constraints:
   - exact text labels when needed
   - key objects, graphics, or metaphors
   - lighting, mood, and finish
-- Treat text_render_mode as a hard contract:
-  - "visual_authored": visible copy may be authored into the generated visual itself, and on_screen_text should stay aligned with that authored text when present.
-  - "deterministic_overlay": for scenes Cathode explicitly renders as deterministic overlays or motion templates, reserve on_screen_text as the exact visible copy Cathode should place. Do not treat this as blanket permission to rewrite ordinary authored image scenes away from their intended layout.
+{text_render_contract}
 - Treat manifestation paths as a hard contract:
   - "authored_image": the ordinary Anthropic-authored still/image path. `visual_prompt` must already be the final authored prompt. Do not expect code-side prompt mutation before Qwen.
-  - "native_remotion": the deterministic native Cathode/Remotion path. Use it only when exact staged text, deterministic overlays/data staging, or a clearly native supported family is genuinely needed.
   - "source_video": the footage/video path. Use it when the beat should be manifested from supplied footage or an intentional video clip.
-- `manifestation_plan.native_build_prompt` is allowed only when `manifestation_plan.primary_path` or `manifestation_plan.fallback_path` is "native_remotion".
-- If a scene uses `native_remotion`, keep the request registry-friendly: no arbitrary TSX, no freeform renderer code, no invented family names.
+{native_manifestation_contract.rstrip()}
 - When "visual_authored" is active and on_screen_text is present, visual_prompt should include the actual visible words and their placement, not vague placeholders like "headline zone," "space for text," or "typography" without naming the text itself.
 {clinical_data_guidance}- Use on_screen_text when there are exact phrases or labels the slide should visibly support.
 - No OCR. If readable text matters, put the exact words in `on_screen_text` and/or in the authored visual description itself.
 - Assume the full deck will be reviewed scene by scene. Make each frame legible and self-sufficient.
-- Use scene_type "motion" when the beat should be deterministically staged as a text-led or data-led Remotion beat instead of relying on authored text inside an image.
-- Use composition_intent only when the family choice is unusually clear and useful to preserve downstream, such as a true 3D hero tableau, a ranked data stage, or a deliberate software-demo overlay. Keep it thin and high-level.
+- Use composition_intent only when the family or layout choice is unusually clear and useful to preserve downstream, such as a ranked data layout or deliberate software-demo callout. Keep it thin and high-level.
 - If style_reference_summary is present, treat it as the canonical visual direction and make every scene compatible with that style while still matching the scene's content.
-- Use staging_notes, data_points, and transition_hint when a scene should clearly behave as a motion-first beat, a screenshot/demo callout, a data-stage visualization, or a richer staged layout than a plain still.
+- Use staging_notes, data_points, and transition_hint when a scene should clearly behave as a screenshot/demo callout, a data-stage visualization, or a richer staged layout than a plain still.
 - Treat visual_source_strategy as a hard preference:
   - "images_only": keep all scenes as image scenes.
   - "mixed_media": use video scenes only where footage would clearly improve the explanation.
@@ -880,17 +946,8 @@ Quality constraints:
 - Use "video_scene_kind" intentionally on generated video scenes:
   - "speaking": a real person should plausibly be on camera delivering the words or a very close paraphrase
   - "cinematic": the clip is visual action or atmosphere that supports voiceover without lip-sync pressure
-- For motion scenes:
-  - keep the narration natural and viewer-facing, not like animation instructions
-  - use on_screen_text for exact visible copy
-  - use staging_notes to describe the motion, reveals, callouts, or camera-feel of the beat
-  - use data_points when the beat depends on an ordered comparison, ranking, or structured values
-  - use composition_intent only for thin family/mode/layout hints when the scene is unmistakably a specific deterministic treatment, such as `surreal_tableau_3d`
-- For patient-facing clinical or data explainers:
-  - when text_render_mode is "deterministic_overlay", default to `manifestation_plan.primary_path: "native_remotion"` and set composition.family to the matching clinical template family for each structured scene
-  - when text_render_mode is "visual_authored", default to `manifestation_plan.primary_path: "authored_image"` unless deterministic data staging is genuinely necessary
-  - do not ask for `media_pan`
-  - do not ask for decorative fades
+{motion_scene_contract.rstrip()}
+{clinical_native_contract.rstrip()}
 - For "speaking" video scenes:
   - narration should sound like something a spokesperson could say naturally to camera
   - visual_prompt should describe one visible speaker, framing, gestures, wardrobe, setting, and camera treatment

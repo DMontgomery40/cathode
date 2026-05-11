@@ -1,9 +1,36 @@
 #!/usr/bin/env node
 
 import fs from "node:fs/promises";
+import { createRequire } from "node:module";
 import path from "node:path";
 import process from "node:process";
-import { chromium } from "playwright";
+import { fileURLToPath } from "node:url";
+
+const requireFromScript = createRequire(import.meta.url);
+
+function loadPlaywright() {
+  const scriptDir = path.dirname(fileURLToPath(import.meta.url));
+  const candidates = [
+    process.env.PLAYWRIGHT_NODE_MODULES,
+    path.resolve(process.cwd(), "node_modules"),
+    path.resolve(process.cwd(), "frontend/node_modules"),
+    path.resolve(scriptDir, "../../../frontend/node_modules"),
+  ];
+
+  for (const candidate of candidates) {
+    if (!candidate) {
+      continue;
+    }
+    try {
+      return createRequire(path.join(candidate, "playwright", "package.json"))("playwright");
+    } catch {
+      // Try the next local package root before falling back to default resolution.
+    }
+  }
+  return requireFromScript("playwright");
+}
+
+const { chromium } = loadPlaywright();
 
 function parseArgs(argv) {
   const args = {

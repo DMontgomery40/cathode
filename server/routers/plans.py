@@ -12,6 +12,7 @@ from core.project_schema import (
     infer_composition_mode,
     normalize_agent_demo_profile,
     normalize_brief,
+    remotion_explicitly_enabled,
     resolve_render_backend_details,
     resolve_render_backend,
     resolve_render_strategy,
@@ -101,6 +102,8 @@ async def get_remotion_manifest(project: str) -> dict[str, Any]:
         raise HTTPException(status_code=404, detail=f"No plan.json for project: {project}")
 
     render_profile = plan.get("meta", {}).get("render_profile")
+    if not remotion_explicitly_enabled(render_profile):
+        raise HTTPException(status_code=400, detail="Remotion manifest requires render_strategy=force_remotion.")
     try:
         return build_remotion_manifest(
             project_dir=project_dir,
