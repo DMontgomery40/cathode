@@ -832,12 +832,17 @@ def edit_image(
 
     if _openai_image_edit_model(chosen_model):
         if shutil.which("codex"):
-            return edit_image_codex_exec(
-                prompt,
-                input_image_paths,
-                output_path,
-                model=chosen_model,
-            )
+            try:
+                return edit_image_codex_exec(
+                    prompt,
+                    input_image_paths,
+                    output_path,
+                    model=chosen_model,
+                )
+            except Exception:
+                if not _openai_image_edit_api_available():
+                    raise
+                _log("Codex image edit failed; retrying with OpenAI Images API fallback.")
         return _edit_image_openai_api(
             prompt=prompt,
             input_image_paths=input_image_paths,
