@@ -376,7 +376,7 @@ def test_rebuild_storyboard_persists_updated_brief_and_agent_demo_profile(client
     assert saved_plan["meta"]["brief"]["video_goal"] == "new goal"
     assert saved_plan["meta"]["brief"]["composition_mode"] == "hybrid"
     assert saved_plan["meta"]["agent_demo_profile"]["workspace_path"] == "/tmp/workspace"
-    assert saved_plan["meta"]["render_profile"]["render_backend"] == "remotion"
+    assert saved_plan["meta"]["render_profile"]["render_backend"] == "ffmpeg"
 
 
 @patch("server.routers.plans.build_remotion_manifest", return_value={"scenes": [], "fps": 24})
@@ -385,7 +385,18 @@ def test_get_project_remotion_manifest(mock_manifest, client, tmp_path):
 
     with (
         patch("server.routers.plans.PROJECTS_DIR", tmp_path),
-        patch("server.routers.plans.load_plan", return_value={"meta": {"render_profile": {"render_backend": "remotion"}}, "scenes": []}),
+        patch(
+            "server.routers.plans.load_plan",
+            return_value={
+                "meta": {
+                    "render_profile": {
+                        "render_strategy": "force_remotion",
+                        "render_backend": "remotion",
+                    },
+                },
+                "scenes": [],
+            },
+        ),
     ):
         resp = client.get("/api/projects/demo/remotion-manifest")
 

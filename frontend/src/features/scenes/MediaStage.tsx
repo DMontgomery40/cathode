@@ -10,6 +10,7 @@ import { PlayerSurface } from '../../remotion/PlayerSurface.tsx'
 interface MediaStageProps {
   scene: Scene | null
   project: string
+  remotionEnabled?: boolean
   remotionManifest?: Record<string, unknown> | null
   actions?: React.ReactNode
   onUpload: (file: File) => void
@@ -18,7 +19,7 @@ interface MediaStageProps {
   compactActions?: boolean
 }
 
-export function MediaStage({ scene, project, remotionManifest, actions, onUpload, uploadPending, uploadError, compactActions }: MediaStageProps) {
+export function MediaStage({ scene, project, remotionEnabled = false, remotionManifest, actions, onUpload, uploadPending, uploadError, compactActions }: MediaStageProps) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const fileRef = useRef<HTMLInputElement>(null)
   const [playing, setPlaying] = useState(false)
@@ -86,7 +87,6 @@ export function MediaStage({ scene, project, remotionManifest, actions, onUpload
     return `${m}:${s.toString().padStart(2, '0')}`
   }
 
-  const isMotionScene = scene?.scene_type === 'motion'
   const visualUrl = sceneVisualUrl(project, scene)
   const previewUrl = scenePreviewUrl(project, scene)
   const hasVideoVisual = scene
@@ -95,7 +95,8 @@ export function MediaStage({ scene, project, remotionManifest, actions, onUpload
   const hasImageVisual = scene
     ? (typeof scene.image_exists === 'boolean' ? scene.image_exists : Boolean(scene.image_path))
     : false
-  const stageLabel = scene?.scene_type === 'video' || scene?.scene_type === 'motion' ? 'Motion stage' : 'Visual stage'
+  const stageLabel = scene?.scene_type === 'video' ? 'Video stage' : 'Visual stage'
+  const displaySceneType = scene?.scene_type === 'motion' && !remotionEnabled ? 'image' : scene?.scene_type ?? 'image'
   const uploadHintId = !scene || !visualUrl ? 'media-stage-hint' : undefined
   const activeUploadError = uploadError ?? localUploadError
 
@@ -164,7 +165,7 @@ export function MediaStage({ scene, project, remotionManifest, actions, onUpload
               className="rounded-full border border-[var(--border-subtle)] bg-[var(--surface-stage)] px-[var(--space-2)] py-[var(--space-1)] text-[var(--text-secondary)]"
               style={{ fontSize: '10px', fontFamily: 'var(--font-mono)' }}
             >
-              {scene.scene_type ?? 'image'}
+              {displaySceneType}
             </div>
           )}
         </div>
@@ -192,7 +193,7 @@ export function MediaStage({ scene, project, remotionManifest, actions, onUpload
           }
         }}
         onClick={() => {
-          if (!uploadPending && !visualUrl && !isMotionScene) fileRef.current?.click()
+          if (!uploadPending && !visualUrl) fileRef.current?.click()
         }}
       >
         {dragOver && (
@@ -214,7 +215,7 @@ export function MediaStage({ scene, project, remotionManifest, actions, onUpload
           </div>
         )}
 
-        {scene && !visualUrl && !isMotionScene && (
+        {scene && !visualUrl && (
           <div className="flex h-full cursor-pointer flex-col items-center justify-center gap-[var(--space-3)] px-[var(--space-6)] text-center">
             <svg
               width="40"
@@ -248,39 +249,6 @@ export function MediaStage({ scene, project, remotionManifest, actions, onUpload
           </div>
         )}
 
-        {scene && isMotionScene && !previewUrl && !remotionManifest && (
-          <div className="flex h-full flex-col justify-between px-[var(--space-6)] py-[var(--space-6)]">
-            <div className="flex flex-col gap-[var(--space-3)]">
-              <span
-                className="text-[var(--text-tertiary)]"
-                style={{ fontSize: 'var(--text-xs)', fontFamily: 'var(--font-mono)', letterSpacing: '0.08em', textTransform: 'uppercase' }}
-              >
-                Motion template
-              </span>
-              <div
-                className="rounded-[var(--radius-xl)] border border-[var(--border-subtle)] bg-[linear-gradient(135deg,rgba(255,150,110,0.18),rgba(32,56,92,0.28))]"
-                style={{ padding: 'var(--space-6)' }}
-              >
-                <div
-                  className="text-[var(--text-primary)] font-[family-name:var(--font-display)]"
-                  style={{ fontSize: 'var(--text-xl)', lineHeight: 'var(--leading-tight)' }}
-                >
-                  {scene.motion?.props?.headline as string || scene.composition?.props?.headline as string || scene.title || 'Motion scene'}
-                </div>
-                <div
-                  className="mt-[var(--space-3)] text-[var(--text-secondary)]"
-                  style={{ fontSize: 'var(--text-sm)', maxWidth: '38rem' }}
-                >
-                  {scene.motion?.props?.body as string || scene.composition?.props?.body as string || scene.narration || 'Generate a preview to see the motion composition with the current template and audio timing.'}
-                </div>
-              </div>
-            </div>
-            <div className="text-[var(--text-tertiary)]" style={{ fontSize: 'var(--text-xs)' }}>
-              Motion scenes preview through Remotion. Choose a template in the inspector, then generate a preview.
-            </div>
-          </div>
-        )}
-
         {activeUploadError && (
           <div
             className="absolute left-[var(--space-4)] right-[var(--space-4)] top-[var(--space-4)] z-10 rounded-[var(--radius-md)] border border-[rgba(200,90,90,0.25)] bg-[rgba(200,90,90,0.12)] px-[var(--space-3)] py-[var(--space-2)] text-[var(--signal-danger)]"
@@ -291,7 +259,7 @@ export function MediaStage({ scene, project, remotionManifest, actions, onUpload
           </div>
         )}
 
-        {scene && hasImageVisual && !hasVideoVisual && !isMotionScene && visualUrl && !remotionManifest && (
+        {scene && hasImageVisual && !hasVideoVisual && visualUrl && !remotionManifest && (
           <div className="flex min-h-0 flex-1 items-center justify-center p-[var(--space-4)]">
             <img
               src={visualUrl ?? undefined}

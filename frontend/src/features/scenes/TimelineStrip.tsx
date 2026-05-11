@@ -10,6 +10,7 @@ interface TimelineStripProps {
   scenes: Scene[]
   project: string
   renderBackend?: string | null
+  remotionEnabled?: boolean
   panelHeight: number
   layoutMode: 'rail' | 'grid'
   actions?: React.ReactNode
@@ -63,6 +64,7 @@ export function TimelineStrip({
   scenes,
   project,
   renderBackend,
+  remotionEnabled = false,
   panelHeight,
   layoutMode,
   actions,
@@ -229,6 +231,7 @@ export function TimelineStrip({
           const isSelected = selectedSceneId === scene.uid
           const isDragging = dragIdx === idx
           const isDropTarget = dropIdx === idx && dragIdx !== idx
+          const displaySceneType = scene.scene_type === 'motion' && !remotionEnabled ? 'image' : scene.scene_type ?? 'image'
 
           return (
             <button
@@ -295,7 +298,7 @@ export function TimelineStrip({
                     fontFamily: 'var(--font-mono)',
                   }}
                 >
-                  {scene.scene_type ?? 'image'}
+                  {displaySceneType}
                 </span>
                 {compactRail && (
                   <div className="scene-timeline-card__overlay">

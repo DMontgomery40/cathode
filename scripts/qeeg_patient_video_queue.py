@@ -40,7 +40,7 @@ DEFAULT_PATIENTS = [
 IMAGE_PROFILE = {
     "provider": "codex",
     "generation_model": "gpt-image-2",
-    "edit_model": "qwen/qwen-image-edit-2511",
+    "edit_model": "gpt-image-2",
     "dashscope_edit_n": 1,
     "dashscope_edit_seed": "",
     "dashscope_edit_negative_prompt": "",
@@ -244,7 +244,7 @@ def build_brief(patient: str, project_dir: Path, *, target_minutes: float) -> di
             "Do not invent diagnoses, overstate causality, bury the patient in raw tables, use generated "
             "video clips, use Kling, use Remotion/native overlays, use Streamlit-era rendering, or repeat the same visual background across scenes."
         ),
-        "ending_cta": "Continue Lumen treatment.",
+        "ending_cta": "Continue LUMIT treatment.",
         "paid_media_budget_usd": "",
         "composition_mode": "classic",
         "visual_source_strategy": "images_only",

@@ -162,7 +162,7 @@ def default_image_profile() -> dict[str, Any]:
     return {
         "provider": "codex",
         "generation_model": "gpt-image-2",
-        "edit_model": "qwen/qwen-image-edit-2511",
+        "edit_model": "gpt-image-2",
         "dashscope_edit_n": 1,
         "dashscope_edit_seed": "",
         "dashscope_edit_negative_prompt": "",
@@ -259,14 +259,24 @@ def _render_backend_reason_from_scenes(scenes: list[dict[str, Any]] | None) -> s
         payload = scene_composition_payload(scene)
         title = str(scene.get("title") or "Untitled scene").strip() or "Untitled scene"
         if str(scene.get("scene_type") or "").strip().lower() == "motion":
-            return f'Remotion selected because scene "{title}" is a motion scene.'
+            return f'Scene "{title}" has motion metadata, but auto render stays on classic assembly.'
         if str(payload.get("mode") or "").strip().lower() == "native":
-            return f'Remotion selected because scene "{title}" uses a native composition treatment.'
+            return f'Scene "{title}" has native composition metadata, but auto render stays on classic assembly.'
         if str(payload.get("mode") or "").strip().lower() == "overlay":
-            return f'Remotion selected because scene "{title}" uses a deterministic overlay treatment.'
+            return f'Scene "{title}" has overlay metadata, but auto render stays on classic assembly.'
         if payload.get("transition_after"):
-            return f'Remotion selected because scene "{title}" adds a transition treatment.'
+            return f'Scene "{title}" has transition metadata, but auto render stays on classic assembly.'
     return None
+
+
+def remotion_explicitly_enabled(render_profile: Any) -> bool:
+    """Return whether a render profile has opted into the Remotion renderer."""
+    raw = render_profile if isinstance(render_profile, dict) else {}
+    if resolve_render_strategy(raw.get("render_strategy")) == "force_remotion":
+        return True
+    render_backend = str(raw.get("render_backend") or "").strip().lower()
+    reason = str(raw.get("render_backend_reason") or "").strip().lower()
+    return render_backend == "remotion" and "explicit" in reason
 
 
 def resolve_render_backend_details(
@@ -282,17 +292,23 @@ def resolve_render_backend_details(
     if requested_strategy == "force_remotion":
         return "remotion", "Remotion forced by render_strategy=force_remotion."
 
+    if composition_mode == "motion_only":
+        return "remotion", "Remotion selected by explicit composition_mode=motion_only."
+
     scene_reason = _render_backend_reason_from_scenes(scenes)
     if scene_reason:
-        return "remotion", scene_reason
+        return "ffmpeg", scene_reason
 
-    if composition_mode in {"motion_only", "hybrid"}:
-        return "remotion", f"Remotion selected because composition_mode={composition_mode}."
+    if composition_mode == "hybrid":
+        return "ffmpeg", (
+            f"Classic assembly selected for composition_mode={composition_mode}; "
+            "use render_strategy=force_remotion for the native renderer."
+        )
 
     requested = str(raw.get("render_backend") or "").strip().lower()
     if requested in RENDER_BACKENDS:
         if requested == "remotion":
-            return "remotion", "Remotion selected by explicit render_backend preference."
+            return "ffmpeg", "Classic assembly selected; render_backend=remotion requires render_strategy=force_remotion."
         return "ffmpeg", "Classic image/video assembly selected by explicit render_backend preference."
 
     return "ffmpeg", "Classic image/video assembly has no Remotion-only requirements."
@@ -1231,7 +1247,9 @@ def backfill_plan(
     image_profile["generation_model"] = str(
         image_profile.get("generation_model") or default_image_profile()["generation_model"]
     ).strip()
-    image_profile["edit_model"] = str(image_profile.get("edit_model") or "qwen/qwen-image-edit-2511").strip()
+    image_profile["edit_model"] = str(
+        image_profile.get("edit_model") or default_image_profile()["edit_model"]
+    ).strip()
 
     raw_video_profile = meta.get("video_profile") if isinstance(meta.get("video_profile"), dict) else {}
     video_profile = _merge_with_defaults(default_video_profile(), raw_video_profile)

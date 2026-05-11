@@ -28,8 +28,8 @@ export function RenderSettings({
   const aspect = renderProfile?.aspect_ratio as string | undefined
   const resolution = renderProfile?.resolution as string | undefined
   const textStrategyCopy = textRenderMode === 'deterministic_overlay'
-    ? "Cathode overlays the scene's on-screen text during Remotion renders. Rebuild visuals if you want generated images to stop baking their own copy."
-    : 'Generated visuals and footage own the visible copy, and Remotion avoids adding a second generic text layer.'
+    ? "Cathode uses the native overlay renderer for the scene's on-screen text."
+    : 'Generated visuals and footage own the visible copy; no extra text layer is added by default.'
 
   return (
     <GlassPanel variant="default" padding="md">

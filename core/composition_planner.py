@@ -259,6 +259,14 @@ def _brief_prefers_authored_clinical_stills(brief: dict[str, Any] | None) -> boo
     return has_patient_context and has_data_context
 
 
+def _brief_allows_native_motion(brief: dict[str, Any] | None) -> bool:
+    raw = brief if isinstance(brief, dict) else {}
+    return (
+        str(raw.get("composition_mode") or "").strip().lower() == "motion_only"
+        or str(raw.get("text_render_mode") or "").strip().lower() == "deterministic_overlay"
+    )
+
+
 def _native_motion_requested(scene: dict[str, Any], intent: dict[str, Any]) -> bool:
     scene_type = str(scene.get("scene_type") or "").strip().lower()
     if scene_type == "motion":
@@ -1385,6 +1393,14 @@ def _default_mode_for_family(scene: dict[str, Any], family: str, current_mode: s
     return current_mode or "none"
 
 
+def _family_needs_native_renderer(family: str) -> bool:
+    return family in (
+        {"kinetic_statements", "bullet_stack", "quote_focus", "three_data_stage", "surreal_tableau_3d"}
+        | _CLINICAL_TEMPLATE_FAMILIES
+        | {"software_demo_focus"}
+    )
+
+
 def _mode_for_family(
     scene: dict[str, Any],
     family: str,
@@ -1457,7 +1473,8 @@ def plan_scene_compositions(
 ) -> list[dict[str, Any]]:
     """Populate stable composition families without forcing a new render path yet."""
     planned: list[dict[str, Any]] = []
-    suppress_transitions = _brief_prefers_authored_clinical_stills(brief)
+    native_motion_allowed = _brief_allows_native_motion(brief)
+    suppress_transitions = _brief_prefers_authored_clinical_stills(brief) or not native_motion_allowed
 
     for scene in scenes:
         current = scene_composition_payload(scene)
@@ -1477,6 +1494,8 @@ def plan_scene_compositions(
         )
         original_family = family
         family = _reroute_family_by_data_shape(family, next_scene)
+        if not native_motion_allowed and _family_needs_native_renderer(family):
+            family = "static_media" if _brief_prefers_authored_clinical_stills(brief) else "media_pan"
         if family != original_family:
             # Update current composition family for downstream logic
             if isinstance(next_scene.get("composition"), dict):
@@ -1487,6 +1506,8 @@ def plan_scene_compositions(
             intent["mode_hint"],
             str(current.get("mode") or "none"),
         )
+        if not native_motion_allowed and mode in {"native", "overlay"}:
+            mode = "none"
         transition_after = None if suppress_transitions else current.get("transition_after")
         if not suppress_transitions:
             transition_hint = _normalized_transition_hint(next_scene, intent)

@@ -8,7 +8,7 @@ export const workspaceLayout = {
   timeline: {
     min: 120,
     default: 144,
-    max: 280,
+    max: 720,
   },
   inspector: {
     min: 320,

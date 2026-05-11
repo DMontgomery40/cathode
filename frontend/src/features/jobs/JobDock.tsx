@@ -14,6 +14,9 @@ export function JobDock() {
     (j) => j.status === 'queued' || j.status === 'running',
   )
   const recentJobs = (jobs ?? []).slice(0, 20)
+  const dockLabel = activeJobs.length > 0
+    ? `Project jobs: ${activeJobs.length} running`
+    : `Project job history: ${recentJobs.length} recent`
 
   if (!projectId || recentJobs.length === 0) return null
 
@@ -22,7 +25,7 @@ export function JobDock() {
       className="fixed bottom-0 left-0 right-0 border-t border-[var(--border-subtle)] bg-[var(--surface-shell)]/95 backdrop-blur-[var(--glass-blur)]"
       style={{ zIndex: 'var(--z-floating)' }}
       role="region"
-      aria-label="Active jobs"
+      aria-label="Project job history"
     >
       {/* Collapsed bar */}
       <button
@@ -30,6 +33,7 @@ export function JobDock() {
         className="w-full flex items-center justify-between text-left cursor-pointer bg-transparent border-none outline-none focus-visible:shadow-[var(--focus-ring)]"
         style={{ padding: `var(--space-2) var(--space-4)` }}
         aria-expanded={expanded}
+        title="Open project job history"
       >
         <div className="flex items-center gap-[var(--space-2)]">
           <span
@@ -40,9 +44,7 @@ export function JobDock() {
             style={{ width: 8, height: 8 }}
           />
           <span className="text-[var(--text-secondary)]" style={{ fontSize: 'var(--text-xs)' }}>
-            {activeJobs.length > 0
-              ? `${activeJobs.length} job${activeJobs.length !== 1 ? 's' : ''} running`
-              : `${recentJobs.length} recent job${recentJobs.length !== 1 ? 's' : ''}`}
+            {dockLabel}
           </span>
         </div>
         <svg
