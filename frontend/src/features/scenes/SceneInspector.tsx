@@ -59,6 +59,8 @@ const COMPOSITION_FAMILY_OPTIONS: CompositionFamilyOption[] = [
   { value: 'analogy_metaphor', label: 'Analogy / metaphor', motionAllowed: true },
 ]
 
+const MEDIA_COMPOSITION_FAMILY_VALUES = new Set(['static_media', 'media_pan'])
+
 const SURREAL_COPY_TREATMENT_OPTIONS = [
   { value: 'none', label: 'No copy' },
   { value: 'kicker_chip', label: 'Kicker chip' },
@@ -83,6 +85,7 @@ const THREE_DATA_STAGE_PALETTE_OPTIONS = [
 interface SceneInspectorProps {
   scene: Scene | null
   project: string
+  remotionEnabled?: boolean
   sceneIndex: number
   actions?: ReactNode
   onAddSceneBefore: () => void
@@ -703,6 +706,7 @@ function resolveCompositionState(currentScene: Scene) {
 export function SceneInspector({
   scene,
   project,
+  remotionEnabled = false,
   sceneIndex,
   actions,
   onAddSceneBefore,
@@ -776,7 +780,7 @@ export function SceneInspector({
     visual: true,
     narration: true,
     prompt: true,
-    text: true,
+    text: false,
     audio: true,
     preview: false,
     operator: false,
@@ -856,10 +860,20 @@ export function SceneInspector({
 
   const motionState = resolveMotionState(scene)
   const compositionState = resolveCompositionState(scene)
+  const compositionFamilyOptions = remotionEnabled
+    ? COMPOSITION_FAMILY_OPTIONS
+    : COMPOSITION_FAMILY_OPTIONS.filter((option) => MEDIA_COMPOSITION_FAMILY_VALUES.has(option.value))
+  const compositionFamilyValue = compositionFamilyOptions.some((option) => option.value === compositionState.family)
+    ? compositionState.family
+    : 'static_media'
+  const compositionModeValue = remotionEnabled ? compositionState.mode : 'none'
   const updateComposition = (patch: Partial<NonNullable<Scene['composition']>>) => {
     const currentScene = sceneDraftRef.current ?? scene
     const currentComposition = resolveCompositionState(currentScene)
-    const requestedFamily = String(patch.family || currentComposition.family || '').trim() || currentComposition.family
+    let requestedFamily = String(patch.family || currentComposition.family || '').trim() || currentComposition.family
+    if (!remotionEnabled && !MEDIA_COMPOSITION_FAMILY_VALUES.has(requestedFamily)) {
+      requestedFamily = 'static_media'
+    }
     const currentProps = typeof currentComposition.props === 'object' && currentComposition.props
       ? currentComposition.props
       : {}
@@ -895,11 +909,14 @@ export function SceneInspector({
       ...currentComposition,
       ...patch,
       family: requestedFamily,
+      mode: remotionEnabled ? (patch.mode ?? currentComposition.mode) : 'none',
       props: nextProps,
       data: nextData,
     }
-    const forceMotionScene = familyRequiresMotionScene(requestedFamily, String(nextComposition.mode || ''))
-    const nextSceneType = forceMotionScene ? 'motion' : currentScene.scene_type
+    const forceMotionScene = remotionEnabled && familyRequiresMotionScene(requestedFamily, String(nextComposition.mode || ''))
+    const nextSceneType = forceMotionScene
+      ? 'motion'
+      : (!remotionEnabled && currentScene.scene_type === 'motion' ? 'image' : currentScene.scene_type)
     const currentMotion = resolveMotionState(currentScene)
     const nextScene = {
       ...currentScene,
@@ -908,7 +925,7 @@ export function SceneInspector({
       video_path: forceMotionScene ? null : currentScene.video_path,
       preview_path: forceMotionScene ? null : currentScene.preview_path,
       composition: nextComposition,
-      motion: nextComposition.mode === 'native' || nextSceneType === 'motion'
+      motion: remotionEnabled && (nextComposition.mode === 'native' || nextSceneType === 'motion')
         ? {
             ...currentMotion,
             template_id: String(nextComposition.family || currentMotion.template_id || 'kinetic_title'),
@@ -917,7 +934,7 @@ export function SceneInspector({
             preview_path: nextComposition.preview_path ?? null,
             rationale: String(nextComposition.rationale || ''),
           }
-        : currentScene.motion,
+        : (!remotionEnabled ? null : currentScene.motion),
     }
     sceneDraftRef.current = nextScene
     onSceneChange(nextScene)
@@ -927,8 +944,10 @@ export function SceneInspector({
   const sceneType = scene.scene_type ?? 'image'
   const isVideoScene = sceneType === 'video'
   const isMotionScene = sceneType === 'motion'
-  const isThreeDataStage = isThreeDataStageFamily(compositionState.family)
-  const isClinicalTemplate = isClinicalTemplateFamily(compositionState.family)
+  const nativeMotionScene = remotionEnabled && isMotionScene
+  const isThreeDataStage = remotionEnabled && isThreeDataStageFamily(compositionState.family)
+  const isClinicalTemplate = remotionEnabled && isClinicalTemplateFamily(compositionState.family)
+  const showOverlayTextEditor = remotionEnabled && (isMotionScene || compositionState.mode === 'native' || compositionState.mode === 'overlay')
   const threeDataStageData = isThreeDataStage
     ? normalizeThreeDataStageData(scene, compositionState.data)
     : null
@@ -939,17 +958,17 @@ export function SceneInspector({
   const recentSceneImageHistory = imageActionHistory
     .filter((entry) => entry.scene_uid === scene.uid)
     .slice(0, 3)
-  const promptSectionTitle = isMotionScene ? 'Motion Direction' : isVideoScene ? 'Clip Notes / Shot Direction' : 'Visual Prompt'
-  const promptPlaceholder = isMotionScene
+  const promptSectionTitle = nativeMotionScene ? 'Motion Direction' : isVideoScene ? 'Clip Notes / Shot Direction' : 'Visual Prompt'
+  const promptPlaceholder = nativeMotionScene
     ? 'Describe the motion behavior, information hierarchy, and what should animate on this scene...'
     : isVideoScene
     ? 'Describe the exact clip moment, camera move, and pacing you want for this scene...'
     : 'Visual prompt for image generation...'
-  const promptFeedbackLabel = isMotionScene ? 'Refine Motion Notes' : isVideoScene ? 'Refine Notes' : 'Refine Prompt'
-  const promptFeedbackPlaceholder = isMotionScene
+  const promptFeedbackLabel = nativeMotionScene ? 'Refine Motion Notes' : isVideoScene ? 'Refine Notes' : 'Refine Prompt'
+  const promptFeedbackPlaceholder = nativeMotionScene
     ? 'How should the motion direction change?'
     : isVideoScene ? 'How should the clip notes change?' : 'How should the prompt change?'
-  const visualMeta = isMotionScene
+  const visualMeta = nativeMotionScene
     ? (
         scene.motion?.preview_exists || scene.preview_exists
           ? 'Preview ready'
@@ -2841,9 +2860,12 @@ export function SceneInspector({
               aria-label="Scene title"
             />
             <select
-              value={scene.scene_type ?? 'image'}
+              value={!remotionEnabled && (scene.scene_type ?? 'image') === 'motion' ? 'image' : scene.scene_type ?? 'image'}
               onChange={(e) => {
                 const nextType = e.target.value as Scene['scene_type']
+                if (nextType === 'motion' && !remotionEnabled) {
+                  return
+                }
                 const nextFamily = nextType === 'motion'
                   ? (
                       compositionState.family && defaultCompositionModeForFamily(compositionState.family) === 'native'
@@ -2899,7 +2921,7 @@ export function SceneInspector({
             >
               <option value="image">Image</option>
               <option value="video">Video</option>
-              <option value="motion">Motion</option>
+              {remotionEnabled && <option value="motion">Motion</option>}
             </select>
           </div>
         </GlassPanel>
@@ -2967,7 +2989,7 @@ export function SceneInspector({
           open={sectionOpen.visual}
           onToggle={() => toggleSection('visual')}
         >
-          {isMotionScene ? (
+          {nativeMotionScene ? (
             <div className="flex flex-col gap-[var(--space-3)]">
               <div className="scene-inspector__action-row scene-inspector__action-row--compact">
                 <ActionButton onClick={onGeneratePreview} variant="primary">
@@ -3264,15 +3286,15 @@ export function SceneInspector({
                 <label className="flex flex-col gap-[var(--space-1)] text-[var(--text-secondary)]" style={{ fontSize: 'var(--text-xs)' }}>
                   <span>Composition family</span>
                   <select
-                    value={compositionState.family}
+                    value={compositionFamilyValue}
                     onChange={(event) => updateComposition({
                       family: event.target.value,
-                      mode: defaultCompositionModeForFamily(event.target.value),
+                      mode: remotionEnabled ? defaultCompositionModeForFamily(event.target.value) : 'none',
                     })}
                     className="rounded-[var(--radius-md)] border border-[var(--border-subtle)] bg-[var(--surface-stage)] px-[var(--space-2)] py-[var(--space-2)] text-[var(--text-primary)] outline-none focus-visible:shadow-[var(--focus-ring)]"
                     aria-label="Composition family"
                   >
-                    {COMPOSITION_FAMILY_OPTIONS.map((option) => (
+                    {compositionFamilyOptions.map((option) => (
                       <option key={option.value} value={option.value}>{option.label}</option>
                     ))}
                   </select>
@@ -3280,14 +3302,14 @@ export function SceneInspector({
                 <label className="flex flex-col gap-[var(--space-1)] text-[var(--text-secondary)]" style={{ fontSize: 'var(--text-xs)' }}>
                   <span>Composition mode</span>
                   <select
-                    value={compositionState.mode}
+                    value={compositionModeValue}
                     onChange={(event) => updateComposition({ mode: event.target.value as NonNullable<Scene['composition']>['mode'] })}
                     className="rounded-[var(--radius-md)] border border-[var(--border-subtle)] bg-[var(--surface-stage)] px-[var(--space-2)] py-[var(--space-2)] text-[var(--text-primary)] outline-none focus-visible:shadow-[var(--focus-ring)]"
                     aria-label="Composition mode"
                   >
                     <option value="none">None</option>
-                    <option value="overlay">Overlay</option>
-                    <option value="native">Native</option>
+                    {remotionEnabled && <option value="overlay">Overlay</option>}
+                    {remotionEnabled && <option value="native">Native</option>}
                   </select>
                 </label>
                 <label className="flex flex-col gap-[var(--space-1)] text-[var(--text-secondary)]" style={{ fontSize: 'var(--text-xs)' }}>
@@ -3577,15 +3599,15 @@ export function SceneInspector({
                 <label className="flex flex-col gap-[var(--space-1)] text-[var(--text-secondary)]" style={{ fontSize: 'var(--text-xs)' }}>
                   <span>Composition family</span>
                   <select
-                    value={compositionState.family}
+                    value={compositionFamilyValue}
                     onChange={(event) => updateComposition({
                       family: event.target.value,
-                      mode: defaultCompositionModeForFamily(event.target.value),
+                      mode: remotionEnabled ? defaultCompositionModeForFamily(event.target.value) : 'none',
                     })}
                     className="rounded-[var(--radius-md)] border border-[var(--border-subtle)] bg-[var(--surface-stage)] px-[var(--space-2)] py-[var(--space-2)] text-[var(--text-primary)] outline-none focus-visible:shadow-[var(--focus-ring)]"
                     aria-label="Composition family"
                   >
-                    {COMPOSITION_FAMILY_OPTIONS.map((option) => (
+                    {compositionFamilyOptions.map((option) => (
                       <option key={option.value} value={option.value}>{option.label}</option>
                     ))}
                   </select>
@@ -3593,14 +3615,14 @@ export function SceneInspector({
                 <label className="flex flex-col gap-[var(--space-1)] text-[var(--text-secondary)]" style={{ fontSize: 'var(--text-xs)' }}>
                   <span>Composition mode</span>
                   <select
-                    value={compositionState.mode}
+                    value={compositionModeValue}
                     onChange={(event) => updateComposition({ mode: event.target.value as NonNullable<Scene['composition']>['mode'] })}
                     className="rounded-[var(--radius-md)] border border-[var(--border-subtle)] bg-[var(--surface-stage)] px-[var(--space-2)] py-[var(--space-2)] text-[var(--text-primary)] outline-none focus-visible:shadow-[var(--focus-ring)]"
                     aria-label="Composition mode"
                   >
                     <option value="none">None</option>
-                    <option value="overlay">Overlay</option>
-                    <option value="native">Native</option>
+                    {remotionEnabled && <option value="overlay">Overlay</option>}
+                    {remotionEnabled && <option value="native">Native</option>}
                   </select>
                 </label>
                 <label className="flex flex-col gap-[var(--space-1)] text-[var(--text-secondary)]" style={{ fontSize: 'var(--text-xs)' }}>
@@ -3813,7 +3835,7 @@ export function SceneInspector({
                 padding: `var(--space-2) var(--space-3)`,
               }}
               placeholder={promptPlaceholder}
-              aria-label={isMotionScene ? 'Motion direction' : isVideoScene ? 'Clip notes / shot direction' : 'Visual prompt'}
+              aria-label={nativeMotionScene ? 'Motion direction' : isVideoScene ? 'Clip notes / shot direction' : 'Visual prompt'}
             />
             <div className="scene-inspector__action-row">
               <ActionButton onClick={() => setPromptFeedbackOpen((value) => !value)}>{promptFeedbackLabel}</ActionButton>
@@ -3837,7 +3859,7 @@ export function SceneInspector({
                     fontFamily: 'var(--font-body)',
                     padding: `var(--space-2) var(--space-3)`,
                   }}
-                  aria-label={isMotionScene ? 'Motion refine feedback' : isVideoScene ? 'Clip notes refine feedback' : 'Prompt refine feedback'}
+                  aria-label={nativeMotionScene ? 'Motion refine feedback' : isVideoScene ? 'Clip notes refine feedback' : 'Prompt refine feedback'}
                 />
                 <div className="scene-inspector__action-row scene-inspector__action-row--compact">
                   <ActionButton onClick={submitPromptFeedback} variant="primary" disabled={!promptFeedback.trim()}>
@@ -3855,54 +3877,56 @@ export function SceneInspector({
           </div>
         </InspectorSection>
 
-        <InspectorSection
-          id="scene-text"
-          title="On-Screen Text"
-          meta={`${(scene.on_screen_text ?? []).length} lines`}
-          open={sectionOpen.text}
-          onToggle={() => toggleSection('text')}
-        >
-          <div className="flex flex-col gap-[var(--space-2)]">
-            {(scene.on_screen_text ?? []).map((text, i) => (
-              <div key={i} className="scene-inspector__text-row flex min-w-0 items-center gap-[var(--space-2)]">
-                <input
-                  type="text"
-                  value={text}
-                  onChange={(e) => {
-                    const next = [...(scene.on_screen_text ?? [])]
-                    next[i] = e.target.value
-                    update({ on_screen_text: next })
-                  }}
-                  className="scene-inspector__text-input min-w-0 flex-1 rounded-[var(--radius-sm)] border border-[var(--border-subtle)] bg-[var(--surface-stage)] text-[var(--text-primary)] outline-none focus-visible:shadow-[var(--focus-ring)]"
-                  style={{
-                    fontSize: 'var(--text-sm)',
-                    padding: `var(--space-1) var(--space-2)`,
-                  }}
-                  aria-label={`On-screen text ${i + 1}`}
-                />
-                <button
-                  onClick={() => {
-                    const next = (scene.on_screen_text ?? []).filter((_, j) => j !== i)
-                    update({ on_screen_text: next })
-                  }}
-                  className="rounded-[var(--radius-sm)] p-[var(--space-1)] text-[var(--text-tertiary)] outline-none focus-visible:shadow-[var(--focus-ring)] hover:text-[var(--signal-danger)]"
-                  aria-label={`Remove text ${i + 1}`}
-                >
-                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5">
-                    <path d="M3 3L11 11M3 11L11 3" />
-                  </svg>
-                </button>
-              </div>
-            ))}
-            <button
-              onClick={() => update({ on_screen_text: [...(scene.on_screen_text ?? []), ''] })}
-              className="self-start rounded-[var(--radius-sm)] px-[var(--space-2)] py-[var(--space-1)] text-[var(--text-tertiary)] outline-none focus-visible:shadow-[var(--focus-ring)] hover:text-[var(--text-secondary)]"
-              style={{ fontSize: 'var(--text-xs)' }}
-            >
-              + Add text
-            </button>
-          </div>
-        </InspectorSection>
+        {showOverlayTextEditor && (
+          <InspectorSection
+            id="scene-text"
+            title="Overlay Text"
+            meta={`${(scene.on_screen_text ?? []).length} lines`}
+            open={sectionOpen.text}
+            onToggle={() => toggleSection('text')}
+          >
+            <div className="flex flex-col gap-[var(--space-2)]">
+              {(scene.on_screen_text ?? []).map((text, i) => (
+                <div key={i} className="scene-inspector__text-row flex min-w-0 items-center gap-[var(--space-2)]">
+                  <input
+                    type="text"
+                    value={text}
+                    onChange={(e) => {
+                      const next = [...(scene.on_screen_text ?? [])]
+                      next[i] = e.target.value
+                      update({ on_screen_text: next })
+                    }}
+                    className="scene-inspector__text-input min-w-0 flex-1 rounded-[var(--radius-sm)] border border-[var(--border-subtle)] bg-[var(--surface-stage)] text-[var(--text-primary)] outline-none focus-visible:shadow-[var(--focus-ring)]"
+                    style={{
+                      fontSize: 'var(--text-sm)',
+                      padding: `var(--space-1) var(--space-2)`,
+                    }}
+                    aria-label={`Overlay text ${i + 1}`}
+                  />
+                  <button
+                    onClick={() => {
+                      const next = (scene.on_screen_text ?? []).filter((_, j) => j !== i)
+                      update({ on_screen_text: next })
+                    }}
+                    className="rounded-[var(--radius-sm)] p-[var(--space-1)] text-[var(--text-tertiary)] outline-none focus-visible:shadow-[var(--focus-ring)] hover:text-[var(--signal-danger)]"
+                    aria-label={`Remove overlay text ${i + 1}`}
+                  >
+                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5">
+                      <path d="M3 3L11 11M3 11L11 3" />
+                    </svg>
+                  </button>
+                </div>
+              ))}
+              <button
+                onClick={() => update({ on_screen_text: [...(scene.on_screen_text ?? []), ''] })}
+                className="self-start rounded-[var(--radius-sm)] px-[var(--space-2)] py-[var(--space-1)] text-[var(--text-tertiary)] outline-none focus-visible:shadow-[var(--focus-ring)] hover:text-[var(--text-secondary)]"
+                style={{ fontSize: 'var(--text-xs)' }}
+              >
+                + Add overlay text
+              </button>
+            </div>
+          </InspectorSection>
+        )}
 
         <InspectorSection
           id="scene-audio"
@@ -4078,10 +4102,10 @@ export function SceneInspector({
           <div className="flex flex-col gap-[var(--space-3)]">
             <div className="rounded-[var(--radius-md)] border border-[var(--border-subtle)] bg-[var(--surface-stage)] px-[var(--space-3)] py-[var(--space-2)]">
               <div className="text-[var(--text-secondary)]" style={{ fontSize: 'var(--text-xs)' }}>
-                {isMotionScene ? 'Render motion preview' : isVideoScene ? 'Generate video clip' : 'Generate image'}
+                {nativeMotionScene ? 'Render motion preview' : isVideoScene ? 'Generate video clip' : 'Generate image'}
               </div>
               <div className="mt-[var(--space-1)] text-[var(--text-primary)]" style={{ fontSize: 'var(--text-sm)', fontFamily: 'var(--font-mono)' }}>
-                {isMotionScene
+                {nativeMotionScene
                   ? `remotion / ${compositionState.family || 'kinetic_title'}`
                   : isVideoScene
                   ? `${videoGenerationProvider || 'manual'} / ${videoGenerationModel || 'default'}`

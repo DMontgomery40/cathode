@@ -62,16 +62,24 @@ function providerHint(provider: string, generationModel: string): string {
 
 function editorBackendLabel(model: string): string {
   if (!model) return 'None configured'
+  if (model.startsWith('gpt-image')) return 'Codex Exec / OpenAI API'
   if (model.startsWith('qwen/')) return 'Replicate-backed'
   if (model.startsWith('qwen-image-edit')) return 'DashScope-backed'
   return 'Custom'
 }
 
 function editorLabel(model: string): string {
+  if (model === 'gpt-image-2') return 'GPT Image 2'
   if (model === 'qwen/qwen-image-edit-2511') return 'Qwen Image Edit 2511 (Replicate)'
   if (model === 'qwen-image-edit-plus') return 'Qwen Image Edit Plus (DashScope)'
   if (model === 'qwen-image-edit') return 'Qwen Image Edit (DashScope)'
   return model || 'No editor'
+}
+
+function editorCostProvider(model: string): string {
+  if (model.startsWith('gpt-image')) return 'openai'
+  if (model.startsWith('qwen-image-edit')) return 'dashscope'
+  return 'replicate'
 }
 
 export function ImageProfilePanel({
@@ -100,7 +108,7 @@ export function ImageProfilePanel({
   const editModelOptions = editModels.map((item) => {
     const entry = findCostEntry(costCatalog ?? null, {
       kind: 'image_edit',
-      provider: item.startsWith('qwen-image-edit') ? 'dashscope' : 'replicate',
+      provider: editorCostProvider(item),
       model: item,
     })
     const price = entryDisplayPrice(entry)
@@ -258,7 +266,7 @@ export function ImageProfilePanel({
               <div>
                 <p className="workspace-eyebrow">Edit defaults</p>
                 <p className="workspace-panel-copy m-0 mt-[var(--space-1)]">
-                  Choose the backend that the per-scene Edit Image action will actually call, then tune the parameters it will send.
+                  Choose the backend that the per-scene Edit Image action will call. GPT Image 2 uses local Codex execution when available and falls back to the OpenAI API on machines without Codex.
                 </p>
               </div>
               <Select

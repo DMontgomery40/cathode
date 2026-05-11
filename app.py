@@ -731,6 +731,7 @@ def render_sidebar():
             st.caption("Manual image mode skips AI generation. Upload stills or clips in Step 2 and keep the rest of the pipeline local.")
 
         edit_models = available_image_edit_models(
+            include_openai=bool(keys.get("openai")),
             include_replicate=bool(keys.get("replicate")),
             include_dashscope=bool(keys.get("dashscope")),
         )
@@ -744,10 +745,10 @@ def render_sidebar():
                 help="Used by per-scene Edit Image actions.",
             )
             st.caption(
-                "Default is the Replicate-backed Qwen Image Edit model because it is the most reliable edit path in this app right now."
+                "Default is GPT Image 2, using local Codex execution when available and direct OpenAI API otherwise."
             )
         else:
-            st.info("No AI image edit backend configured. Add REPLICATE_API_TOKEN or DASHSCOPE_API_KEY to enable Edit Image.")
+            st.info("No AI image edit backend configured. Add OPENAI_API_KEY, REPLICATE_API_TOKEN, or DASHSCOPE_API_KEY to enable Edit Image.")
 
         is_dashscope_model = str(st.session_state.image_edit_model).startswith("qwen-image-edit")
         if edit_models and is_dashscope_model:

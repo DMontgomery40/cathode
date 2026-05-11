@@ -174,7 +174,7 @@ def test_create_project_from_brief_service_persists_agent_demo_profile(monkeypat
     assert plan["meta"]["agent_demo_profile"]["workspace_path"] == "/tmp/workspace"
     assert plan["meta"]["brief"]["composition_mode"] == "hybrid"
     assert plan["meta"]["video_profile"]["provider"] == "agent"
-    assert plan["meta"]["render_profile"]["render_backend"] == "remotion"
+    assert plan["meta"]["render_profile"]["render_backend"] == "ffmpeg"
 
 
 def test_generate_project_assets_service_emits_scene_progress(monkeypatch, tmp_path):

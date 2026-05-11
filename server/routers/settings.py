@@ -82,6 +82,7 @@ async def get_providers() -> dict[str, Any]:
         "tts_providers": available_tts_providers(keys),
         "tts_voice_options": _tts_voice_options(),
         "image_edit_models": available_image_edit_models(
+            include_openai=keys.get("openai", False),
             include_replicate=keys.get("replicate", False),
             include_dashscope=keys.get("dashscope", False),
         ),

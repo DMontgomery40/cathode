@@ -437,6 +437,7 @@ def test_image_generate(mock_gen, client, tmp_path):
 def test_image_generate_rejects_native_remotion_scenes(client, tmp_path):
     (tmp_path / "demo").mkdir()
     plan = _fresh_plan()
+    plan["meta"]["render_profile"] = {"render_strategy": "force_remotion", "render_backend": "remotion"}
     plan["scenes"][0]["scene_type"] = "image"
     plan["scenes"][0]["composition"] = {
         "family": "three_data_stage",
@@ -460,7 +461,35 @@ def test_image_generate_rejects_native_remotion_scenes(client, tmp_path):
         resp = client.post("/api/projects/demo/scenes/abc1/image-generate", json={})
 
     assert resp.status_code == 400
-    assert "native Remotion path" in resp.json()["detail"]
+    assert "native renderer path" in resp.json()["detail"]
+
+
+@patch("server.routers.scenes.generate_scene_image", return_value=Path("/tmp/images/new.png"))
+def test_image_generate_allows_legacy_motion_scene_when_remotion_not_explicit(mock_gen, client, tmp_path):
+    (tmp_path / "demo").mkdir()
+    plan = _fresh_plan()
+    plan["meta"]["render_profile"] = {"render_strategy": "auto", "render_backend": "ffmpeg"}
+    plan["scenes"][0]["scene_type"] = "motion"
+    plan["scenes"][0]["composition"] = {
+        "family": "kinetic_title",
+        "mode": "native",
+        "props": {},
+    }
+
+    with (
+        patch("server.routers.scenes.PROJECTS_DIR", tmp_path),
+        patch("server.routers.scenes.load_plan", return_value=plan),
+        patch("server.routers.scenes.save_plan", side_effect=lambda d, p: p),
+        patch(
+            "server.routers.scenes.resolve_image_profile",
+            return_value={"provider": "replicate", "generation_model": "qwen/qwen-image-2512"},
+        ),
+    ):
+        resp = client.post("/api/projects/demo/scenes/abc1/image-generate", json={})
+
+    assert resp.status_code == 200
+    mock_gen.assert_called_once()
+    assert resp.json()["scenes"][0]["scene_type"] == "image"
 
 
 @patch(
@@ -784,7 +813,7 @@ def test_preview_scene(mock_preview, client, tmp_path):
 def test_motion_preview_runs_in_threadpool(mock_manifest, mock_render, client, tmp_path):
     (tmp_path / "demo").mkdir()
     plan = _fresh_plan()
-    plan["meta"]["render_profile"] = {"render_backend": "remotion"}
+    plan["meta"]["render_profile"] = {"render_strategy": "force_remotion", "render_backend": "remotion"}
     plan["scenes"][0]["scene_type"] = "motion"
     plan["scenes"][0]["motion"] = {
         "template_id": "kinetic_title",
@@ -816,6 +845,24 @@ def test_motion_preview_runs_in_threadpool(mock_manifest, mock_render, client, t
     assert saved_scene["preview_path"] == "/tmp/previews/preview_motion_scene.mp4"
     assert saved_scene["motion"]["preview_path"] == "/tmp/previews/preview_motion_scene.mp4"
     assert saved_scene["composition"]["preview_path"] == "/tmp/previews/preview_motion_scene.mp4"
+
+
+def test_motion_preview_requires_explicit_remotion_opt_in(client, tmp_path):
+    (tmp_path / "demo").mkdir()
+    plan = _fresh_plan()
+    plan["meta"]["render_profile"] = {"render_strategy": "auto", "render_backend": "ffmpeg"}
+    plan["scenes"][0]["scene_type"] = "motion"
+    plan["scenes"][0]["motion"] = {"template_id": "kinetic_title", "props": {"headline": "Prompts"}}
+    plan["scenes"][0]["composition"] = {"family": "kinetic_title", "mode": "native", "props": {}}
+
+    with (
+        patch("server.routers.scenes.PROJECTS_DIR", tmp_path),
+        patch("server.routers.scenes.load_plan", return_value=plan),
+    ):
+        resp = client.post("/api/projects/demo/scenes/abc1/preview")
+
+    assert resp.status_code == 400
+    assert "render_strategy=force_remotion" in resp.json()["detail"]
 
 
 def test_preview_project_not_found(client, tmp_path):

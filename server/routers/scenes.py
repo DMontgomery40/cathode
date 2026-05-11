@@ -13,6 +13,7 @@ from core.costs import append_actual_cost_entry, image_edit_entry, image_generat
 from core.director import refine_narration_with_metadata, refine_prompt_with_metadata
 from core.image_gen import canonicalize_exact_text_edit_prompt, edit_image, generate_scene_image
 from core.project_store import annotate_plan_asset_existence, load_plan, save_plan
+from core.project_schema import default_image_profile, remotion_explicitly_enabled
 from core.remotion_render import build_remotion_manifest, render_manifest_with_remotion
 from core.runtime import PROJECTS_DIR, choose_llm_provider, resolve_image_profile, resolve_tts_profile, resolve_video_profile
 from core.video_gen import generate_scene_video_result
@@ -79,6 +80,11 @@ def _render_preview_asset(
     render_profile: dict[str, Any],
 ) -> tuple[Path | None, dict[str, Any] | None]:
     if str(scene.get("scene_type") or "image").strip().lower() == "motion":
+        if not remotion_explicitly_enabled(render_profile):
+            raise HTTPException(
+                status_code=400,
+                detail="Motion preview requires render_strategy=force_remotion.",
+            )
         output_path = project_dir / "previews" / f"preview_{scene_uid}.mp4"
         manifest = build_remotion_manifest(
             project_dir=project_dir,
@@ -256,11 +262,12 @@ async def generate_image_for_scene(
     composition = scene.get("composition") if isinstance(scene.get("composition"), dict) else {}
     scene_type = str(scene.get("scene_type") or "image").strip().lower()
     composition_mode = str(composition.get("mode") or "").strip().lower()
-    if scene_type == "motion" or composition_mode == "native":
+    render_profile = meta.get("render_profile") if isinstance(meta.get("render_profile"), dict) else {}
+    if remotion_explicitly_enabled(render_profile) and (scene_type == "motion" or composition_mode == "native"):
         raise HTTPException(
             status_code=400,
             detail=(
-                "This scene is on Cathode's native Remotion path. "
+                "This scene is on Cathode's native renderer path. "
                 "Use Generate Motion Preview or Render Video instead of Generate Image."
             ),
         )
@@ -411,7 +418,8 @@ async def edit_image_for_scene(
     plan = _load_plan_or_404(project_dir)
     idx, scene = _find_scene(plan, scene_uid)
     meta = plan.get("meta", {})
-    image_profile = meta.get("image_profile") if isinstance(meta.get("image_profile"), dict) else {}
+    raw_image_profile = meta.get("image_profile") if isinstance(meta.get("image_profile"), dict) else {}
+    image_profile = {**default_image_profile(), **raw_image_profile}
 
     image_path = scene.get("image_path")
     if not image_path or not Path(str(image_path)).exists():
@@ -515,7 +523,13 @@ async def edit_image_for_scene(
         plan,
         image_edit_entry(
             scene=scene,
-            provider="dashscope" if model.startswith("qwen-image-edit") else "replicate",
+            provider=(
+                "dashscope"
+                if model.startswith("qwen-image-edit")
+                else "openai"
+                if model.startswith("gpt-image")
+                else "replicate"
+            ),
             model=model,
             estimated=False,
             operation="scene_image_edit",
