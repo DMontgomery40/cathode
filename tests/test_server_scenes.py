@@ -282,6 +282,42 @@ def test_image_edit_uses_profile_model(mock_edit, client, tmp_path):
 
 
 @patch("server.routers.scenes.edit_image")
+def test_image_edit_resolves_configured_provider_default_model(mock_edit, client, tmp_path):
+    project_dir = tmp_path / "demo"
+    project_dir.mkdir()
+    source = project_dir / "images" / "scene_000.png"
+    source.parent.mkdir(parents=True)
+    source.write_bytes(b"\x89PNG\r\n\x1a\n" + b"\x00" * 32)
+
+    plan = _fresh_plan()
+    plan["meta"]["image_profile"] = {}
+    plan["scenes"][0]["image_path"] = str(source)
+
+    edited = project_dir / "images" / ".scene_000_edited.png"
+    edited.write_bytes(b"\x89PNG\r\n\x1a\n" + b"\x00" * 32)
+    mock_edit.return_value = edited
+
+    with (
+        patch("server.routers.scenes.PROJECTS_DIR", tmp_path),
+        patch("server.routers.scenes.load_plan", return_value=plan),
+        patch("server.routers.scenes.save_plan", side_effect=lambda d, p: p),
+        patch(
+            "server.routers.scenes.resolve_image_profile",
+            return_value={"provider": "replicate", "edit_model": "qwen/qwen-image-edit-2511"},
+        ) as mock_resolve,
+    ):
+        resp = client.post(
+            "/api/projects/demo/scenes/abc1/image-edit",
+            json={"feedback": "Make the image more cinematic"},
+        )
+
+    assert resp.status_code == 200
+    mock_resolve.assert_called_once_with({})
+    assert mock_edit.call_args.kwargs["model"] == "qwen/qwen-image-edit-2511"
+    assert not edited.exists()
+
+
+@patch("server.routers.scenes.edit_image")
 def test_image_edit_canonicalizes_exact_text_change_prompt_for_dashscope(mock_edit, client, tmp_path):
     project_dir = tmp_path / "demo"
     project_dir.mkdir()

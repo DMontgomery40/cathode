@@ -337,6 +337,42 @@ def test_edit_image_gpt_image_falls_back_to_openai_api_without_codex(monkeypatch
     assert captured["output_format"] == "png"
 
 
+def test_edit_image_gpt_image_falls_back_to_openai_api_when_codex_fails(monkeypatch, tmp_path):
+    input_path = tmp_path / "input.png"
+    output_path = tmp_path / "edited.png"
+    input_path.write_bytes(b"\x89PNG\r\n\x1a\n" + b"\x00" * 32)
+    captured: dict[str, object] = {}
+
+    class FakeImages:
+        def edit(self, **kwargs):
+            captured.update(kwargs)
+            return types.SimpleNamespace(
+                data=[
+                    types.SimpleNamespace(
+                        b64_json=base64.b64encode(b"openai-edited").decode("ascii")
+                    )
+                ]
+            )
+
+    class FakeClient:
+        images = FakeImages()
+
+    def fail_codex(*args, **kwargs):
+        raise RuntimeError("codex auth unavailable")
+
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    monkeypatch.setattr(image_gen.shutil, "which", lambda value: "/usr/local/bin/codex" if value == "codex" else None)
+    monkeypatch.setattr(image_gen, "edit_image_codex_exec", fail_codex)
+    monkeypatch.setitem(sys.modules, "openai", types.SimpleNamespace(OpenAI=lambda: FakeClient()))
+    monkeypatch.setattr(image_gen.image_limiter, "call_with_retry", lambda callback: callback())
+
+    result = edit_image("make it warmer", input_path, output_path, model="gpt-image-2")
+
+    assert result == output_path
+    assert output_path.read_bytes() == b"openai-edited"
+    assert captured["model"] == "gpt-image-2"
+
+
 def test_generate_scene_image_preserves_raw_prompt_for_authored_image_scene(monkeypatch, tmp_path):
     captured: dict[str, str] = {}
 

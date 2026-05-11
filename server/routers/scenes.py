@@ -13,7 +13,7 @@ from core.costs import append_actual_cost_entry, image_edit_entry, image_generat
 from core.director import refine_narration_with_metadata, refine_prompt_with_metadata
 from core.image_gen import canonicalize_exact_text_edit_prompt, edit_image, generate_scene_image
 from core.project_store import annotate_plan_asset_existence, load_plan, save_plan
-from core.project_schema import default_image_profile, remotion_explicitly_enabled
+from core.project_schema import remotion_explicitly_enabled
 from core.remotion_render import build_remotion_manifest, render_manifest_with_remotion
 from core.runtime import PROJECTS_DIR, choose_llm_provider, resolve_image_profile, resolve_tts_profile, resolve_video_profile
 from core.video_gen import generate_scene_video_result
@@ -418,8 +418,7 @@ async def edit_image_for_scene(
     plan = _load_plan_or_404(project_dir)
     idx, scene = _find_scene(plan, scene_uid)
     meta = plan.get("meta", {})
-    raw_image_profile = meta.get("image_profile") if isinstance(meta.get("image_profile"), dict) else {}
-    image_profile = {**default_image_profile(), **raw_image_profile}
+    image_profile = resolve_image_profile(meta.get("image_profile"))
 
     image_path = scene.get("image_path")
     if not image_path or not Path(str(image_path)).exists():
