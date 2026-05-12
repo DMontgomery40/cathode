@@ -592,6 +592,14 @@ def _image_edit_kwargs(image_profile: dict[str, Any]) -> tuple[str, dict[str, An
     return model, kwargs
 
 
+def _image_edit_cost_provider(model: str) -> str:
+    if model.startswith("qwen-image-edit"):
+        return "dashscope"
+    if model.startswith("gpt-image"):
+        return "openai"
+    return "replicate"
+
+
 def _attempt_text_repairs(
     project_dir: Path,
     current_plan: dict[str, Any],
@@ -645,7 +653,7 @@ def _attempt_text_repairs(
                 current_plan,
                 image_edit_entry(
                     scene=refreshed_scene,
-                    provider="dashscope" if edit_model.startswith("qwen-image-edit") else "replicate",
+                    provider=_image_edit_cost_provider(edit_model),
                     model=edit_model,
                     estimated=False,
                     operation="render_text_repair",

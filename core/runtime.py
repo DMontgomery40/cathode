@@ -312,6 +312,21 @@ def resolve_image_profile(profile: dict | None = None) -> dict:
         resolved["generation_model"] = str(
             resolved.get("generation_model") or default_image_profile()["generation_model"]
         ).strip()
+    edit_model = str(resolved.get("edit_model") or default_image_profile()["edit_model"]).strip()
+    if edit_model.startswith("gpt-image") and not keys.get("openai"):
+        edit_model = ""
+    elif edit_model.startswith("qwen/") and not keys.get("replicate"):
+        edit_model = ""
+    elif edit_model.startswith("qwen-image-edit") and not keys.get("dashscope"):
+        edit_model = ""
+    if not edit_model:
+        if keys.get("openai"):
+            edit_model = "gpt-image-2"
+        elif keys.get("replicate"):
+            edit_model = "qwen/qwen-image-edit-2511"
+        elif keys.get("dashscope"):
+            edit_model = "qwen-image-edit-plus"
+    resolved["edit_model"] = edit_model
     return resolved
 
 

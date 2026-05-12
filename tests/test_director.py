@@ -85,16 +85,26 @@ def test_director_system_prompt_selects_capability_blocks():
 
 
 def test_director_system_prompt_includes_official_remotion_stack_for_anthropic_only():
-    brief = normalize_brief(
+    default_brief = normalize_brief(
         {
             "source_mode": "ideas_notes",
             "source_material": "Explain the workflow clearly.",
         }
     )
+    motion_brief = normalize_brief(
+        {
+            "source_mode": "ideas_notes",
+            "source_material": "Explain the workflow clearly.",
+            "composition_mode": "motion_only",
+        }
+    )
 
-    anthropic_prompt = build_director_system_prompt(brief, provider="anthropic")
-    openai_prompt = build_director_system_prompt(brief, provider="openai")
+    default_anthropic_prompt = build_director_system_prompt(default_brief, provider="anthropic")
+    anthropic_prompt = build_director_system_prompt(motion_brief, provider="anthropic")
+    openai_prompt = build_director_system_prompt(motion_brief, provider="openai")
 
+    assert "# About Remotion" not in default_anthropic_prompt
+    assert "Cathode manifestation-path contract." not in default_anthropic_prompt
     assert "# About Remotion" in anthropic_prompt
     assert "Cathode manifestation-path contract." in anthropic_prompt
     assert "Cathode supported-family registry constraints." in anthropic_prompt
@@ -353,6 +363,7 @@ def test_director_clinical_template_prompt_forbids_transitions():
                 "video_goal": "Educate the patient on their assessment data.",
                 "audience": "The patient whose report this is.",
                 "source_material": "Assessment results across sessions with reference ranges.",
+                "text_render_mode": "deterministic_overlay",
             }
         ),
         provider="anthropic",
@@ -371,6 +382,7 @@ def test_director_clinical_template_prompt_documents_brain_region_names():
                 "video_goal": "Educate the patient on their assessment data.",
                 "audience": "The patient whose report this is.",
                 "source_material": "Assessment results across sessions.",
+                "text_render_mode": "deterministic_overlay",
             }
         ),
         provider="anthropic",

@@ -147,7 +147,7 @@ def test_plain_screen_recording_stays_static_media_without_overlay_callouts():
     assert scene["composition"]["mode"] == "none"
 
 
-def test_explicit_ui_callout_scene_keeps_software_demo_overlay():
+def test_explicit_ui_callout_scene_defaults_to_media_without_native_opt_in():
     scenes = [
         {
             "uid": "scene_callout",
@@ -164,6 +164,27 @@ def test_explicit_ui_callout_scene_keeps_software_demo_overlay():
     planned = plan_scene_compositions(scenes)
     scene = planned[0]
 
+    assert scene["composition"]["family"] == "media_pan"
+    assert scene["composition"]["mode"] == "none"
+
+
+def test_explicit_ui_callout_scene_keeps_software_demo_overlay_when_native_requested():
+    scenes = [
+        {
+            "uid": "scene_callout",
+            "id": 0,
+            "title": "What Goes Into a Brief",
+            "scene_type": "image",
+            "narration": "Overlay labels point at the main brief fields while the screenshot stays stable underneath.",
+            "visual_prompt": "Dark-mode screenshot of the brief workspace with the main form visible.",
+            "staging_notes": "Soft callout tags point to the brief input, goal field, and generate button.",
+            "on_screen_text": ["Source Material", "Video Goal", "Generate"],
+        }
+    ]
+
+    planned = plan_scene_compositions(scenes, brief={"text_render_mode": "deterministic_overlay"})
+    scene = planned[0]
+
     assert scene["composition"]["family"] == "software_demo_focus"
     assert scene["composition"]["mode"] == "overlay"
 
@@ -176,6 +197,11 @@ _CLINICAL_BRIEF = {
     "video_goal": "Educate the patient on their assessment data.",
     "audience": "The patient whose report this is.",
     "source_material": "Assessment results across sessions.",
+}
+
+_CLINICAL_NATIVE_BRIEF = {
+    **_CLINICAL_BRIEF,
+    "text_render_mode": "deterministic_overlay",
 }
 
 
@@ -489,20 +515,20 @@ class TestDataShapeRerouting:
 
     def test_brain_region_with_arrows_reroutes_to_three_data_stage(self):
         scenes = [self._brain_scene_with_arrows()]
-        planned = plan_scene_compositions(scenes, brief=_CLINICAL_BRIEF)
+        planned = plan_scene_compositions(scenes, brief=_CLINICAL_NATIVE_BRIEF)
         scene = planned[0]
         assert scene["composition"]["family"] == "three_data_stage"
         assert scene["composition"]["mode"] == "native"
 
     def test_brain_region_without_arrows_stays_brain_region(self):
         scenes = [self._brain_scene_without_arrows()]
-        planned = plan_scene_compositions(scenes, brief=_CLINICAL_BRIEF)
+        planned = plan_scene_compositions(scenes, brief=_CLINICAL_NATIVE_BRIEF)
         scene = planned[0]
         assert scene["composition"]["family"] == "brain_region_focus"
 
     def test_rerouted_scene_preserves_data_points(self):
         scenes = [self._brain_scene_with_arrows()]
-        planned = plan_scene_compositions(scenes, brief=_CLINICAL_BRIEF)
+        planned = plan_scene_compositions(scenes, brief=_CLINICAL_NATIVE_BRIEF)
         data = planned[0]["composition"].get("data", {})
         dp = data.get("data_points", [])
         # Data points should be preserved for manifest-time enrichment
@@ -510,7 +536,7 @@ class TestDataShapeRerouting:
 
     def test_rerouted_scene_clears_brain_background_id(self):
         scenes = [self._brain_scene_with_arrows()]
-        planned = plan_scene_compositions(scenes, brief=_CLINICAL_BRIEF)
+        planned = plan_scene_compositions(scenes, brief=_CLINICAL_NATIVE_BRIEF)
         props = planned[0]["composition"]["props"]
         # brain-specific background_id should be cleared
         assert "background_id" not in props or "brain" not in props.get("background_id", "").lower()
@@ -531,7 +557,7 @@ class TestDataShapeRerouting:
                 "data": {"data_points": ["Time: 75 -> 63 -> 58"]},
             },
         }
-        planned = plan_scene_compositions([scene], brief=_CLINICAL_BRIEF)
+        planned = plan_scene_compositions([scene], brief=_CLINICAL_NATIVE_BRIEF)
         assert planned[0]["composition"]["family"] == "three_data_stage"
 
 

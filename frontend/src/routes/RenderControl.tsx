@@ -42,9 +42,6 @@ export function RenderControl() {
   const { projectId = '' } = useParams<{ projectId: string }>()
   const { data: bootstrap } = useBootstrap()
   const { data: plan } = usePlan(projectId)
-  const remotionManifest = useRemotionManifest(projectId, {
-    enabled: Boolean(bootstrap?.providers?.remotion_capabilities?.player_available && projectId),
-  })
   const { data: jobs } = useProjectJobs(projectId, { refetchInterval: 2000 })
   const startRender = useStartRender(projectId)
   const genAssets = useGenerateAssets(projectId)
@@ -66,6 +63,18 @@ export function RenderControl() {
   const renderBackend = typeof renderProfile === 'object' && renderProfile
     ? String((renderProfile as Record<string, unknown>).render_backend || 'ffmpeg')
     : 'ffmpeg'
+  const remotionExplicitlyEnabled = typeof renderProfile === 'object' && renderProfile
+    ? (
+        String((renderProfile as Record<string, unknown>).render_strategy || '').trim().toLowerCase() === 'force_remotion'
+        || (
+          String((renderProfile as Record<string, unknown>).render_backend || '').trim().toLowerCase() === 'remotion'
+          && String((renderProfile as Record<string, unknown>).render_backend_reason || '').trim().toLowerCase().includes('explicit')
+        )
+      )
+    : false
+  const remotionManifest = useRemotionManifest(projectId, {
+    enabled: remotionExplicitlyEnabled && Boolean(bootstrap?.providers?.remotion_capabilities?.player_available && projectId),
+  })
   const renderBackendReason = typeof renderProfile === 'object' && renderProfile
     ? String((renderProfile as Record<string, unknown>).render_backend_reason || '').trim() || null
     : null

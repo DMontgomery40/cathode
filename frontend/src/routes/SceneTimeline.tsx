@@ -79,9 +79,6 @@ export function SceneTimeline() {
   const refineP = useRefinePrompt(projectId)
   const refineN = useRefineNarration(projectId)
   const genPreview = useGenerateScenePreview(projectId)
-  const selectedSceneRemotionManifest = useSceneRemotionManifest(projectId, selectedSceneId, {
-    enabled: Boolean(bootstrap?.providers?.remotion_capabilities?.player_available && selectedSceneId),
-  })
 
   const [liveMsg, setLiveMsg] = useState('')
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -425,6 +422,16 @@ export function SceneTimeline() {
     ? currentPlan.meta.render_profile as Record<string, unknown>
     : {}
   const renderBackend = String(renderProfile.render_backend || 'ffmpeg')
+  const remotionExplicitlyEnabled = (
+    String(renderProfile.render_strategy || '').trim().toLowerCase() === 'force_remotion'
+    || (
+      String(renderProfile.render_backend || '').trim().toLowerCase() === 'remotion'
+      && String(renderProfile.render_backend_reason || '').trim().toLowerCase().includes('explicit')
+    )
+  )
+  const selectedSceneRemotionManifest = useSceneRemotionManifest(projectId, selectedSceneId, {
+    enabled: remotionExplicitlyEnabled && Boolean(bootstrap?.providers?.remotion_capabilities?.player_available),
+  })
   const imageEditModels = bootstrap?.providers?.image_edit_models ?? []
   const imageEditError = editImage.error
     ? getApiErrorMessage(editImage.error, 'Image edit failed.')
@@ -720,6 +727,7 @@ export function SceneTimeline() {
             scenes={scenes}
             project={projectId}
             renderBackend={renderBackend}
+            remotionEnabled={remotionExplicitlyEnabled}
             panelHeight={sceneTimelineHeight}
             layoutMode={timelineLayoutMode}
             actions={
@@ -793,7 +801,8 @@ export function SceneTimeline() {
             <MediaStage
               scene={selectedScene}
               project={projectId}
-              remotionManifest={selectedSceneRemotionManifest.data ?? null}
+              remotionEnabled={remotionExplicitlyEnabled}
+              remotionManifest={remotionExplicitlyEnabled ? selectedSceneRemotionManifest.data ?? null : null}
               actions={
                 <>
                   <button
@@ -866,6 +875,7 @@ export function SceneTimeline() {
                 <SceneInspector
                   scene={selectedScene}
                   project={projectId}
+                  remotionEnabled={remotionExplicitlyEnabled}
                   sceneIndex={selectedIndex}
                   saving={saving || savePlan.isPending}
                   onAddSceneBefore={handleAddSceneBefore}
