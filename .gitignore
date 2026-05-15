@@ -42,6 +42,8 @@ eggs/
 .mypy_cache/
 .eggs/
 lib/
+!frontend/src/lib/
+!frontend/src/lib/**
 lib64/
 parts/
 sdist/

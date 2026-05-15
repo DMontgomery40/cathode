@@ -19,7 +19,9 @@ def test_frontend_cost_catalog_exposes_versioned_entries():
     assert any(entry["model"] == "kwaivgi/kling-v3-video" for entry in catalog["entries"])
 
 
-def test_estimate_plan_cost_is_route_aware_and_budget_gated():
+def test_estimate_plan_cost_is_route_aware_and_budget_gated(monkeypatch):
+    monkeypatch.setenv("REPLICATE_API_TOKEN", "test-token")
+    monkeypatch.setenv("OPENAI_API_KEY", "test-token")
     plan = {
         "meta": {
             "brief": {
