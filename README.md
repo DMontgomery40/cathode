@@ -1,7 +1,3 @@
-<p align="center">
-  <img src="docs/assets/cathode-logo.png" alt="betTube Studio logo" width="220">
-</p>
-
 # betTube Studio
 
 betTube Studio is a local-first explainer-video pipeline with three main surfaces:
@@ -315,8 +311,8 @@ CATHODE_MCP_PORT=8765 /opt/homebrew/bin/python3.10 cathode_mcp_server.py --trans
 Docker:
 
 ```bash
-docker build -t cathode-mcp .
-docker run --rm -p 8765:8765 cathode-mcp
+docker build -t bettube-studio-mcp .
+docker run --rm -p 8765:8765 bettube-studio-mcp
 ```
 
 Primary MCP tools:
