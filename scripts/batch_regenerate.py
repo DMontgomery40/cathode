@@ -3,15 +3,19 @@
 Batch rebuild Cathode projects from metadata and regenerate assets.
 
 Usage:
-    python3.10 batch_regenerate.py
-    python3.10 batch_regenerate.py --projects demo_one,demo_two
-    python3.10 batch_regenerate.py --dry-run
+    python3.10 scripts/batch_regenerate.py
+    python3.10 scripts/batch_regenerate.py --projects demo_one,demo_two
+    python3.10 scripts/batch_regenerate.py --dry-run
 """
 
 from __future__ import annotations
 
 import argparse
+import sys
 from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(REPO_ROOT))
 
 from core.pipeline_service import process_existing_project_service
 from core.project_store import list_projects, load_plan

@@ -9,8 +9,8 @@
     },
     {
       "name": "frontend",
-      "runtimeExecutable": "/Users/davidmontgomery/cathode/frontend/node_modules/.bin/vite",
-      "runtimeArgs": ["--port", "9322"],
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "--", "--port", "9322"],
       "cwd": "frontend",
       "port": 9322
     }

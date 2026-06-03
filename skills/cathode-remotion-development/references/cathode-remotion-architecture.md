@@ -12,18 +12,18 @@ The product creates a local project under `projects/<project>/`, persists `plan.
 
 ## Read These Files First
 
-- `/Users/davidmontgomery/cathode/AGENTS.md`
-- `/Users/davidmontgomery/cathode/CLAUDE.md`
-- `/Users/davidmontgomery/cathode/README.md`
-- `/Users/davidmontgomery/cathode/PLAN.md`
-- `/Users/davidmontgomery/cathode/core/director.py`
-- `/Users/davidmontgomery/cathode/core/composition_planner.py`
-- `/Users/davidmontgomery/cathode/core/treatment_planner.py`
-- `/Users/davidmontgomery/cathode/core/project_schema.py`
-- `/Users/davidmontgomery/cathode/core/workflow.py`
-- `/Users/davidmontgomery/cathode/core/remotion_render.py`
-- `/Users/davidmontgomery/cathode/frontend/src/remotion/index.tsx`
-- `/Users/davidmontgomery/cathode/frontend/src/features/scenes/SceneInspector.tsx`
+- `AGENTS.md`
+- `CLAUDE.md`
+- `README.md`
+- `docs/PLAN.md`
+- `core/director.py`
+- `core/composition_planner.py`
+- `core/treatment_planner.py`
+- `core/project_schema.py`
+- `core/workflow.py`
+- `core/remotion_render.py`
+- `frontend/src/remotion/index.tsx`
+- `frontend/src/features/scenes/SceneInspector.tsx`
 
 ## Canonical Data Flow
 

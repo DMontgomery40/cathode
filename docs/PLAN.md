@@ -78,7 +78,7 @@ Then add a second, optional Remotion treatment-planner stage that is informed by
 
 ## Implementation Notes
 - Status: in progress
-- 2026-03-14: active implementation restarted for the motion-first 3D failure. Root cause confirmed from `/Users/davidmontgomery/cathode/projects/moth_orrery_api_1773538729/plan.json`: `_apply_composition_mode_to_scenes()` pre-seeds `motion.template_id` from `infer_motion_template()`, long narration pushes the hero tableau into `quote_focus`, and `plan_scene_compositions()` then preserves that weak family instead of re-evaluating the 3D/tableau/orbit cues.
+- 2026-03-14: active implementation restarted for the motion-first 3D failure. Root cause confirmed from `projects/moth_orrery_api_1773538729/plan.json`: `_apply_composition_mode_to_scenes()` pre-seeds `motion.template_id` from `infer_motion_template()`, long narration pushes the hero tableau into `quote_focus`, and `plan_scene_compositions()` then preserves that weak family instead of re-evaluating the 3D/tableau/orbit cues.
 - 2026-03-14: official doc set locked for this overhaul because future agents should not have to rediscover it:
   - <https://www.remotion.dev/docs/player>
   - <https://www.remotion.dev/docs/sequence>
@@ -111,9 +111,9 @@ Then add a second, optional Remotion treatment-planner stage that is informed by
   - Background job can remain `running` at `storyboard` with no visible progress change.
   - That is tracked as a real gap from this turn, not hand-waved away.
 - 2026-03-15: live validation against the fresh UI-created observatory brief completed.
-  - Project: `/Users/davidmontgomery/cathode/projects/moth_observatory_ui_1773542716609`
+  - Project: `projects/moth_observatory_ui_1773542716609`
   - Hero scene now persists as `surreal_tableau_3d` and exposes semantic 3D controls in the browser.
-  - Audio generation completed for all scenes and final render completed at `/Users/davidmontgomery/cathode/projects/moth_observatory_ui_1773542716609/final_video.mp4`.
+  - Audio generation completed for all scenes and final render completed at `projects/moth_observatory_ui_1773542716609/final_video.mp4`.
   - Captured validation artifacts live under `/tmp/cathode-remotion-validation/`.
 - 2026-03-15: Projects library sorting no longer relies on alphabetical order alone.
   - `/api/projects` now exposes `created_utc` and `updated_utc`.

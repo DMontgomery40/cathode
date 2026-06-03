@@ -5,7 +5,7 @@ Calls Qwen (qwen/qwen-image-2512) via Replicate sequentially.
 Output: template_deck/backgrounds/<template_name>.png
 
 Usage:
-    /opt/homebrew/bin/python3.10 generate_template_backgrounds.py
+    /opt/homebrew/bin/python3.10 scripts/generators/generate_template_backgrounds.py
 """
 
 import sys
@@ -13,15 +13,15 @@ import os
 import time
 from pathlib import Path
 
-# Ensure project root is importable
-sys.path.insert(0, str(Path(__file__).parent))
+REPO_ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(REPO_ROOT))
 
 from core.runtime import load_repo_env
 load_repo_env()
 
 from core.image_gen import generate_image
 
-OUTPUT_DIR = Path(__file__).parent / "template_deck" / "backgrounds"
+OUTPUT_DIR = REPO_ROOT / "template_deck" / "backgrounds"
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 # Each entry: (filename_stem, prompt)

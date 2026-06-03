@@ -436,9 +436,9 @@ For live demos, add reviewed `footage_paths` or `footage_manifest` instead of on
 ## Batch Rebuild
 
 ```bash
-python3.10 batch_regenerate.py
-python3.10 batch_regenerate.py --projects demo_one,demo_two
-python3.10 batch_regenerate.py --dry-run
+python3.10 scripts/batch_regenerate.py
+python3.10 scripts/batch_regenerate.py --projects demo_one,demo_two
+python3.10 scripts/batch_regenerate.py --dry-run
 ```
 
 ## Tests
@@ -451,16 +451,17 @@ PYTHONPATH=. /opt/homebrew/bin/python3.10 -m pytest -q
 
 ```text
 app.py
-batch_regenerate.py
 cathode_mcp_server.py
 core/
 core/remotion_render.py
 frontend/
 server/
 prompts/
+scripts/
 skills/
 tests/
 docs/assets/
+docs/examples/
 projects/
 output/
 ```

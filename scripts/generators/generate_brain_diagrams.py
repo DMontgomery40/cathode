@@ -6,21 +6,22 @@ connecting arrows, and region indicators. Short labels (F3, Cz, Pz) are
 in Qwen's reliable range.
 
 Usage:
-    /opt/homebrew/bin/python3.10 generate_brain_diagrams.py
+    /opt/homebrew/bin/python3.10 scripts/generators/generate_brain_diagrams.py
 """
 
 import sys
 import time
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent))
+REPO_ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(REPO_ROOT))
 
 from core.runtime import load_repo_env
 load_repo_env()
 
 from core.image_gen import generate_image
 
-OUTPUT_DIR = Path(__file__).parent / "template_deck" / "backgrounds" / "brain_diagrams"
+OUTPUT_DIR = REPO_ROOT / "template_deck" / "backgrounds" / "brain_diagrams"
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 TEMPLATES = [

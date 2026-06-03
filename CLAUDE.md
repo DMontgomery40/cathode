@@ -38,7 +38,7 @@ npm run dev --prefix frontend -- --host 127.0.0.1 --port 9322
 CATHODE_MCP_PORT=8765 /opt/homebrew/bin/python3.10 cathode_mcp_server.py --transport streamable-http
 
 # Batch rebuild / regenerate
-python3.10 batch_regenerate.py
+python3.10 scripts/batch_regenerate.py
 
 # Tests
 PYTHONPATH=. /opt/homebrew/bin/python3.10 -m pytest -q
@@ -50,7 +50,7 @@ PYTHONPATH=. /opt/homebrew/bin/python3.10 -m pytest -q
 
 - `app.py`: Streamlit UI
 - `cathode_mcp_server.py`: MCP server
-- `batch_regenerate.py`: simple batch rebuild/regenerate CLI
+- `scripts/batch_regenerate.py`: simple batch rebuild/regenerate CLI
 
 ### Shared pipeline and storage
 

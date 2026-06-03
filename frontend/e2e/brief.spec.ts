@@ -363,7 +363,7 @@ test.describe('Brief Studio', () => {
       await page.getByLabel('Video Goal').fill('Show the one prompt to final render path.')
       await page.getByLabel('Audience').fill('Hiring manager')
       await page.getByLabel('Visual Source Strategy').selectOption('mixed_media')
-      await page.getByLabel('Workspace Path').fill('/Users/davidmontgomery/cathode')
+      await page.getByLabel('Workspace Path').fill('/Users/davidmontgomery/bettube-studio')
       await page.getByLabel('App URL').fill('http://127.0.0.1:9322')
 
       await page.route('**/api/jobs/make-video', async (route) => {
@@ -371,7 +371,7 @@ test.describe('Brief Studio', () => {
         expect(payload.project_name).toBe('brief_live_demo')
         expect((payload.brief as Record<string, unknown>).video_goal).toBe('Show the one prompt to final render path.')
         expect((payload.brief as Record<string, unknown>).composition_mode).toBe('auto')
-        expect((payload.agent_demo_profile as Record<string, unknown>).workspace_path).toBe('/Users/davidmontgomery/cathode')
+        expect((payload.agent_demo_profile as Record<string, unknown>).workspace_path).toBe('/Users/davidmontgomery/bettube-studio')
         await route.fulfill({
           status: 200,
           contentType: 'application/json',

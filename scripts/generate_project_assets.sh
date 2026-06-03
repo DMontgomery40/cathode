@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Generate assets and render a Cathode project.
-# Run from the cathode directory: ./generate_project_assets.sh projects/<project_name>
+# Run from the repository root:
+#   scripts/generate_project_assets.sh projects/<project_name>
 
 set -euo pipefail
 
@@ -11,7 +12,8 @@ if [ -f .env ]; then
 fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-cd "$SCRIPT_DIR"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+cd "$REPO_ROOT"
 
 project_dir="${1:-}"
 
