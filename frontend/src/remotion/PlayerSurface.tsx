@@ -1,6 +1,6 @@
 import { Player } from '@remotion/player'
 import { clsx } from 'clsx'
-import { CathodeRender, FALLBACK_PROPS, type CathodeRenderProps } from './index.tsx'
+import { BetTubeStudioRender, FALLBACK_PROPS, type BetTubeStudioRenderProps } from './index.tsx'
 
 interface PlayerSurfaceProps {
   manifest: Record<string, unknown> | null | undefined
@@ -18,7 +18,7 @@ export function PlayerSurface({
   className,
   height = 360,
 }: PlayerSurfaceProps) {
-  const props = (manifest ?? {}) as CathodeRenderProps
+  const props = (manifest ?? {}) as BetTubeStudioRenderProps
   const compositionWidth = asPositiveNumber(props.width, FALLBACK_PROPS.width)
   const compositionHeight = asPositiveNumber(props.height, FALLBACK_PROPS.height)
   const fps = asPositiveNumber(props.fps, FALLBACK_PROPS.fps)
@@ -34,7 +34,7 @@ export function PlayerSurface({
       className={clsx('overflow-hidden rounded-[var(--radius-lg)] border border-[var(--border-subtle)] bg-[var(--surface-void)]', className)}
     >
       <Player
-        component={CathodeRender}
+        component={BetTubeStudioRender}
         inputProps={{
           ...FALLBACK_PROPS,
           ...props,

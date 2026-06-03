@@ -1,5 +1,5 @@
 #!/bin/bash
-# Start script for Cathode.
+# Start script for betTube Studio.
 # Default mode: Streamlit app on 8517.
 # React mode: FastAPI on 9321 + Vite on 9322 via `./start.sh --react`.
 
@@ -132,7 +132,7 @@ run_streamlit() {
     "import streamlit, kokoro, anthropic, openai, replicate" \
     "$ROOT_DIR/requirements.txt"
 
-  echo "Starting Cathode Streamlit app..."
+  echo "Starting betTube Studio Streamlit app..."
   echo "Opening http://127.0.0.1:${STREAMLIT_PORT}"
   cd "$ROOT_DIR"
   local streamlit_cmd=(
@@ -160,7 +160,7 @@ run_react_stack() {
 
   trap cleanup EXIT INT TERM
 
-  echo "Starting Cathode API..."
+  echo "Starting betTube Studio API..."
   echo "  API:      http://127.0.0.1:${CATHODE_API_PORT}"
   echo "  Frontend: http://127.0.0.1:${CATHODE_FRONTEND_PORT}"
 
@@ -168,9 +168,9 @@ run_react_stack() {
   "$PYTHON" -m uvicorn server.app:app --host 127.0.0.1 --port "${CATHODE_API_PORT}" --reload &
   API_PID=$!
 
-  wait_for_http "http://127.0.0.1:${CATHODE_API_PORT}/api/health" "Cathode API"
+  wait_for_http "http://127.0.0.1:${CATHODE_API_PORT}/api/health" "betTube Studio API"
 
-  echo "Starting Cathode React app..."
+  echo "Starting betTube Studio React app..."
   npm run dev --prefix "$ROOT_DIR/frontend" -- --host 127.0.0.1 --port "${CATHODE_FRONTEND_PORT}"
 }
 

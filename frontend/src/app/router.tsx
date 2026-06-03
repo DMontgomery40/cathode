@@ -3,6 +3,7 @@ import { AppShell } from './AppShell.tsx'
 import { RouteErrorBoundary } from './ErrorBoundary.tsx'
 import { WorkspaceHome } from '../routes/WorkspaceHome.tsx'
 import { BriefStudio } from '../routes/BriefStudio.tsx'
+import { ShortFormStudio } from '../routes/ShortFormStudio.tsx'
 import { ProjectsList } from '../routes/ProjectsList.tsx'
 import { SceneTimeline } from '../routes/SceneTimeline.tsx'
 import { RenderControl } from '../routes/RenderControl.tsx'
@@ -18,6 +19,7 @@ export const router = createBrowserRouter([
     ),
     children: [
       { index: true, element: <WorkspaceHome /> },
+      { path: 'short-form', element: <ShortFormStudio /> },
       { path: 'projects', element: <ProjectsList /> },
       { path: 'projects/:projectId/brief', element: <BriefStudio /> },
       { path: 'projects/:projectId/scenes', element: <SceneTimeline /> },

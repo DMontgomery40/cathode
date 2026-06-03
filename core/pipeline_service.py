@@ -24,6 +24,7 @@ from .demo_assets import (
 from .director import analyze_style_references_with_metadata, rewrite_prompt_for_synonym_fallback_with_metadata
 from .image_gen import build_exact_text_edit_prompt, edit_image, generate_scene_image
 from .project_schema import (
+    apply_short_form_render_profile,
     default_image_profile,
     has_agent_demo_context,
     infer_composition_mode,
@@ -76,6 +77,8 @@ def prepare_project_execution_profiles(
         next_video_profile["provider"] = "agent"
 
     resolved_render_profile = dict(render_profile or {})
+    if normalized_brief.get("short_form_format") == "vertical_short":
+        resolved_render_profile = apply_short_form_render_profile(resolved_render_profile)
     resolved_render_profile["render_strategy"] = resolve_render_strategy(
         resolved_render_profile.get("render_strategy")
     )
@@ -1248,10 +1251,32 @@ def render_project_service(
         plan = load_plan(project_dir) or plan
 
     scenes = plan.get("scenes", [])
-    render_profile = dict(plan.get("meta", {}).get("render_profile") or {})
-    if fps is not None:
+    meta = plan.setdefault("meta", {})
+    brief = meta.get("brief") if isinstance(meta.get("brief"), dict) else {}
+    is_short_form = (
+        brief.get("short_form_format") == "vertical_short"
+        or meta.get("pipeline_mode") == "short_form_vertical_v1"
+    )
+    render_profile = dict(meta.get("render_profile") or {})
+    if is_short_form:
+        next_render_profile = apply_short_form_render_profile(render_profile)
+        if next_render_profile != render_profile:
+            render_profile = next_render_profile
+            meta["render_profile"] = render_profile
+            save_plan(project_dir, plan)
+            plan = load_plan(project_dir) or plan
+            meta = plan.setdefault("meta", {})
+            render_profile = apply_short_form_render_profile(
+                dict(meta.get("render_profile") or {})
+            )
+            meta["render_profile"] = render_profile
+            scenes = plan.get("scenes", [])
+        else:
+            render_profile = next_render_profile
+            meta["render_profile"] = render_profile
+    elif fps is not None:
         render_profile["fps"] = int(fps)
-        plan.setdefault("meta", {})["render_profile"] = render_profile
+        meta["render_profile"] = render_profile
 
     render_backend = str(render_profile.get("render_backend") or "ffmpeg").strip().lower() or "ffmpeg"
     missing_visuals = [

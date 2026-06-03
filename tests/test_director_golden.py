@@ -21,7 +21,7 @@ def test_build_storyboard_payload_uses_director_tool_and_full_prompt():
     )
 
     assert payload["tools"][0]["name"] == "emit_storyboard"
-    assert "Cathode" in payload["system"]
+    assert "betTube Studio" in payload["system"]
     assert "Use Bella as narrator" in payload["messages"][0]["content"]
     assert '"staging_notes"' in payload["messages"][0]["content"]
 

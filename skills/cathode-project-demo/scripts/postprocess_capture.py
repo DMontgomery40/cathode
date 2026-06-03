@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Trim, crop, and normalize raw capture clips into Cathode-ready footage."""
+"""Trim, crop, and normalize raw capture clips into footage ready for betTube Studio."""
 
 from __future__ import annotations
 
@@ -21,7 +21,7 @@ TARGET_FPS = 24
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Postprocess raw capture clips into Cathode-ready footage.")
+    parser = argparse.ArgumentParser(description="Postprocess raw capture clips into footage ready for betTube Studio.")
     parser.add_argument("--capture-manifest", required=True, help="JSON file listing raw clips and optional focus boxes.")
     parser.add_argument("--output-manifest", help="Optional output path. Defaults beside the input manifest.")
     return parser.parse_args()

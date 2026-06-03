@@ -1,0 +1,18 @@
+Short-form vertical capability.
+
+- Treat this as one 30-50 second vertical short, not a compressed full explainer.
+- Build around one hook promise, 3-5 beats, one payoff, and one CTA after the payoff.
+- The first 1-3 seconds must make the viewer care immediately. Do not open with greetings, agenda-setting, channel intros, or "in this video".
+- Use visible attention resets every 3-5 seconds: new framing, proof, caption emphasis, example, contradiction, cut, or visual pattern change.
+- Keep captions central to comprehension. Write meaning chunks or keyword cards rather than dumping a transcript into on-screen text.
+- Respect the selected tier:
+  - `mass-native-technical`: broad cold-feed energy, simple language, restrained social-native punch.
+  - `dev-native-credible`: proof-first, technically credible, inspectable visuals, less slang.
+- Respect the selected approach:
+  - `public-reframe`: source is research/input; choose one public-facing idea and use fresh vertical visuals unless footage is the proof.
+  - `source-cutdown`: footage is the primary proof; choose one standalone moment.
+  - `mixed-media-proof`: combine source proof moments with fresh vertical visuals.
+- Use the source anchor card and source context lock as hard boundaries for generated visual prompts. Do not drift into unrelated domains, workflows, objects, claims, users, products, sports, platforms, or outcomes.
+- If the topic is evidence-heavy, include an evidence-boundary beat that states what the source actually shows without overclaiming.
+- Favor tight, mobile-safe authored visuals with large simple focal points. Avoid tiny text, crowded dashboards, unreadable UI, random shake/zoom effects, forced youth slang, and deceptive clickbait.
+- Each scene must justify its place in the short by revealing proof, raising stakes, simplifying the idea, or moving toward the payoff.

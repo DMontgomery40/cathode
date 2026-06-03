@@ -84,6 +84,188 @@ def test_render_profile_defaulting_preserves_partial_override():
     assert "Classic image/video assembly" in render_profile["render_backend_reason"]
 
 
+def test_short_form_brief_fields_normalize_and_infer_vertical_render_profile():
+    plan = backfill_plan(
+        {
+            "meta": {
+                "project_name": "vertical_demo",
+                "brief": {
+                    "project_name": "vertical_demo",
+                    "source_material": "Make a short.",
+                    "short_form_format": "vertical_short",
+                    "short_form_tier": "dev-native-credible",
+                    "short_form_approach": "public-reframe",
+                    "caption_strategy": "meaning-card-captions",
+                    "platform_targets": ["tiktok", "bad-platform", "youtube_shorts"],
+                },
+            },
+            "scenes": [],
+        }
+    )
+
+    brief = plan["meta"]["brief"]
+    render_profile = plan["meta"]["render_profile"]
+
+    assert brief["short_form_format"] == "vertical_short"
+    assert brief["platform_targets"] == ["tiktok", "youtube-shorts"]
+    assert render_profile["aspect_ratio"] == "9:16"
+    assert render_profile["width"] == 928
+    assert render_profile["height"] == 1664
+    assert render_profile["render_strategy"] == "force_ffmpeg"
+    assert plan["meta"]["pipeline_mode"] == "short_form_vertical_v1"
+
+
+def test_minimal_short_form_brief_gets_mode_defaults():
+    plan = backfill_plan(
+        {
+            "meta": {
+                "project_name": "minimal_short",
+                "brief": {
+                    "project_name": "minimal_short",
+                    "source_material": "Make a short.",
+                    "short_form_format": "vertical_short",
+                },
+            },
+            "scenes": [],
+        }
+    )
+
+    brief = plan["meta"]["brief"]
+
+    assert brief["short_form_tier"] == "dev-native-credible"
+    assert brief["short_form_approach"] == "public-reframe"
+    assert brief["caption_strategy"] == "meaning-card-captions"
+    assert brief["short_form_duration_seconds"] == 42.0
+    assert brief["target_length_minutes"] == 0.7
+    assert brief["platform_targets"] == ["tiktok", "instagram-reels", "youtube-shorts"]
+    assert brief["visual_source_strategy"] == "images_only"
+    assert brief["composition_mode"] == "classic"
+
+
+def test_short_form_approach_drives_visual_source_strategy():
+    plan = backfill_plan(
+        {
+            "meta": {
+                "project_name": "mixed_short",
+                "brief": {
+                    "project_name": "mixed_short",
+                    "source_material": "Make a mixed proof short.",
+                    "short_form_format": "vertical_short",
+                    "short_form_approach": "mixed-media-proof",
+                    "visual_source_strategy": "images_only",
+                    "video_scene_style": "auto",
+                    "short_form_duration_seconds": 12,
+                },
+            },
+            "scenes": [],
+        }
+    )
+
+    brief = plan["meta"]["brief"]
+
+    assert brief["short_form_duration_seconds"] == 30.0
+    assert brief["target_length_minutes"] == 0.5
+    assert brief["visual_source_strategy"] == "mixed_media"
+    assert brief["video_scene_style"] == "mixed"
+
+
+def test_backfill_plan_downgrades_stale_short_form_pipeline_mode():
+    plan = backfill_plan(
+        {
+            "meta": {
+                "project_name": "formerly_short",
+                "pipeline_mode": "short_form_vertical_v1",
+                "brief": {
+                    "project_name": "formerly_short",
+                    "source_material": "Make a normal explainer again.",
+                    "short_form_format": "",
+                    "short_form_tier": "dev-native-credible",
+                    "short_form_approach": "public-reframe",
+                    "caption_strategy": "meaning-card-captions",
+                    "platform_targets": ["tiktok"],
+                    "hook_promise": "Stale hook",
+                    "payoff": "Stale payoff",
+                },
+            },
+            "scenes": [],
+        }
+    )
+
+    assert plan["meta"]["brief"]["short_form_format"] == ""
+    assert plan["meta"]["brief"]["short_form_tier"] == ""
+    assert plan["meta"]["brief"]["short_form_approach"] == ""
+    assert plan["meta"]["brief"]["caption_strategy"] == ""
+    assert plan["meta"]["brief"]["platform_targets"] == []
+    assert plan["meta"]["brief"]["hook_promise"] == ""
+    assert plan["meta"]["brief"]["payoff"] == ""
+    assert plan["meta"]["pipeline_mode"] == "generic_slides_v1"
+    assert plan["meta"]["render_profile"]["aspect_ratio"] == "16:9"
+
+
+def test_short_form_brief_overrides_stale_landscape_render_profile():
+    plan = backfill_plan(
+        {
+            "meta": {
+                "project_name": "retuned_short",
+                "brief": {
+                    "project_name": "retuned_short",
+                    "source_material": "Retune the existing project into a short.",
+                    "short_form_format": "vertical_short",
+                },
+                "render_profile": {
+                    "aspect_ratio": "16:9",
+                    "width": 1664,
+                    "height": 928,
+                    "fps": 24,
+                    "render_strategy": "auto",
+                },
+            },
+            "scenes": [],
+        }
+    )
+
+    render_profile = plan["meta"]["render_profile"]
+
+    assert render_profile["aspect_ratio"] == "9:16"
+    assert render_profile["width"] == 928
+    assert render_profile["height"] == 1664
+    assert render_profile["fps"] == 30
+    assert render_profile["render_strategy"] == "force_ffmpeg"
+    assert plan["meta"]["pipeline_mode"] == "short_form_vertical_v1"
+
+
+def test_short_form_brief_repairs_partial_vertical_render_profile():
+    plan = backfill_plan(
+        {
+            "meta": {
+                "project_name": "partial_vertical_short",
+                "brief": {
+                    "project_name": "partial_vertical_short",
+                    "source_material": "Retune the existing project into a short.",
+                    "short_form_format": "vertical_short",
+                },
+                "render_profile": {
+                    "aspect_ratio": "9:16",
+                    "width": 1664,
+                    "height": 928,
+                    "fps": 24,
+                    "render_strategy": "auto",
+                },
+            },
+            "scenes": [],
+        }
+    )
+
+    render_profile = plan["meta"]["render_profile"]
+
+    assert render_profile["aspect_ratio"] == "9:16"
+    assert render_profile["width"] == 928
+    assert render_profile["height"] == 1664
+    assert render_profile["fps"] == 30
+    assert render_profile["render_strategy"] == "force_ffmpeg"
+    assert render_profile["render_backend"] == "ffmpeg"
+
+
 def test_backfill_plan_preserves_video_scene_metadata():
     plan = backfill_plan(
         {

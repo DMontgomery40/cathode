@@ -1,4 +1,4 @@
-"""Agent-driven demo orchestration helpers for Cathode video scenes."""
+"""Agent-driven demo orchestration helpers for betTube Studio video scenes."""
 
 from __future__ import annotations
 
@@ -108,11 +108,11 @@ def build_agent_demo_prompt(
     }
 
     return (
-        "You are running as Cathode's explicit Agent Demo path.\n"
+        "You are running as betTube Studio's explicit Agent Demo path.\n"
         "This is separate from local video generation and should use the packaged live-demo workflow, not the image pipeline.\n\n"
         f"Repository root: {REPO_ROOT}\n"
         f"Skill to use: {SKILL_PATH}\n"
-        f"Existing Cathode project to update in place: {project_dir}\n"
+        f"Existing betTube Studio project to update in place: {project_dir}\n"
         f"Demo target workspace: {resolved_workspace}\n"
         f"Target app URL (if already running): {str(app_url or '').strip() or '(infer or launch from workspace)'}\n"
         f"Launch command override: {str(launch_command or '').strip() or '(infer if possible)'}\n"
@@ -122,12 +122,12 @@ def build_agent_demo_prompt(
         "2. Work scene-by-scene through the listed video scenes.\n"
         "3. For each target scene, ensure narration audio exists or generate it first so audio length becomes the timing source of truth.\n"
         "4. Capture/review/select footage, then trim or speed-adjust the chosen clip so it fits the narration intent.\n"
-        "5. Update the existing Cathode project in place: write the chosen clip path into the scene's video_path, preserve scene_type=video, clear image_path if needed, set video_trim_start/video_trim_end/video_playback_speed/video_hold_last_frame thoughtfully, and generate preview clips where helpful.\n"
+        "5. Update the existing betTube Studio project in place: write the chosen clip path into the scene's video_path, preserve scene_type=video, clear image_path if needed, set video_trim_start/video_trim_end/video_playback_speed/video_hold_last_frame thoughtfully, and generate preview clips where helpful.\n"
         "6. Keep operator-facing artifacts and logs; do not fake completion from code inspection alone.\n"
         f"7. When the targeted video scenes are complete, {run_label}.\n\n"
         "Important:\n"
         "- Treat projects/<project>/plan.json as the source of truth.\n"
-        "- Do not create a brand new Cathode project; update the existing one in place.\n"
+        "- Do not create a brand new betTube Studio project; update the existing one in place.\n"
         "- Prefer the packaged skill scripts and review loop over ad-hoc screenshots.\n"
         "- If a capture attempt looks weak, use the retry workflow instead of shipping it blindly.\n"
         "- Keep logs readable and explicit about what scene you are on and what command/script is running.\n\n"

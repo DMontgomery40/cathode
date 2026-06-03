@@ -267,7 +267,7 @@ async def generate_image_for_scene(
         raise HTTPException(
             status_code=400,
             detail=(
-                "This scene is on Cathode's native renderer path. "
+                "This scene is on betTube Studio's native renderer path. "
                 "Use Generate Motion Preview or Render Video instead of Generate Image."
             ),
         )

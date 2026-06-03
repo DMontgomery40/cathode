@@ -1,4 +1,4 @@
-"""Generic live-demo footage helpers for Cathode and bundled demo skills."""
+"""Generic live-demo footage helpers for betTube Studio and bundled demo skills."""
 
 from __future__ import annotations
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Batch rebuild Cathode projects from metadata and regenerate assets.
+Batch rebuild betTube Studio projects from metadata and regenerate assets.
 
 Usage:
     python3.10 scripts/batch_regenerate.py
@@ -103,7 +103,7 @@ def regenerate_project(project_dir: Path, dry_run: bool = False) -> bool:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Batch regenerate Cathode projects")
+    parser = argparse.ArgumentParser(description="Batch regenerate betTube Studio projects")
     parser.add_argument("--dry-run", action="store_true", help="Show what would be done without doing it")
     parser.add_argument("--projects", type=str, help="Comma-separated list of project names to process")
     args = parser.parse_args()

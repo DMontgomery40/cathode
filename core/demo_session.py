@@ -88,7 +88,7 @@ def build_live_demo_session(
     resolved_expected_url = str(expected_url or app_url or infer_expected_url(root) or "").strip()
     if launch and not resolved_expected_url:
         raise ValueError(
-            "An expected_url is required when Cathode launches the target app locally."
+            "An expected_url is required when betTube Studio launches the target app locally."
         )
 
     artifacts = {

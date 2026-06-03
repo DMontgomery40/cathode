@@ -118,7 +118,7 @@ export function ProjectsList() {
         ) : !projects || projects.length === 0 ? (
           <WorkspaceEmptyState
             title="No projects yet"
-            copy="Create the first project and Cathode will give it a brief, a scene timeline, and a local artifact trail."
+            copy="Create the first project and betTube Studio will give it a brief, a scene timeline, and a local artifact trail."
             icon={(
               <svg
                 width="48"

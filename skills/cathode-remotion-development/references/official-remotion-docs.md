@@ -17,15 +17,15 @@ Verified official links used during the 2026-03-14 motion-first 3D overhaul:
 - Sequence
   - Use when debugging scene timing, freeze/hold behavior, narration extension, or per-scene composition timing.
 - TransitionSeries
-  - Use when debugging scene-to-scene transitions and how Cathode chains scenes in the final composition.
+  - Use when debugging scene-to-scene transitions and how betTube Studio chains scenes in the final composition.
 - Three / `@remotion/three`
-  - Use when building or debugging 3D scenes. Cathode's `surreal_tableau_3d` should use this integration, not an arbitrary standalone fiber canvas path.
+  - Use when building or debugging 3D scenes. betTube Studio's `surreal_tableau_3d` should use this integration, not an arbitrary standalone fiber canvas path.
 - AI system prompt
-  - Use when comparing Cathode's treatment-planner constraints against Remotion's own AI-oriented composition guidance.
+  - Use when comparing betTube Studio's treatment-planner constraints against Remotion's own AI-oriented composition guidance.
 - Prompt gallery
   - Use when you need examples of meaningful composition ideas or prompt framing, not just syntax reminders.
 
-## Cathode-Specific Reading Order
+## betTube Studio Reading Order
 
 1. Player
 2. Sequence

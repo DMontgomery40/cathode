@@ -1,4 +1,4 @@
-# Repository Agents (Cathode)
+# Repository Agents (betTube Studio)
 
 This file is for AI agents working in this repo.
 
@@ -11,9 +11,9 @@ This file is for AI agents working in this repo.
 2. Treat `projects/<project>/plan.json` as the source of truth for storyboard state.
 3. Keep pipeline behavior generic and product-facing. Do not reintroduce domain-specific workflows.
 
-## What Cathode Is
+## What betTube Studio Is
 
-Cathode has two main surfaces:
+betTube Studio has two main surfaces:
 
 - `app.py`: the local Streamlit app
 - `cathode_mcp_server.py`: the MCP server for agent/client integrations
@@ -48,11 +48,11 @@ Both rely on the same underlying pipeline services and project store.
 ## Pipeline Integrity Rules
 
 - Do not bypass the brief -> director -> normalized plan pipeline for product work.
-- Do not bypass, demote, or misdescribe the brief wizard / Brief Studio. It is how Cathode captures intent, source material, and constraints before the pipeline runs.
+- Do not bypass, demote, or misdescribe the brief wizard / Brief Studio. It is how betTube Studio captures intent, source material, and constraints before the pipeline runs.
 - Preserve the one-click raw-brief flow that powers the primary Brief Studio button. New prompt or planner work must keep the `make_video` path capable of turning a raw user dump into a finished project without hand-authored scene content.
 - Do not describe storyboard generation as fake, optional, or something the product should skip past. Storyboard planning is a core product step, even when later stages run automatically in the background.
 - If the brief flow is missing fields or cannot express a needed behavior, extend the brief schema and wiring instead of inventing side channels or per-project overrides.
-- If Cathode needs to support a new storytelling pattern, scene shape, or media-planning behavior, update the real pipeline:
+- If betTube Studio needs to support a new storytelling pattern, scene shape, or media-planning behavior, update the real pipeline:
   - `core/director.py`
   - the relevant prompts under `prompts/`
   - normalization/schema code when required
@@ -74,13 +74,13 @@ Both rely on the same underlying pipeline services and project store.
 ## Director Contract Rules
 
 - Claude gets the full normalized brief plus the full raw user input.
-- In Cathode's product workflow, Claude/Anthropic is the creative scene writer. OpenAI may handle downstream deterministic machinery or treatment planning, but should not replace Claude as the scene author.
+- In betTube Studio's product workflow, Claude/Anthropic is the creative scene writer. OpenAI may handle downstream deterministic machinery or treatment planning, but should not replace Claude as the scene author.
 - Brief options select capability blocks and examples for the director prompt; they do not replace the core prompt or the raw user dump.
-- Remotion is not “extra UI stuff.” It is Cathode’s deterministic manifestation layer for scenes that Claude dreams up.
+- Remotion is not “extra UI stuff.” It is betTube Studio’s deterministic manifestation layer for scenes that Claude dreams up.
 - Pure creative briefs should remain image-first by default. Do not silently drag whimsical, editorial, surreal, or storybook briefs into generic motion treatment unless the brief clearly asks for motion/data/demo structure or a downstream treatment planner has an explicit product reason to do so.
-- Keep the model-facing scene contract thin. Avoid forcing Claude to emit brittle nested renderer schemas when Cathode can map creative signals into deterministic composition internally.
-- The director owns narrative and art direction. If Cathode needs Remotion-aware staging, transitions, timing, or 3D treatment selection, add a second planner stage after storyboard generation rather than bloating the director prompt with renderer mechanics.
-- Do not ask the director to generate arbitrary Remotion TSX or freeform component code. Cathode remains registry-based.
+- Keep the model-facing scene contract thin. Avoid forcing Claude to emit brittle nested renderer schemas when betTube Studio can map creative signals into deterministic composition internally.
+- The director owns narrative and art direction. If betTube Studio needs Remotion-aware staging, transitions, timing, or 3D treatment selection, add a second planner stage after storyboard generation rather than bloating the director prompt with renderer mechanics.
+- Do not ask the director to generate arbitrary Remotion TSX or freeform component code. betTube Studio remains registry-based.
 - Preserve backward compatibility for stored plans that still carry older composition-hint fields.
 
 ## Prompt Example Rules
@@ -88,7 +88,7 @@ Both rely on the same underlying pipeline services and project store.
 - Raw corpus artifacts belong under ignored `experiments/director_golden/`.
 - Promoted examples belong under tracked `prompts/director_examples/`.
 - Do not move raw Anthropic transcripts into `prompts/`.
-- A promoted example is not valid unless it parsed, normalized through Cathode’s planner, produced a valid Remotion manifest, and yielded at least a preview/frame.
+- A promoted example is not valid unless it parsed, normalized through betTube Studio’s planner, produced a valid Remotion manifest, and yielded at least a preview/frame.
 - Match promoted examples to the brief intent. Do not let one abstract or product-oriented example shelf become the implicit default for unrelated whimsical/storybook briefs.
 
 ## Memory Rules
@@ -99,7 +99,7 @@ Both rely on the same underlying pipeline services and project store.
 
 ## Live Demo Skill
 
-Cathode now ships a packaged live-demo skill:
+betTube Studio now ships a packaged live-demo skill:
 
 - canonical path: `skills/cathode-project-demo/`
 - Claude mirror: `.claude/skills/cathode-project-demo/`
@@ -109,21 +109,21 @@ Treat this as a generic product-demo workflow, not a repo-specific shortcut. It 
 - booting or attaching to a live app
 - capturing fresh footage
 - reviewing the capture through a spawned reviewer sub-agent before handoff
-- passing reviewed clips into Cathode as `footage_paths` or `footage_manifest`
+- passing reviewed clips into betTube Studio as `footage_paths` or `footage_manifest`
 
 Do not assume README screenshots exist or are good enough. Fresh captured footage is the default.
 The reviewer sub-agent should be given frames and a short gut-check prompt, not a long JSON-heavy briefing.
-Save the raw reviewer reply in the bundle, then have the parent agent translate it into the structured observations/report that Cathode uses for retry logic and handoff.
+Save the raw reviewer reply in the bundle, then have the parent agent translate it into the structured observations/report that betTube Studio uses for retry logic and handoff.
 Use the packaged `capture_live_demo.py` script for deterministic browser capture and `apply_retry_actions.py` when the review report recommends another bounded attempt.
 
 ## Remotion Development Skill
 
-Cathode now ships a packaged Remotion-development skill:
+betTube Studio now ships a packaged Remotion-development skill:
 
 - canonical path: `skills/cathode-remotion-development/`
 - Claude mirror: `.claude/skills/cathode-remotion-development/`
 
-Use it when tracing or extending the Cathode Remotion path so future agents do not have to rediscover:
+Use it when tracing or extending the betTube Studio Remotion path so future agents do not have to rediscover:
 
 - the planner -> schema -> treatment -> manifest -> renderer flow
 - the canonical `scene.composition` contract
@@ -159,7 +159,7 @@ Use it when tracing or extending the Cathode Remotion path so future agents do n
 
 ## Operator UX Rules
 
-- Long-running or failure-prone operations need visible operator feedback in the app: pending state, useful error text, and enough context to understand what Cathode tried to do.
+- Long-running or failure-prone operations need visible operator feedback in the app: pending state, useful error text, and enough context to understand what betTube Studio tried to do.
 - Prefer showing the effective request parameters for provider-backed actions when they materially affect output quality.
 - When provider/model choice materially changes spend, surface the cost basis where the choice is made and again where the resulting plan is estimated. Do not hide meaningful price deltas behind one default label.
 - Persisted job logs should be surfaced through the product where practical; do not hide them as backend-only artifacts.
@@ -179,7 +179,7 @@ These are intentionally different:
 - Favor the fast default workflow first; present fine-tuning as optional power.
 - Keep MCP tool behavior practical and bounded.
 - Do not add external publish/QC systems or work-specific automations to this fork.
-- Keep reviewed footage plumbing generic. Do not add domain-specific capture or review logic to core Cathode.
+- Keep reviewed footage plumbing generic. Do not add domain-specific capture or review logic to core betTube Studio.
 - Do not solve product gaps by manually authoring project-specific output. Solve them in the reusable pipeline.
 
 **It is CRITICAL AND MANDATORY THAT YOU UPDATE MEMORY.md with anything that a future agent would need to know**

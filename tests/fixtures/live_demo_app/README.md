@@ -1,6 +1,6 @@
 # Live Demo Fixture
 
-This fixture app exists to exercise the Cathode live-demo workflow from scratch.
+This fixture app exists to exercise the betTube Studio live-demo workflow from scratch.
 
 It intentionally includes:
 

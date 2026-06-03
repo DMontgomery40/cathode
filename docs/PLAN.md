@@ -3,7 +3,7 @@
 ## Summary
 Restore the old “masterpiece” behavior for pure creative briefs by making the default path image-first again and fixing the director prompt/example shelf so Claude leads with rich visual art direction instead of renderer-aware pseudo-structure.
 
-Then add a second, optional Remotion treatment-planner stage that is informed by a repo-local adaptation of the official Remotion AI system prompt. That second stage may choose Cathode-supported motion treatments, transitions, timing, and 3D families, but it must stay inside Cathode’s fixed composition registry and must not generate arbitrary TSX.
+Then add a second, optional Remotion treatment-planner stage that is informed by a repo-local adaptation of the official Remotion AI system prompt. That second stage may choose motion treatments, transitions, timing, and 3D families supported by betTube Studio, but it must stay inside betTube Studio’s fixed composition registry and must not generate arbitrary TSX.
 
 ## Key Changes
 - Re-split planning into two stages:
@@ -17,7 +17,7 @@ Then add a second, optional Remotion treatment-planner stage that is informed by
   - stop using the abstract `static_image_control` / `pure_creative_concept` shelf as the universal fallback for all creative briefs
   - add a separate promoted example shelf for whimsical narrative / contradictory / storybook / surreal creative briefs
   - keep product-demo, quote, ranked-data, and software-demo examples behind explicit intent selection instead of defaulting them into unrelated briefs
-- Add a new Remotion treatment-planner prompt under `prompts/` based on the official Remotion AI system prompt, but adapted to Cathode constraints:
+- Add a new Remotion treatment-planner prompt under `prompts/` based on the official Remotion AI system prompt, but adapted to betTube Studio constraints:
   - fixed composition registry only
   - allowed families, transitions, timing rules, overlays, and R3F usage
   - deterministic behavior only
@@ -73,7 +73,7 @@ Then add a second, optional Remotion treatment-planner stage that is informed by
 - Default pure creative briefs remain image-first.
 - Remotion treatment is a second planner layer, not the director’s primary job.
 - The official Remotion AI system prompt is distilled into repo-local prompts and constraints; it is not fetched live at runtime.
-- Cathode continues to use a fixed Remotion registry, not arbitrary model-authored TSX.
+- betTube Studio continues to use a fixed Remotion registry, not arbitrary model-authored TSX.
 - v1 of this fix prioritizes restoring creative quality first; treatment-planner upgrades are additive and conservative, not automatic for every whimsical brief.
 
 ## Implementation Notes
@@ -91,7 +91,7 @@ Then add a second, optional Remotion treatment-planner stage that is informed by
   2. Fix planner classification so explicit 3D/tableau scenes stop becoming text cards.
   3. Rebuild `surreal_tableau_3d` into a semantic deterministic renderer.
   4. Unify motion-scene editing on canonical `scene.composition`.
-  5. Add a repo skill pack and handoff references so future agents have a zero-search Cathode/Remotion path.
+  5. Add a repo skill pack and handoff references so future agents have a zero-search betTube Studio/Remotion path.
 - 2026-03-14: planner-side fix completed and verified.
   - `_apply_composition_mode_to_scenes()` now seeds motion scenes neutrally instead of pre-classifying them from narration length.
   - `core/composition_planner.py` now has explicit 3D/tableau/orbit heuristics and semantic `surreal_tableau_3d` props.
@@ -124,11 +124,11 @@ Then add a second, optional Remotion treatment-planner stage that is informed by
   - `Scene controls`, the scene chip, and save state now share the same horizontal band instead of stacking in a tall utility column.
   - `Collapse Panel` stays available but no longer burns a full extra header tier.
   - Coverage added in `frontend/e2e/scenes.spec.ts` to keep the header compact.
-- 2026-03-15: investigated Remotion's full-video Three.js ranking prompt as a benchmark Cathode does not currently meet.
+- 2026-03-15: investigated Remotion's full-video Three.js ranking prompt as a benchmark betTube Studio does not currently meet.
   - Official benchmark prompt: `https://www.remotion.dev/prompts/threejs-top-20-games-sold-ranking-1`
   - The prompt target is a single full 1920x1080 60fps 3D video with a programmed camera journey from rank 20 to rank 1, not a small per-scene 3D treatment.
-  - Cathode's current `three_data_stage` is not that. It is a four-item bar stage with overlay labels and a mild turntable camera.
-  - Cathode currently lacks a reusable registry family for a full-video 3D ranking world with structured item records, environment components, and timeline-driven camera stops.
+  - betTube Studio's current `three_data_stage` is not that. It is a four-item bar stage with overlay labels and a mild turntable camera.
+  - betTube Studio currently lacks a reusable registry family for a full-video 3D ranking world with structured item records, environment components, and timeline-driven camera stops.
 - 2026-03-14: starting with guardrail updates in `AGENTS.md` and `prompts/AGENTS.md` before changing the planner pipeline.
 - 2026-03-15: completed repo/prompt guardrail updates.
 - 2026-03-15: completed director prompt reset plus intent-specific example selection, including a promoted `whimsical_storybook__v1` example harvested through the director-golden workflow.

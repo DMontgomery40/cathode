@@ -13,18 +13,52 @@ import traceback
 import sys
 from contextlib import ExitStack
 
-import replicate
-from replicate import Client
-import requests
+
+class _MissingRequestsModule:
+    get = None
+    post = None
+
+try:
+    from replicate import Client
+except ImportError:  # Replicate is optional unless that provider is selected.
+    Client = None  # type: ignore[assignment]
+
+try:
+    import requests
+except ImportError as exc:  # Requests is only needed for cloud provider downloads.
+    requests = _MissingRequestsModule()  # type: ignore[assignment]
+    _REQUESTS_IMPORT_ERROR: ImportError | None = exc
+else:
+    _REQUESTS_IMPORT_ERROR = None
 
 from core.local_image_gen import DEFAULT_LOCAL_IMAGE_MODEL, generate_local_image
 from core.rate_limiter import image_limiter
 
-# Target dimensions for all generated/edited images (16:9 aspect ratio)
+# Default target dimensions for generated/edited images.
 TARGET_WIDTH = 1664
 TARGET_HEIGHT = 928
 TARGET_SIZE_DASHSCOPE = f"{TARGET_WIDTH}*{TARGET_HEIGHT}"
 TARGET_SIZE_OPENAI = f"{TARGET_WIDTH}x{TARGET_HEIGHT}"
+VERTICAL_TARGET_WIDTH = 928
+VERTICAL_TARGET_HEIGHT = 1664
+VERTICAL_TARGET_SIZE_DASHSCOPE = f"{VERTICAL_TARGET_WIDTH}*{VERTICAL_TARGET_HEIGHT}"
+VERTICAL_TARGET_SIZE_OPENAI = f"{VERTICAL_TARGET_WIDTH}x{VERTICAL_TARGET_HEIGHT}"
+SUPPORTED_IMAGE_TARGETS = {
+    "16:9": {
+        "width": TARGET_WIDTH,
+        "height": TARGET_HEIGHT,
+        "dashscope_size": TARGET_SIZE_DASHSCOPE,
+        "openai_size": TARGET_SIZE_OPENAI,
+        "replicate_aspect_ratio": "16:9",
+    },
+    "9:16": {
+        "width": VERTICAL_TARGET_WIDTH,
+        "height": VERTICAL_TARGET_HEIGHT,
+        "dashscope_size": VERTICAL_TARGET_SIZE_DASHSCOPE,
+        "openai_size": VERTICAL_TARGET_SIZE_OPENAI,
+        "replicate_aspect_ratio": "9:16",
+    },
+}
 DEFAULT_IMAGE_MODEL = "qwen/qwen-image-2512"
 DEFAULT_CODEX_IMAGE_MODEL = "gpt-image-2"
 DEFAULT_CODEX_IMAGE_QUALITY = "medium"
@@ -76,6 +110,26 @@ def _codex_helper_python_command() -> str:
     return "python3"
 
 
+def image_target_from_brief(brief: dict | None = None) -> dict[str, int | str]:
+    """Return the image generation target implied by a brief or render profile."""
+    raw = brief if isinstance(brief, dict) else {}
+    render_profile = raw.get("render_profile") if isinstance(raw.get("render_profile"), dict) else {}
+    aspect_ratio = "9:16" if raw.get("short_form_format") == "vertical_short" else ""
+    if not aspect_ratio:
+        aspect_ratio = str(render_profile.get("aspect_ratio") or "").strip()
+    if not aspect_ratio:
+        try:
+            width = int(render_profile.get("width") or 0)
+            height = int(render_profile.get("height") or 0)
+        except (TypeError, ValueError):
+            width = 0
+            height = 0
+        if width == VERTICAL_TARGET_WIDTH and height == VERTICAL_TARGET_HEIGHT:
+            aspect_ratio = "9:16"
+    target = SUPPORTED_IMAGE_TARGETS.get(aspect_ratio) or SUPPORTED_IMAGE_TARGETS["16:9"]
+    return dict(target)
+
+
 # Replicate client with timeout to prevent indefinite hangs
 # 120s timeout covers both cold-start queue delays and generation time
 _replicate_client = None
@@ -83,11 +137,23 @@ _replicate_client = None
 
 def _get_replicate_client() -> Client:
     """Get or create the Replicate client with timeout."""
+    if Client is None:
+        raise RuntimeError("The replicate package is not installed. Select a local/manual image provider or install replicate.")
     global _replicate_client
     if _replicate_client is None:
         _replicate_client = Client(timeout=120)  # 2 minute timeout
         _log("Created Replicate client with 120s timeout")
     return _replicate_client
+
+
+def _requests_module():
+    if (
+        _REQUESTS_IMPORT_ERROR is not None
+        and getattr(requests, "get", None) is None
+        and getattr(requests, "post", None) is None
+    ):
+        raise RuntimeError("The requests package is not installed. Cloud image provider downloads are unavailable.")
+    return requests
 
 
 def _ensure_png(path: Path) -> Path:
@@ -300,7 +366,7 @@ def _edit_image_replicate(
         image_url = str(output)
 
     # Download and save
-    response = requests.get(image_url, timeout=(5, 60))  # (connect, read)
+    response = _requests_module().get(image_url, timeout=(5, 60))  # (connect, read)
     response.raise_for_status()
     output_path.write_bytes(response.content)
 
@@ -359,7 +425,7 @@ def _edit_image_dashscope(
             "Authorization": f"Bearer {api_key}",
         }
         _log(f"  DashScope POST model={model} n={params.get('n')} size={params.get('size', '(default)')}")
-        resp = requests.post(endpoint, headers=headers, json=body, timeout=(10, 240))
+        resp = _requests_module().post(endpoint, headers=headers, json=body, timeout=(10, 240))
         _log(f"  DashScope response status: {resp.status_code}")
         try:
             payload = resp.json()
@@ -391,7 +457,7 @@ def _edit_image_dashscope(
             if idx == 0
             else output_path.with_name(f"{output_path.stem}__n{idx + 1}{output_path.suffix}")
         )
-        r = requests.get(url, timeout=(5, 120))
+        r = _requests_module().get(url, timeout=(5, 120))
         r.raise_for_status()
         out.write_bytes(r.content)
         if not first_written:
@@ -435,7 +501,7 @@ def _edit_image_openai_api(
 
     image_url = getattr(result.data[0], "url", None) if result.data else None
     if image_url:
-        response = requests.get(str(image_url), timeout=(5, 60))
+        response = _requests_module().get(str(image_url), timeout=(5, 60))
         response.raise_for_status()
         output_path.write_bytes(response.content)
         _ensure_png(output_path)
@@ -476,6 +542,9 @@ def generate_image(
 
     full_prompt = prompt
     _log(f"  Full prompt length: {len(full_prompt)} chars")
+    image_target = image_target_from_brief(brief)
+    aspect_ratio = str(image_target["replicate_aspect_ratio"])
+    _log(f"  image target: {aspect_ratio} {image_target['width']}x{image_target['height']}")
 
     # Run the model with rate limiting and retry
     def _call_replicate():
@@ -483,7 +552,7 @@ def generate_image(
         _log(f"  Calling client.run() with model: {model} (120s timeout)")
         inputs: dict = {
             "prompt": full_prompt,
-            "aspect_ratio": "16:9",
+            "aspect_ratio": aspect_ratio,
             "output_format": "png",
             "go_fast": False,
             "guidance": 5,
@@ -520,7 +589,7 @@ def generate_image(
     # Download and save the image
     _log(f"  Downloading image from URL...")
     try:
-        response = requests.get(image_url, timeout=(5, 60))  # (connect, read)
+        response = _requests_module().get(image_url, timeout=(5, 60))  # (connect, read)
         _log(f"  Download response status: {response.status_code}")
         response.raise_for_status()
         _log(f"  Downloaded {len(response.content)} bytes")
@@ -555,13 +624,14 @@ def generate_image_local(
     """Generate an image locally with the configured Hugging Face Qwen Image model."""
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
+    image_target = image_target_from_brief(brief)
 
     return generate_local_image(
         prompt=prompt,
         output_path=output_path,
         model=str(model or DEFAULT_LOCAL_IMAGE_MODEL).strip() or DEFAULT_LOCAL_IMAGE_MODEL,
-        width=TARGET_WIDTH,
-        height=TARGET_HEIGHT,
+        width=int(image_target["width"]),
+        height=int(image_target["height"]),
         seed=seed,
     )
 
@@ -575,7 +645,7 @@ def generate_image_codex_exec(
     brief: dict | None = None,
 ) -> Path:
     """Generate an image by asking the local Codex CLI to run the checked-in GPT Image helper."""
-    del apply_style, seed, brief
+    del apply_style, seed
 
     codex_path = shutil.which("codex")
     if not codex_path:
@@ -588,6 +658,8 @@ def generate_image_codex_exec(
 
     resolved_model = str(model or DEFAULT_CODEX_IMAGE_MODEL).strip() or DEFAULT_CODEX_IMAGE_MODEL
     resolved_quality = _codex_image_quality()
+    image_target = image_target_from_brief(brief)
+    openai_size = str(image_target["openai_size"])
 
     with tempfile.TemporaryDirectory(prefix="cathode-codex-image-") as tmp_dir:
         temp_root = Path(tmp_dir)
@@ -608,7 +680,7 @@ def generate_image_codex_exec(
                 "--model",
                 shlex.quote(resolved_model),
                 "--size",
-                shlex.quote(TARGET_SIZE_OPENAI),
+                shlex.quote(openai_size),
                 "--quality",
                 shlex.quote(resolved_quality),
                 "--output-format",
@@ -616,7 +688,7 @@ def generate_image_codex_exec(
             ]
         )
         agent_prompt = (
-            "You are Cathode's local Codex image-generation lane.\n"
+            "You are betTube Studio's local Codex image-generation lane.\n"
             "Run the exact command below once, do not rewrite it, and do not modify any files except the requested output image.\n\n"
             f"{helper_command}\n\n"
             f"After it finishes, verify the file exists at {output_path.resolve()} and return one JSON object only.\n"
@@ -723,7 +795,7 @@ def edit_image_codex_exec(
         ]
         helper_command = " ".join(helper_parts)
         agent_prompt = (
-            "You are Cathode's local Codex image-edit lane.\n"
+            "You are betTube Studio's local Codex image-edit lane.\n"
             "Run the exact command below once, do not rewrite it, and do not modify any files except the requested output image.\n\n"
             f"{helper_command}\n\n"
             f"After it finishes, verify the file exists at {output_path.resolve()} and return one JSON object only.\n"
@@ -899,7 +971,7 @@ def generate_scene_image(
     normalized_provider = str(provider).strip().lower()
     if normalized_provider == "manual":
         raise ValueError(
-            "AI image generation is disabled for this project. Upload a still image instead, or switch the image provider back to Cathode's Codex Exec still-image lane."
+            "AI image generation is disabled for this project. Upload a still image instead, or switch the image provider back to betTube Studio's Codex Exec still-image lane."
         )
 
     try:

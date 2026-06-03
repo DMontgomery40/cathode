@@ -199,7 +199,7 @@ type RemotionScene = {
   }
 }
 
-export type CathodeRenderProps = {
+export type BetTubeStudioRenderProps = {
   width?: number
   height?: number
   fps?: number
@@ -208,7 +208,7 @@ export type CathodeRenderProps = {
   scenes?: RemotionScene[]
 }
 
-export const FALLBACK_PROPS: Required<CathodeRenderProps> = {
+export const FALLBACK_PROPS: Required<BetTubeStudioRenderProps> = {
   width: 1664,
   height: 928,
   fps: 24,
@@ -218,14 +218,14 @@ export const FALLBACK_PROPS: Required<CathodeRenderProps> = {
     {
       uid: 'fallback',
       sceneType: 'motion',
-      title: 'Cathode Motion',
+      title: 'betTube Studio Motion',
       narration: 'Fallback motion scene',
       onScreenText: ['Fallback motion scene'],
       durationInFrames: 120,
       motion: {
         templateId: 'kinetic_title',
         props: {
-          headline: 'Cathode Motion',
+          headline: 'betTube Studio Motion',
           body: 'Fallback motion scene',
           kicker: 'Remotion',
           bullets: ['Prompts', 'Agents', 'Render'],
@@ -2830,7 +2830,7 @@ function ThreeDataStage({ scene }: { scene: RemotionScene }) {
   const callouts = normalizeDataStageCallouts(scene)
   const layoutVariant = semanticString(props, 'layoutVariant', primarySeries.type === 'bar' ? 'bars_with_band' : 'line_with_band')
   const headline = semanticString(props, 'headline', scene.title || primarySeries.label || 'Data stage')
-  const kicker = semanticString(props, 'kicker', primarySeries.label || scene.title || 'Cathode')
+  const kicker = semanticString(props, 'kicker', primarySeries.label || scene.title || 'betTube Studio')
   const rawYAxisLabel = String(data.yAxisLabel || '').trim()
   const yAxisLabel = rawYAxisLabel && rawYAxisLabel.toLowerCase() !== 'value'
     ? rawYAxisLabel
@@ -4109,7 +4109,7 @@ function MotionTemplateRenderer({ scene }: { scene: RemotionScene }) {
   const props = (scene.composition?.props ?? scene.motion?.props ?? {}) as Record<string, unknown>
   const headline = String(props.headline || scene.onScreenText[0] || scene.title || 'Motion beat')
   const body = String(props.body || scene.onScreenText.slice(1, 3).join(' ') || scene.narration || '')
-  const kicker = String(props.kicker || scene.title || 'Cathode')
+  const kicker = String(props.kicker || scene.title || 'betTube Studio')
   const bullets = (props.bullets as string[] | undefined) ?? scene.onScreenText.slice(0, 4)
 
   switch (templateId) {
@@ -4306,9 +4306,9 @@ function resolveTransitionPresentation(kind: string): any {
   return fade()
 }
 
-export function CathodeRender({
+export function BetTubeStudioRender({
   scenes = FALLBACK_PROPS.scenes,
-}: CathodeRenderProps) {
+}: BetTubeStudioRenderProps) {
   const hasTransitions = scenes.some((scene) => scene.composition?.transitionAfter?.kind)
 
   if (hasTransitions) {
@@ -4352,15 +4352,15 @@ export const RemotionRoot: React.FC = () => {
   return (
     <>
       <Composition
-        id="CathodeRender"
-        component={CathodeRender}
+        id="BetTubeStudioRender"
+        component={BetTubeStudioRender}
         defaultProps={FALLBACK_PROPS}
         width={FALLBACK_PROPS.width}
         height={FALLBACK_PROPS.height}
         fps={FALLBACK_PROPS.fps}
         durationInFrames={FALLBACK_PROPS.totalDurationInFrames}
         calculateMetadata={({ props }) => {
-          const safeProps = props as CathodeRenderProps
+          const safeProps = props as BetTubeStudioRenderProps
           return {
             width: safeProps.width || FALLBACK_PROPS.width,
             height: safeProps.height || FALLBACK_PROPS.height,

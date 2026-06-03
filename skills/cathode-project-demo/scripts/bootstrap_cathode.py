@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Prepare a Cathode checkout for skill-driven app or MCP usage."""
+"""Prepare a betTube Studio checkout for skill-driven app or MCP usage."""
 
 from __future__ import annotations
 
@@ -22,11 +22,11 @@ class BootstrapError(RuntimeError):
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Prepare or reuse a Cathode checkout and emit launch commands as JSON.",
+        description="Prepare or reuse a betTube Studio checkout and emit launch commands as JSON.",
     )
     parser.add_argument(
         "--repo-path",
-        help="Existing Cathode checkout to reuse. The script will not pull or checkout refs in this mode.",
+        help="Existing betTube Studio checkout to reuse. The script will not pull or checkout refs in this mode.",
     )
     parser.add_argument(
         "--checkout-dir",
@@ -45,7 +45,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--python",
         dest="python_bin",
-        help="Explicit Python 3.10 executable to use for the Cathode virtualenv.",
+        help="Explicit Python 3.10 executable to use for the betTube Studio virtualenv.",
     )
     parser.add_argument(
         "--update",
@@ -120,7 +120,7 @@ def find_python(explicit: str | None) -> Path:
         seen.add(resolved)
         if _probe_python(candidate):
             return Path(resolved).resolve()
-    raise BootstrapError("Python 3.10 is required for Cathode. Install python3.10 or pass --python /path/to/python3.10.")
+    raise BootstrapError("Python 3.10 is required for betTube Studio. Install python3.10 or pass --python /path/to/python3.10.")
 
 
 def validate_repo(repo_path: Path) -> None:
@@ -128,7 +128,7 @@ def validate_repo(repo_path: Path) -> None:
     missing = [name for name in required if not (repo_path / name).exists()]
     if missing:
         joined = ", ".join(missing)
-        raise BootstrapError(f"{repo_path} does not look like a Cathode checkout. Missing: {joined}")
+        raise BootstrapError(f"{repo_path} does not look like a betTube Studio checkout. Missing: {joined}")
 
 
 def clone_or_reuse_checkout(args: argparse.Namespace) -> tuple[Path, bool]:
@@ -236,7 +236,7 @@ def build_output(
 
     notes = [
         "Set OPENAI_API_KEY or ANTHROPIC_API_KEY before calling make_video.",
-        "Cathode now prefers the local Codex Exec + GPT Image lane for stills when codex and OPENAI_API_KEY are available. REPLICATE_API_TOKEN remains a fallback image path.",
+        "betTube Studio now prefers the local Codex Exec + GPT Image lane for stills when codex and OPENAI_API_KEY are available. REPLICATE_API_TOKEN remains a fallback image path.",
     ]
     if missing:
         notes.append(f"Missing system dependencies: {', '.join(missing)}. Suggested install: {install_hint()}")

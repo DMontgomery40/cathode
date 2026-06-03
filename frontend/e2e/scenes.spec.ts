@@ -886,7 +886,7 @@ test.describe('Scene Timeline', () => {
       await saveResponse
       await expect(page.getByLabel('Clip style')).toHaveValue('auto')
       await expect(page.getByLabel('Model selection')).toHaveValue('automatic')
-      await expect(page.locator('p').filter({ hasText: /Clip audio enabled, so Cathode uses the speaking-video lane\./ })).toBeVisible()
+      await expect(page.locator('p').filter({ hasText: /Clip audio enabled, so betTube Studio uses the speaking-video lane\./ })).toBeVisible()
       await expect(page.getByLabel('Scene audio source')).toHaveValue('narration')
       await expect(page.getByLabel('Clip Start (seconds)')).toHaveValue('1.5')
       await expect(page.getByLabel('Playback Speed')).toHaveValue('1.25')

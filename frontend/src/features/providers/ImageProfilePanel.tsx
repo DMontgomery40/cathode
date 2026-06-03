@@ -45,8 +45,8 @@ function providerHint(provider: string, generationModel: string): string {
   switch (provider) {
     case 'codex':
       return generationModel
-        ? `Cathode will ask the local Codex CLI to run the checked-in GPT Image helper with ${generationModel}. This is the preferred still-image lane now.`
-        : 'Cathode will ask the local Codex CLI to run the checked-in GPT Image helper. This is the preferred still-image lane now.'
+        ? `betTube Studio will ask the local Codex CLI to run the checked-in GPT Image helper with ${generationModel}. This is the preferred still-image lane now.`
+        : 'betTube Studio will ask the local Codex CLI to run the checked-in GPT Image helper. This is the preferred still-image lane now.'
     case 'replicate':
       return 'Cloud image generation stays available as a fallback. Generate and Regenerate Image will use the model shown here only when you keep Replicate selected.'
     case 'local':
@@ -138,7 +138,7 @@ export function ImageProfilePanel({
           <p className="workspace-eyebrow">Streamlit parity</p>
           <h3 className="workspace-panel-title">Image profile</h3>
           <p className="workspace-panel-copy m-0 mt-[var(--space-1)]">
-            Project-level generation and edit defaults. Cathode is image-first now: local Codex execution plus GPT Image is the primary still-building lane, while motion stays a specialist override.
+            Project-level generation and edit defaults. betTube Studio is image-first now: local Codex execution plus GPT Image is the primary still-building lane, while motion stays a specialist override.
           </p>
         </div>
         <span

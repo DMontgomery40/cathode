@@ -21,6 +21,7 @@ import { WorkspaceCanvas, WorkspaceGrid, WorkspacePanel } from '../design-system
 import { sceneHasRenderableAudio, sceneHasRenderableVisual } from '../lib/scene-media.ts'
 import { useInvalidateProjectOnJobCompletion } from '../lib/api/project-job-sync.ts'
 import { resolveRenderOutputFilename } from '../lib/render-output.ts'
+import { projectModeFromPlan } from '../lib/project-mode.ts'
 import { PlayerSurface } from '../remotion/PlayerSurface.tsx'
 
 const DEFAULT_FPS = 24
@@ -57,6 +58,7 @@ export function RenderControl() {
 
   const scenes = plan?.scenes ?? []
   const renderProfile = plan?.meta?.render_profile ?? null
+  const projectMode = projectModeFromPlan(plan)
   const brief = typeof plan?.meta?.brief === 'object' && plan?.meta?.brief
     ? plan.meta.brief as Record<string, unknown>
     : null
@@ -109,11 +111,13 @@ export function RenderControl() {
     projectName: typeof plan?.meta?.project_name === 'string' ? plan.meta.project_name : null,
     projectId,
   })
-  const renderFps = resolveRenderFps(
-    typeof renderProfile === 'object' && renderProfile
-      ? renderProfile as Record<string, unknown>
-      : null,
-  )
+  const renderFps = projectMode.locksFps
+    ? 30
+    : resolveRenderFps(
+        typeof renderProfile === 'object' && renderProfile
+          ? renderProfile as Record<string, unknown>
+          : null,
+      )
 
   useInvalidateProjectOnJobCompletion(projectId, jobs, ['assets', 'render'])
   const { data: renderLog } = useJobLog(projectId, (activeRenderJob ?? latestRenderJob)?.job_id ?? null, {
@@ -137,10 +141,13 @@ export function RenderControl() {
   }, [existingOutputFilename, outputFilenameDirty])
 
   useEffect(() => {
-    if (!fpsDirty) {
+    if (projectMode.locksFps) {
+      setFpsDirty(false)
+      setFps(30)
+    } else if (!fpsDirty) {
       setFps(renderFps)
     }
-  }, [fpsDirty, renderFps])
+  }, [fpsDirty, projectMode.locksFps, renderFps])
 
   useEffect(() => {
     if (!textRenderModeDirty) {
@@ -203,7 +210,7 @@ export function RenderControl() {
         ]}
         status={status}
       />
-      <ProjectWorkspaceNav projectId={projectId} />
+      <ProjectWorkspaceNav projectId={projectId} plan={plan} />
 
       <WorkspaceCanvas>
         <WorkspaceGrid
@@ -267,7 +274,10 @@ export function RenderControl() {
                     </div>
                   </button>
                   <button
-                    onClick={() => startRender.mutate({ output_filename: outputFilename, fps })}
+                    onClick={() => startRender.mutate({
+                      output_filename: outputFilename,
+                      fps: projectMode.locksFps ? undefined : fps,
+                    })}
                     disabled={!allReady || startRender.isPending || hasActiveJob || savePlan.isPending}
                     className={clsx(
                       'rounded-[var(--radius-md)] border cursor-pointer outline-none text-left',
@@ -296,6 +306,7 @@ export function RenderControl() {
                 onOutputFilenameChange={handleOutputFilenameChange}
                 fps={fps}
                 onFpsChange={handleFpsChange}
+                fpsLocked={projectMode.locksFps}
                 renderBackend={renderBackend}
                 renderBackendReason={renderBackendReason}
                 textRenderMode={textRenderMode}

@@ -1,6 +1,11 @@
 import { useRef } from 'react'
 import { Button } from './Button'
-import { describeRejectedFiles, getAcceptedFileTypes, splitAcceptedFiles } from '../../lib/uploads'
+import {
+  acceptedFileTypesForPicker,
+  describeRejectedFiles,
+  getAcceptedFileTypes,
+  splitAcceptedFiles,
+} from '../../lib/uploads'
 
 interface FileTriggerButtonProps {
   accept?: string
@@ -25,7 +30,8 @@ export function FileTriggerButton({
 }: FileTriggerButtonProps) {
   const inputRef = useRef<HTMLInputElement | null>(null)
   const acceptedFileTypes = getAcceptedFileTypes(accept) ?? []
-  const acceptAttr = acceptedFileTypes.length > 0 ? acceptedFileTypes.join(',') : undefined
+  const acceptedPickerTypes = acceptedFileTypesForPicker(accept)
+  const acceptAttr = acceptedPickerTypes.length > 0 ? acceptedPickerTypes.join(',') : undefined
 
   const handleSelection = (files: FileList | null) => {
     const incoming = Array.from(files ?? [])

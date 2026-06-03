@@ -5,6 +5,7 @@ interface RenderSettingsProps {
   onOutputFilenameChange: (v: string) => void
   fps: number
   onFpsChange: (v: number) => void
+  fpsLocked?: boolean
   renderBackend: string
   renderBackendReason?: string | null
   textRenderMode: string
@@ -18,6 +19,7 @@ export function RenderSettings({
   onOutputFilenameChange,
   fps,
   onFpsChange,
+  fpsLocked = false,
   renderBackend,
   renderBackendReason,
   textRenderMode,
@@ -26,9 +28,13 @@ export function RenderSettings({
   renderProfile,
 }: RenderSettingsProps) {
   const aspect = renderProfile?.aspect_ratio as string | undefined
-  const resolution = renderProfile?.resolution as string | undefined
+  const width = Number(renderProfile?.width)
+  const height = Number(renderProfile?.height)
+  const explicitResolution = renderProfile?.resolution as string | undefined
+  const resolution = explicitResolution
+    ?? (Number.isFinite(width) && width > 0 && Number.isFinite(height) && height > 0 ? `${width}x${height}` : undefined)
   const textStrategyCopy = textRenderMode === 'deterministic_overlay'
-    ? "Cathode uses the native overlay renderer for the scene's on-screen text."
+    ? "betTube Studio uses the native overlay renderer for the scene's on-screen text."
     : 'Generated visuals and footage own the visible copy; no extra text layer is added by default.'
 
   return (
@@ -84,6 +90,7 @@ export function RenderSettings({
             id="fps-select"
             value={fps}
             onChange={(e) => onFpsChange(Number(e.target.value))}
+            disabled={fpsLocked}
             className="w-full bg-[var(--surface-stage)] text-[var(--text-primary)] border border-[var(--border-subtle)] rounded-[var(--radius-md)] outline-none focus-visible:shadow-[var(--focus-ring)]"
             style={{
               fontSize: 'var(--text-sm)',
@@ -94,6 +101,11 @@ export function RenderSettings({
             <option value={30}>30 fps</option>
             <option value={60}>60 fps</option>
           </select>
+          {fpsLocked ? (
+            <p className="m-0 text-[var(--text-tertiary)]" style={{ fontSize: 'var(--text-xs)' }}>
+              Vertical shorts render at 30 fps.
+            </p>
+          ) : null}
         </div>
 
         <div className="flex flex-col gap-[var(--space-1)]">

@@ -1,6 +1,6 @@
 # Source-Video Cutdown Workflow
 
-Use this reference when the user provides an existing video, transcript, long-form script, demo recording, or Cathode project and wants a short.
+Use this reference when the user provides an existing video, transcript, long-form script, demo recording, or betTube Studio project and wants a short.
 
 ## Principle
 
@@ -102,7 +102,7 @@ When footage is available:
 - preserve useful original audio when it carries authenticity
 - use voiceover when the source audio is noisy, slow, or context-heavy
 
-## Cathode Handoff
+## betTube Studio Handoff
 
 Use `footage_paths` or `footage_manifest` for supplied clips. Add clip notes that tell the director why each clip matters.
 

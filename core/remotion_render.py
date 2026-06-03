@@ -171,7 +171,7 @@ def scene_motion_payload(scene: dict[str, Any]) -> dict[str, Any]:
 
     headline = str(props.get("headline") or (lines[0] if lines else title) or "Motion beat").strip()
     body = str(props.get("body") or "\n".join(lines[1:3]) or narration[:180]).strip()
-    kicker = str(props.get("kicker") or title or "Cathode").strip()
+    kicker = str(props.get("kicker") or title or "betTube Studio").strip()
     bullets = props.get("bullets") if isinstance(props.get("bullets"), list) else lines[:4]
 
     return {

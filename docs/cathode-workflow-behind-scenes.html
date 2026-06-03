@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Cathode — the dark factory</title>
+<title>betTube Studio — the dark factory</title>
 <style>
   :root {
     --ivory:    #FAF9F5;
@@ -555,8 +555,8 @@
       <div class="eyebrow">Lights-out video manufacturing</div>
       <h1>The dark factory: <em>agents prompting agents prompting agents.</em></h1>
       <p class="intro">
-        Cathode looks like a one-button video maker. Behind the glass it's a
-        delegation chain: one agent calls Cathode's MCP, which spawns a
+        betTube Studio looks like a one-button video maker. Behind the glass it's a
+        delegation chain: one agent calls betTube Studio's MCP, which spawns a
         director agent, which writes scenes for image and voice models, whose
         output is judged by another agent, which prompts more agents to repair
         what failed — until an MP4 falls out the end. <strong>Almost no human
@@ -652,7 +652,7 @@
     <span class="count">4 operators</span>
   </div>
   <p class="sec-intro">
-    Every box on Cathode's floor is run by either a Claude agent, a model
+    Every box on betTube Studio's floor is run by either a Claude agent, a model
     call, or deterministic code. The same pipeline can be entered by a human
     or, more interestingly, by another agent — at which point the chain has
     no human at any point, just delegation all the way down.
@@ -889,7 +889,7 @@
         </div>
         <div class="what">
           <div class="arrow-row">normalized brief ›› director</div>
-          <div class="slip"><em>system:</em> you are Cathode's storyboard director. write 6–10 scenes. each scene needs visual_prompt, on_screen_text, narration. respect the brief's audience and constraints.
+          <div class="slip"><em>system:</em> you are betTube Studio's storyboard director. write 6–10 scenes. each scene needs visual_prompt, on_screen_text, narration. respect the brief's audience and constraints.
 
 <em>user:</em> {normalized_brief_json}</div>
         </div>
@@ -905,7 +905,7 @@
           <div class="slip">[
   { "scene_type": "image",
     "visual_prompt": "isometric factory floor, three stations…",
-    "narration": "Behind the glass, Cathode is a delegation chain.",
+    "narration": "Behind the glass, betTube Studio is a delegation chain.",
     "on_screen_text": "agents prompt agents prompt agents" },
   …
 ]</div>
@@ -932,7 +932,7 @@ no text in image, 16:9</div>
         </div>
         <div class="what">
           <div class="arrow-row">image bytes ›› reviewer</div>
-          <div class="slip"><em>system:</em> you are Cathode's scene reviewer. given the scene
+          <div class="slip"><em>system:</em> you are betTube Studio's scene reviewer. given the scene
 spec and the rendered image, decide: accept, repair_text,
 or regenerate. if repair, return the new visual_prompt
 verbatim.
@@ -1128,7 +1128,7 @@ verbatim.
       <div class="panel-grid">
         <div>
           <h3>Provider UI is env-driven</h3>
-          <p>Cathode only surfaces models that are actually configured. Kokoro is always available for local voice. Anthropic is required because Claude is the agent at every reasoning station.</p>
+          <p>betTube Studio only surfaces models that are actually configured. Kokoro is always available for local voice. Anthropic is required because Claude is the agent at every reasoning station.</p>
         </div>
 <pre class="code">OPENAI_API_KEY
 ANTHROPIC_API_KEY
@@ -1182,7 +1182,7 @@ suggestion:    "Review failed scenes or provider
     <span class="count">3 buckets</span>
   </div>
   <p class="sec-intro">
-    Cathode is local-first. The durable output isn't only an MP4 — it's the
+    betTube Studio is local-first. The durable output isn't only an MP4 — it's the
     paper trail of every prompt that crossed every station, recoverable from
     disk without rerunning the chain.
   </p>
@@ -1231,7 +1231,7 @@ suggestion:    "Review failed scenes or provider
     <span class="count">6 contracts</span>
   </div>
   <p class="sec-intro">
-    The useful way to debug Cathode is to ask which contract between adjacent
+    The useful way to debug betTube Studio is to ask which contract between adjacent
     agents has — or hasn't — been satisfied yet.
   </p>
   <div class="sec-body">

@@ -1,4 +1,4 @@
-"""Cathode MCP server."""
+"""betTube Studio MCP server."""
 
 from __future__ import annotations
 
@@ -31,7 +31,7 @@ from core.runtime import (
 )
 
 SERVER_INSTRUCTIONS = (
-    "Cathode turns a user's intent into a local video project. "
+    "betTube Studio turns a user's intent into a local video project. "
     "Use make_video for new work, use get_job_status for long-running operations, "
     "and read project resources when you need the full plan or artifact inventory."
 )
@@ -110,12 +110,12 @@ def build_server() -> FastMCP:
 
     @mcp.prompt(
         name="prepare_video_request",
-        title="Prepare A Cathode Video Request",
+        title="Prepare A betTube Studio Video Request",
         description="Use this when the user has a rough goal and you need to gather enough detail before calling make_video.",
     )
     def prepare_video_request(intent: str) -> str:
         return (
-            "Collect only the details needed to make a strong first Cathode render.\n"
+            "Collect only the details needed to make a strong first betTube Studio render.\n"
             f"User intent: {intent}\n\n"
             "Ask for:\n"
             "- who the video is for\n"
@@ -129,7 +129,7 @@ def build_server() -> FastMCP:
         "project://{project_name}/plan",
         name="project-plan",
         title="Project Plan",
-        description="Read the normalized plan.json for a Cathode project. Use this when you need the full storyboard or persisted metadata.",
+        description="Read the normalized plan.json for a betTube Studio project. Use this when you need the full storyboard or persisted metadata.",
         mime_type="application/json",
     )
     def project_plan(project_name: str) -> str:
@@ -143,7 +143,7 @@ def build_server() -> FastMCP:
         "project://{project_name}/artifacts",
         name="project-artifacts",
         title="Project Artifacts",
-        description="Read a compact inventory of local files generated for a Cathode project.",
+        description="Read a compact inventory of local files generated for a betTube Studio project.",
         mime_type="application/json",
     )
     def project_artifacts(project_name: str) -> str:
@@ -155,7 +155,7 @@ def build_server() -> FastMCP:
     @mcp.tool(
         name="make_video",
         description=(
-            "Create a new Cathode video project from natural-language intent. "
+            "Create a new betTube Studio video project from natural-language intent. "
             "Use this for end-to-end video generation. It may inspect a bounded local workspace when workspace_path or source_paths are provided, "
             "may ask a few follow-up questions through MCP elicitation if the brief is too thin, and starts a background job instead of blocking until render completes."
         ),
@@ -188,7 +188,23 @@ def build_server() -> FastMCP:
         ending_cta: Annotated[str | None, Field(description="Optional closing CTA.", default=None)] = None,
         composition_mode: Annotated[Literal["classic", "motion_only", "hybrid"] | None, Field(description="Optional composition/render mode override.", default=None)] = None,
         visual_source_strategy: Annotated[Literal["images_only", "mixed_media", "video_preferred"] | None, Field(description="Optional visuals strategy override.", default=None)] = None,
+        video_scene_style: Annotated[Literal["auto", "cinematic", "speaking", "mixed"] | None, Field(description="Optional generated-video scene style override.", default=None)] = None,
+        text_render_mode: Annotated[Literal["visual_authored", "deterministic_overlay"] | None, Field(description="Optional text rendering mode override.", default=None)] = None,
         available_footage: Annotated[str | None, Field(description="Optional footage notes or clip availability.", default=None)] = None,
+        short_form_format: Annotated[Literal["vertical_short"] | None, Field(description="Set to vertical_short to create a first-class 9:16 short-form project.", default=None)] = None,
+        short_form_tier: Annotated[Literal["mass-native-technical", "dev-native-credible"] | None, Field(description="Optional vertical-short audience/tone tier.", default=None)] = None,
+        short_form_approach: Annotated[Literal["public-reframe", "source-cutdown", "mixed-media-proof"] | None, Field(description="Optional vertical-short source strategy.", default=None)] = None,
+        short_form_duration_seconds: Annotated[float | None, Field(description="Optional vertical-short runtime in seconds. betTube Studio clamps short-form mode to 30-50 seconds.", default=None, ge=1.0, le=300.0)] = None,
+        platform_targets: Annotated[list[str] | None, Field(description="Optional platform targets such as tiktok, instagram-reels, and youtube-shorts.", default=None)] = None,
+        hook_promise: Annotated[str | None, Field(description="Optional first-1-to-3-second promise for vertical shorts.", default=None)] = None,
+        payoff: Annotated[str | None, Field(description="Optional payoff the viewer should get before the CTA.", default=None)] = None,
+        source_anchor_card: Annotated[str | None, Field(description="Optional source-loyalty anchor card for generated visuals.", default=None)] = None,
+        source_context_lock: Annotated[str | None, Field(description="Optional context lock describing source domain, objects, workflow, and claim boundaries.", default=None)] = None,
+        caption_strategy: Annotated[Literal["word-level-highlight", "meaning-card-captions", "keyword-labels"] | None, Field(description="Optional caption policy for vertical shorts.", default=None)] = None,
+        caption_timing_source: Annotated[str | None, Field(description="Optional caption timing guidance.", default=None)] = None,
+        caption_renderer: Annotated[str | None, Field(description="Optional caption rendering guidance.", default=None)] = None,
+        voice_direction: Annotated[str | None, Field(description="Optional narration voice direction for short-form mode.", default=None)] = None,
+        motion_intensity: Annotated[str | None, Field(description="Optional motion-intensity calibration for short-form mode.", default=None)] = None,
         app_url: Annotated[str | None, Field(description="Optional running app URL for demo-backed capture flows.", default=None)] = None,
         launch_command: Annotated[str | None, Field(description="Optional app launch command for demo-backed capture flows.", default=None)] = None,
         expected_url: Annotated[str | None, Field(description="Optional app URL the demo-backed agent should wait for after launch.", default=None)] = None,
@@ -205,7 +221,7 @@ def build_server() -> FastMCP:
         tts_provider: Annotated[str | None, Field(description="Optional TTS provider override.", default=None)] = None,
         tts_voice: Annotated[str | None, Field(description="Optional TTS voice override.", default=None)] = None,
         tts_speed: Annotated[float | None, Field(description="Optional TTS speed override.", default=None, ge=0.25, le=4.0)] = None,
-        run_until: Annotated[Literal["storyboard", "assets", "render"], Field(description="How far Cathode should run before stopping.", default="render")] = "render",
+        run_until: Annotated[Literal["storyboard", "assets", "render"], Field(description="How far betTube Studio should run before stopping.", default="render")] = "render",
         overwrite: Annotated[bool, Field(description="If true, replace an existing project folder with the same name.", default=False)] = False,
     ) -> dict[str, Any]:
         try:
@@ -241,7 +257,23 @@ def build_server() -> FastMCP:
                 "ending_cta": ending_cta,
                 "composition_mode": composition_mode,
                 "visual_source_strategy": visual_source_strategy,
+                "video_scene_style": video_scene_style,
+                "text_render_mode": text_render_mode,
                 "available_footage": available_footage,
+                "short_form_format": short_form_format,
+                "short_form_tier": short_form_tier,
+                "short_form_approach": short_form_approach,
+                "short_form_duration_seconds": short_form_duration_seconds,
+                "platform_targets": platform_targets,
+                "hook_promise": hook_promise,
+                "payoff": payoff,
+                "source_anchor_card": source_anchor_card,
+                "source_context_lock": source_context_lock,
+                "caption_strategy": caption_strategy,
+                "caption_timing_source": caption_timing_source,
+                "caption_renderer": caption_renderer,
+                "voice_direction": voice_direction,
+                "motion_intensity": motion_intensity,
                 "style_reference_paths": style_reference_paths or [],
             },
         )
@@ -322,7 +354,7 @@ def build_server() -> FastMCP:
     @mcp.tool(
         name="get_job_status",
         description=(
-            "Check the current status of a Cathode background job. "
+            "Check the current status of a betTube Studio background job. "
             "Use this after make_video or rerun_stage to track long-running storyboard, asset, or render work."
         ),
         annotations=ToolAnnotations(
@@ -334,7 +366,7 @@ def build_server() -> FastMCP:
         ),
     )
     def get_job_status_tool(
-        job_id: Annotated[str, Field(description="The Cathode background job id.")],
+        job_id: Annotated[str, Field(description="The betTube Studio background job id.")],
         project_name: Annotated[str | None, Field(description="Optional project name when you want to scope the lookup.", default=None)] = None,
     ) -> dict[str, Any]:
         return get_job_status(job_id, project_name=project_name)
@@ -342,7 +374,7 @@ def build_server() -> FastMCP:
     @mcp.tool(
         name="cancel_job",
         description=(
-            "Cancel a running Cathode background job. "
+            "Cancel a running betTube Studio background job. "
             "Use this when a render or asset generation run is no longer wanted. This stops the worker process and marks the job cancelled."
         ),
         annotations=ToolAnnotations(
@@ -354,7 +386,7 @@ def build_server() -> FastMCP:
         ),
     )
     def cancel_job_tool(
-        job_id: Annotated[str, Field(description="The Cathode background job id to cancel.")],
+        job_id: Annotated[str, Field(description="The betTube Studio background job id to cancel.")],
         project_name: Annotated[str | None, Field(description="Optional project name when you want to scope the lookup.", default=None)] = None,
     ) -> dict[str, Any]:
         return cancel_job(job_id, project_name=project_name)
@@ -362,7 +394,7 @@ def build_server() -> FastMCP:
     @mcp.tool(
         name="rerun_stage",
         description=(
-            "Start a new background job that reruns one stage of an existing Cathode project. "
+            "Start a new background job that reruns one stage of an existing betTube Studio project. "
             "Use storyboard to rebuild scenes from saved metadata, assets to regenerate local media, or render to produce a new MP4 from existing assets."
         ),
         annotations=ToolAnnotations(
@@ -374,7 +406,7 @@ def build_server() -> FastMCP:
         ),
     )
     def rerun_stage(
-        project_name: Annotated[str, Field(description="Existing Cathode project name.")],
+        project_name: Annotated[str, Field(description="Existing betTube Studio project name.")],
         stage: Annotated[Literal["storyboard", "assets", "render"], Field(description="Which stage to rerun.")],
         force: Annotated[bool, Field(description="If true, regenerate existing scene assets instead of only filling missing ones.", default=False)] = False,
     ) -> dict[str, Any]:
@@ -383,7 +415,7 @@ def build_server() -> FastMCP:
     @mcp.tool(
         name="list_projects",
         description=(
-            "List Cathode projects available under the local projects directory. "
+            "List betTube Studio projects available under the local projects directory. "
             "Use this when you need to discover existing projects before reading resources or rerunning a stage."
         ),
         annotations=ToolAnnotations(
@@ -409,13 +441,13 @@ def build_server() -> FastMCP:
 
 
 def main() -> None:
-    """CLI entrypoint for the Cathode MCP server."""
-    parser = argparse.ArgumentParser(description="Run the Cathode MCP server.")
+    """CLI entrypoint for the betTube Studio MCP server."""
+    parser = argparse.ArgumentParser(description="Run the betTube Studio MCP server.")
     parser.add_argument(
         "--transport",
         choices=["stdio", "streamable-http"],
         default=_transport_from_env(),
-        help="Transport to use for the Cathode MCP server.",
+        help="Transport to use for the betTube Studio MCP server.",
     )
     args = parser.parse_args()
     server = build_server()

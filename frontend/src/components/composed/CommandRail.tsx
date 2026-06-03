@@ -45,6 +45,17 @@ const navItems: NavItem[] = [
     path: '/queue',
   },
   {
+    label: 'Short Form',
+    icon: (
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="6.5" y="2.5" width="7" height="15" rx="1.6" />
+        <path d="M8.5 5.5H11.5" />
+        <path d="M9 14.5H11" />
+      </svg>
+    ),
+    path: '/short-form',
+  },
+  {
     label: 'Settings',
     icon: (
       <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -115,7 +126,7 @@ export function CommandRail() {
           className="font-[family-name:var(--font-display)] text-[var(--text-primary)] select-none whitespace-nowrap overflow-hidden"
           style={{ fontWeight: 'var(--weight-bold)', fontSize: 'var(--text-lg)' }}
         >
-          {effectiveCollapsed ? 'C' : 'Cathode'}
+          {effectiveCollapsed ? 'C' : 'betTube Studio'}
         </span>
       </div>
 

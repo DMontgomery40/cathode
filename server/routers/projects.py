@@ -100,6 +100,8 @@ async def get_projects() -> list[ProjectSummary]:
         if plan is None:
             continue
         meta = plan.get("meta") or {}
+        brief = meta.get("brief") if isinstance(meta.get("brief"), dict) else {}
+        render_profile = meta.get("render_profile") if isinstance(meta.get("render_profile"), dict) else {}
         created_utc, updated_utc = _project_dates(project_dir, meta)
         video_path = _project_asset_path(project_dir, meta.get("video_path"))
         thumbnail_path = None
@@ -125,6 +127,9 @@ async def get_projects() -> list[ProjectSummary]:
                 updated_utc=updated_utc,
                 image_profile=meta.get("image_profile"),
                 tts_profile=meta.get("tts_profile"),
+                pipeline_mode=str(meta.get("pipeline_mode") or ""),
+                short_form_format=str(brief.get("short_form_format") or ""),
+                render_aspect_ratio=str(render_profile.get("aspect_ratio") or ""),
             )
         )
     return summaries

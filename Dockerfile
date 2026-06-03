@@ -1,7 +1,7 @@
 FROM python:3.10-slim
 
-LABEL org.opencontainers.image.title="Cathode MCP Server"
-LABEL org.opencontainers.image.description="Cathode turns intent into video and exposes the workflow over MCP."
+LABEL org.opencontainers.image.title="betTube Studio MCP Server"
+LABEL org.opencontainers.image.description="betTube Studio turns intent into video and exposes the workflow over MCP."
 LABEL org.opencontainers.image.licenses="MIT"
 
 ENV PYTHONDONTWRITEBYTECODE=1 \

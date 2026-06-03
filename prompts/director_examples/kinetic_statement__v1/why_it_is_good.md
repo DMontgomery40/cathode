@@ -1,6 +1,6 @@
 # Why It Works
 
-A genuinely excellent kinetic statement piece with strong directing instincts, clear narrative architecture, and a luxury motion aesthetic that matches the brief precisely. The triptych structure (Fast / Repeatable / Saleable) is well-staged and the bookend technique (opening obsidian sweep closing the bracket at Scene 11) shows real directorial craft. Some staging notes request renderer behaviors (echoing ghosts, self-drawing underlines, waveform animations) that Cathode's deterministic layer cannot reliably execute without brittle custom Remotion code — this is the primary weakness.
+A genuinely excellent kinetic statement piece with strong directing instincts, clear narrative architecture, and a luxury motion aesthetic that matches the brief precisely. The triptych structure (Fast / Repeatable / Saleable) is well-staged and the bookend technique (opening obsidian sweep closing the bracket at Scene 11) shows real directorial craft. Some staging notes request renderer behaviors (echoing ghosts, self-drawing underlines, waveform animations) that betTube Studio's deterministic layer cannot reliably execute without brittle custom Remotion code — this is the primary weakness.
 
 ## Strengths
 - Narrative arc is complete and purposeful: invisible labor → tuned system → triptych of outcomes → proof → sell the work → reward

@@ -1,11 +1,11 @@
 ---
 name: cathode-short-form-vertical-video
-description: Create or adapt Cathode briefs, scripts, and source-video plans for catchy 30-50 second vertical short-form videos for TikTok, Instagram Reels, YouTube Shorts, or similar feeds. Use when the user wants a short vertical video, reel, short, TikTok-style cutdown, hook-first social clip, or a short made from existing Cathode source material or an uploaded video.
+description: Create or adapt betTube Studio briefs, scripts, and source-video plans for catchy 30-50 second vertical short-form videos for TikTok, Instagram Reels, YouTube Shorts, or similar feeds. Use when the user wants a short vertical video, reel, short, TikTok-style cutdown, hook-first social clip, or a short made from existing betTube Studio source material or an uploaded video.
 ---
 
-# Cathode Short-Form Vertical Video
+# betTube Studio Short-Form Vertical Video
 
-Use this skill to turn source material, an existing Cathode video idea, or supplied footage into a 30-50 second hook-first vertical short.
+Use this skill to turn source material, an existing betTube Studio video idea, or supplied footage into a 30-50 second hook-first vertical short.
 
 Default outcome:
 
@@ -16,7 +16,7 @@ Default outcome:
 5. extract a source anchor card before visual prompting
 6. choose a caption mode and timing/render path
 7. pay off the promise before the CTA
-8. hand Cathode a compact brief or footage-driven plan
+8. hand betTube Studio a compact short-form brief through the first-class API/GUI surface
 
 Read [references/short-form-retention.md](references/short-form-retention.md) when writing the hook, beat structure, captions, or CTA. Read [references/source-video-cutdown.md](references/source-video-cutdown.md) when adapting an existing video. Read [references/platform-specs-and-sources.md](references/platform-specs-and-sources.md) when platform specs, safe zones, or source links matter.
 Read [references/tone-tiers-and-calibration.md](references/tone-tiers-and-calibration.md) when choosing audience tier, voice direction, visual intensity, motion intensity, or when the user asks to avoid cringe, Gen Alpha slang, cartoonish visuals, shaky motion, or autotuned narration.
@@ -44,13 +44,17 @@ Read [references/source-loyalty-and-captions.md](references/source-loyalty-and-c
 - Every generated visual must stay loyal to the source context. Reject/regenerate assets that introduce a different domain, use-case, object class, sport, platform, workflow, or implication not supported by the source.
 - Do source-fidelity checks both before and after generation: prompt-lint every visual request against the source anchor card, then inspect the actual generated frame/contact sheet before final render.
 
-## Cathode Guardrails
+## betTube Studio Guardrails
 
-- Preserve Cathode's brief -> director -> normalized plan pipeline. Do not hand-author `projects/<project>/plan.json` to fake a short-form feature.
-- For new Cathode projects, encode the short-form intent in `intent`, `video_goal`, `tone`, `visual_style`, `must_include`, `must_avoid`, `ending_cta`, and `target_length_minutes`.
+- Preserve betTube Studio's brief -> director -> normalized plan pipeline. Do not hand-author `projects/<project>/plan.json` to fake a short-form feature.
+- Prefer the first-class short-form surfaces when available:
+  - React GUI: `/short-form`
+  - FastAPI: `GET /api/short-form/options`, `POST /api/short-form/preview`, `POST /api/short-form/jobs`
+  - Brief Studio / MCP: set `short_form_format="vertical_short"` on the canonical brief path
+- For new betTube Studio projects, encode the short-form intent in `short_form_format`, `short_form_tier`, `short_form_approach`, `short_form_duration_seconds`, `platform_targets`, `hook_promise`, `payoff`, `source_anchor_card`, `source_context_lock`, `caption_strategy`, `voice_direction`, `motion_intensity`, and the usual `video_goal`, `tone`, `visual_style`, `must_include`, `must_avoid`, and `ending_cta`.
 - Use `source_mode="source_text"` for notes/facts that need rewriting, `source_mode="ideas_notes"` for rough concepts, and `source_mode="final_script"` only when the user gave a finished script.
 - Use `visual_source_strategy="video_preferred"` when the user provides footage, `mixed_media` when combining footage with generated scenes, and `images_only` only for still/motion-led shorts.
-- Current Cathode v1 render validation may only support 16:9 in this checkout. Do not promise a true 9:16 final MP4 unless vertical render or an explicit post-process path is present and verified.
+- Current betTube Studio v1 render validation supports `9:16` vertical shorts at `928x1664 @ 30fps` through ffmpeg. Still verify the actual project plan/render before promising a final MP4.
 
 ## Testing From Local Footage
 
@@ -63,7 +67,7 @@ When the user points at a real video, run a lightweight source-video pass before
 5. Decide whether this should be a literal cutdown, a mixed-media proof short, or a public reframe with fresh generated visuals.
 6. Pick one standalone moment or one public-facing idea with a hook, tension, visual proof, and payoff.
 7. Prompt-lint each proposed visual beat against the source anchor card before spending image/video generation.
-8. Write a 30-50 second beat plan and a storyboard-only Cathode payload.
+8. Write a 30-50 second beat plan and a storyboard-only betTube Studio payload.
 9. If feasible, produce a rough vertical prototype from the selected approach before spending further generation.
 
 For scientific, medical, legal, financial, or technical evidence-heavy subjects, add an evidence-boundary beat. A catchy hook is not allowed to overclaim what the source proves.
@@ -89,7 +93,7 @@ Source footage role: optional proof/reference only, not the default visual spine
 
 ## Brief Pattern
 
-When calling Cathode, make the brief say this explicitly:
+When calling betTube Studio, make the brief say this explicitly:
 
 ```text
 Create a 30-50 second vertical short-form video. It must be hook-first, fast-paced, caption-led, and built around one clear payoff. The first 1-3 seconds should create a concrete reason to keep watching. Use 3-5 beats, visible pattern changes every 3-5 seconds, and one final CTA only after the payoff.
@@ -114,8 +118,14 @@ For `make_video`, a compact shape is:
   "source_text": "<notes, transcript excerpt, or script>",
   "source_mode": "source_text",
   "audience": "<specific scrolling audience>",
+  "short_form_format": "vertical_short",
   "short_form_tier": "mass-native-technical | dev-native-credible",
+  "short_form_approach": "public-reframe | mixed-media-proof | source-cutdown",
+  "short_form_duration_seconds": 42,
+  "platform_targets": ["tiktok", "instagram-reels", "youtube-shorts"],
   "target_length_minutes": 0.75,
+  "hook_promise": "<the specific tension/result/question>",
+  "payoff": "<what they know, see, or feel by the end>",
   "tone": "fast, clear, confident, social-native",
   "voice_direction": "naturally fast presenter, clear consonants, no chipmunk pitch, no exaggerated influencer cadence",
   "visual_style": "vertical short-form, tight framing, kinetic captions, fast visual resets, tier-appropriate visual polish",

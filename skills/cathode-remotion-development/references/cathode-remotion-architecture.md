@@ -1,8 +1,8 @@
-# Cathode Remotion Architecture
+# betTube Studio Remotion Architecture
 
-## What Cathode Is
+## What betTube Studio Is
 
-Cathode is a local-first explainer-video pipeline with three user-facing surfaces:
+betTube Studio is a local-first explainer-video pipeline with three user-facing surfaces:
 
 - React + FastAPI control room
 - legacy Streamlit app

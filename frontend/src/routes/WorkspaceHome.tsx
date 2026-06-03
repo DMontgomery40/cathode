@@ -22,6 +22,20 @@ export function WorkspaceHome() {
       onClick: () => navigate('/projects/new/brief'),
     },
     {
+      id: 'short-form',
+      title: 'Create a vertical short',
+      description: 'Shape a 30-50 second hook-first short for TikTok, Reels, or Shorts.',
+      icon: (
+        <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="6.5" y="2.5" width="7" height="15" rx="1.6" />
+          <path d="M8.5 5.5H11.5" />
+          <path d="M9 14.5H11" />
+        </svg>
+      ),
+      badge: '9:16',
+      onClick: () => navigate('/short-form'),
+    },
+    {
       id: 'continue',
       title: 'Continue editing',
       description: 'Pick up where you left off on an in-progress project.',
@@ -78,7 +92,7 @@ export function WorkspaceHome() {
       <BackgroundMesh />
       <div className="relative flex flex-col flex-1" style={{ zIndex: 1 }}>
         <WorkspaceHeader
-          title="Cathode"
+          title="betTube Studio"
           subtitle="Video production workspace"
         />
         <WorkspaceCanvas size="full">
@@ -96,7 +110,7 @@ export function WorkspaceHome() {
               <WorkspacePanel
                 title="Active modes"
                 eyebrow="Multimodal flow"
-                copy="Cathode should feel fluid across typing, drag and drop, media scrubbing, keyboard navigation, and live asset review."
+                copy="betTube Studio should feel fluid across typing, drag and drop, media scrubbing, keyboard navigation, and live asset review."
               >
                 <div className="flex flex-wrap gap-[var(--space-2)]">
                   <Badge variant="active">Brief editing</Badge>

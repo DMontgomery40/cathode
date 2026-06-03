@@ -168,7 +168,7 @@ def _build_treatment_user_prompt(
         )
 
     return (
-        "Choose deterministic treatment overrides only for scenes that are already in Cathode's native Remotion branch.\n\n"
+        "Choose deterministic treatment overrides only for scenes that are already in betTube Studio's native Remotion branch.\n\n"
         "Do not change manifestation branch, mode, scene copy, visual prompts, narration, staging facts, or raw data. Only refine native family choice, semantic props, structured data that already exists in the source scene, and rationale.\n\n"
         f"Brief JSON:\n{json.dumps(normalized, indent=2, ensure_ascii=False)}\n\n"
         f"Scenes JSON:\n{json.dumps(payload_scenes, indent=2, ensure_ascii=False)}\n"

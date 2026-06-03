@@ -119,6 +119,7 @@ test.describe('Brief Studio', () => {
 
       const sourceMode = page.getByLabel('Source Mode')
       await expect(sourceMode).toBeVisible()
+      await expect(page.getByLabel('Output Mode')).toBeVisible()
       await expect(page.locator('legend:has-text("Advanced Creative Controls")')).toBeVisible()
     })
 
@@ -195,6 +196,29 @@ test.describe('Brief Studio', () => {
 
       await select.selectOption('ideas_notes')
       await expect(select).toHaveValue('ideas_notes')
+    })
+
+    test('Output Mode vertical short reveals short-form controls', async ({ page }) => {
+      await page.getByLabel('Output Mode').selectOption('vertical_short')
+      await expect(page.locator('legend:has-text("Short-Form Mode")')).toBeVisible()
+      await expect(page.getByLabel('Short Tier')).toBeVisible()
+      await expect(page.getByLabel('Short Mode')).toBeVisible()
+      await expect(page.getByLabel('Caption Strategy')).toBeVisible()
+      await expect(page.getByLabel('Short Runtime')).toHaveValue('42')
+      await expect(page.getByLabel('Source Mode')).toHaveValue('source_text')
+      await expect(page.getByText(/Controlled by Short Runtime/)).toBeVisible()
+
+      await page.getByLabel('Short Mode').selectOption('mixed-media-proof')
+      await expect(page.getByLabel('Visual Source Strategy')).toHaveValue('mixed_media')
+      await expect(page.getByLabel('Generated Video Scene Style')).toHaveValue('mixed')
+
+      await page.getByLabel('Hook Promise').fill('A clean hook')
+      await page.getByLabel('Output Mode').selectOption('')
+      await expect(page.locator('legend:has-text("Short-Form Mode")')).toBeHidden()
+      await expect(page.getByLabel('Target Length')).toBeVisible()
+
+      await page.getByLabel('Output Mode').selectOption('vertical_short')
+      await expect(page.getByLabel('Hook Promise')).toHaveValue('')
     })
 
     test('Visual Source Strategy select', async ({ page }) => {
@@ -406,7 +430,7 @@ test.describe('Brief Studio', () => {
 
       await page.locator('button[type="submit"]:has-text("F#@K it, we\'re doing it live!!")').click()
 
-      await expect(page.getByText('Could not reach the Cathode API at http://127.0.0.1:9321. Make sure the server is running and try again.')).toBeVisible()
+      await expect(page.getByText('Could not reach the betTube Studio API at http://127.0.0.1:9321. Make sure the server is running and try again.')).toBeVisible()
       await expect(page).toHaveURL(/\/projects\/new\/brief$/)
     })
 

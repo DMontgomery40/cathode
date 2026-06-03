@@ -13,6 +13,7 @@ import {
   usePlan,
   useCreateProject,
   useRebuildStoryboard,
+  useShortFormOptions,
   useStartMakeVideoJob,
 } from '../lib/api/hooks.ts'
 import type { Brief } from '../lib/schemas/plan.ts'
@@ -27,6 +28,7 @@ export function BriefStudio() {
   const isNew = projectId === 'new'
 
   const { data: bootstrap } = useBootstrap()
+  const { data: shortFormOptions } = useShortFormOptions()
   const { data: plan, isLoading: planLoading } = usePlan(projectId)
 
   const createProject = useCreateProject()
@@ -201,7 +203,7 @@ export function BriefStudio() {
         breadcrumbs={breadcrumbs}
         status={loading ? 'generating' : 'idle'}
       />
-      {!isNew && <ProjectWorkspaceNav projectId={projectId} />}
+      {!isNew && <ProjectWorkspaceNav projectId={projectId} plan={plan} />}
       <WorkspaceCanvas>
         <WorkspaceGrid
           asideWidth={312}
@@ -220,13 +222,14 @@ export function BriefStudio() {
                   loadingAction={loadingAction}
                   remotionAvailable={bootstrap ? Boolean(bootstrap.providers?.remotion_available) : null}
                   paidMediaGenerationAvailable={paidMediaGenerationAvailable}
+                  shortFormOptions={shortFormOptions}
                 />
               </WorkspacePanel>
 
               <WorkspacePanel
                 title="Demo target"
                 eyebrow="One-click live path"
-                copy="Optional, but this is what lets Cathode pivot from still-image generation into the heavier repo/app demo path. Leave it empty to stay on the classic track."
+                copy="Optional, but this is what lets betTube Studio pivot from still-image generation into the heavier repo/app demo path. Leave it empty to stay on the classic track."
               >
                 <GlassPanel variant="inset" padding="lg" rounded="lg">
                   <div className="flex flex-col gap-[var(--space-4)]">
@@ -244,7 +247,7 @@ export function BriefStudio() {
                       value={demoTarget.workspace_path}
                       onChange={(event) => setDemoTarget((current) => ({ ...current, workspace_path: event.target.value }))}
                       placeholder="/absolute/path/to/the/repo/or-workspace"
-                      hint="If omitted, Cathode will try to use the current local Cathode workspace for tonight's self-demo path."
+                      hint="If omitted, betTube Studio will try to use the current local betTube Studio workspace for tonight's self-demo path."
                     />
                     <TextInput
                       label="App URL"

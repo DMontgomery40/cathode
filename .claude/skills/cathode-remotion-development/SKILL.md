@@ -1,11 +1,11 @@
 ---
 name: cathode-remotion-development
-description: Debug and extend Cathode's Remotion planning and renderer pipeline without rediscovering the architecture. Use when Claude needs the canonical Cathode/Remotion debug path, scene-family contract, and official Remotion docs.
+description: Debug and extend betTube Studio's Remotion planning and renderer pipeline without rediscovering the architecture. Use when Claude needs the canonical betTube Studio/Remotion debug path, scene-family contract, and official Remotion docs.
 ---
 
-# Cathode Remotion Development
+# betTube Studio Remotion Development
 
-This Claude-facing mirror points at the canonical Cathode skill resources in the repository root.
+This Claude-facing mirror points at the canonical betTube Studio skill resources in the repository root.
 
 Use the canonical resources here:
 

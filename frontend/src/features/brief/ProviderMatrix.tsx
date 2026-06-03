@@ -105,7 +105,7 @@ export function ProviderMatrix() {
           <p className="workspace-eyebrow">Capability matrix</p>
           <h3 className="workspace-panel-title">Providers</h3>
           <p className="workspace-panel-copy m-0 mt-[var(--space-1)]">
-            Cathode only surfaces configured or always-available capabilities, so this page mirrors the real machine instead of pretending every backend exists. For stills, the intended default lane is local Codex execution when it is available.
+            betTube Studio only surfaces configured or always-available capabilities, so this page mirrors the real machine instead of pretending every backend exists. For stills, the intended default lane is local Codex execution when it is available.
           </p>
           <p className="workspace-panel-copy m-0 mt-[var(--space-1)]">
             Exact costs are model- and route-specific. Provider badges stay generic; the precise pricing belongs on the model or route choice itself.

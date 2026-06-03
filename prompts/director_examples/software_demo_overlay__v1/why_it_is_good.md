@@ -1,6 +1,6 @@
 # Why It Works
 
-A well-structured, 14-scene product demo storyboard that cleanly covers the brief-to-storyboard workflow. Pacing is confident, the proof moment (scene 9) is correctly isolated and emphasized, and the mix of video/motion/image scene types maps naturally to Cathode's renderer surfaces. Deterministic anchors are consistently populated across scenes. A few minor weaknesses: some visual_prompts lean toward overly detailed cinematic descriptions that could challenge asset generation consistency, and the no-CTA ending is correct per brief but leaves the closing slightly flat for an operator-facing demo.
+A well-structured, 14-scene product demo storyboard that cleanly covers the brief-to-storyboard workflow. Pacing is confident, the proof moment (scene 9) is correctly isolated and emphasized, and the mix of video/motion/image scene types maps naturally to betTube Studio's renderer surfaces. Deterministic anchors are consistently populated across scenes. A few minor weaknesses: some visual_prompts lean toward overly detailed cinematic descriptions that could challenge asset generation consistency, and the no-CTA ending is correct per brief but leaves the closing slightly flat for an operator-facing demo.
 
 ## Strengths
 - Proof moment (scene 9) is explicitly named, isolated, and given clear overlay text and staging guidance — exactly what a planner needs to flag a hero beat

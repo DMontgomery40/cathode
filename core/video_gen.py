@@ -15,8 +15,15 @@ from contextlib import ExitStack
 from pathlib import Path
 from typing import Any
 
-import requests
-from replicate import Client
+try:
+    import requests
+except ImportError:  # Requests is optional until local/cloud HTTP video generation is used.
+    requests = None  # type: ignore[assignment]
+
+try:
+    from replicate import Client
+except ImportError:  # Replicate is optional unless that provider is selected.
+    Client = None  # type: ignore[assignment]
 
 from .image_gen import generate_image, generate_image_local
 from .rate_limiter import image_limiter
@@ -42,10 +49,18 @@ _replicate_client: Client | None = None
 
 
 def _get_replicate_client() -> Client:
+    if Client is None:
+        raise RuntimeError("The replicate package is not installed. Select a local/manual video provider or install replicate.")
     global _replicate_client
     if _replicate_client is None:
         _replicate_client = Client(timeout=DEFAULT_VIDEO_TIMEOUT_SECONDS)
     return _replicate_client
+
+
+def _requests_module():
+    if requests is None:
+        raise RuntimeError("The requests package is not installed. HTTP video generation/downloads are unavailable.")
+    return requests
 
 
 def _local_video_command() -> str:
@@ -175,7 +190,7 @@ def _write_base64_video(data: str, output_path: Path) -> Path:
 
 
 def _download_video(url: str, output_path: Path, *, timeout_seconds: int) -> Path:
-    response = requests.get(url, timeout=(10, timeout_seconds))
+    response = _requests_module().get(url, timeout=(10, timeout_seconds))
     response.raise_for_status()
     output_path.write_bytes(response.content)
     return output_path
@@ -420,7 +435,7 @@ def _request_local_video_endpoint(payload: dict[str, Any], output_path: Path, *,
         headers["Authorization"] = f"Bearer {api_key}"
 
     _log(f"POST {endpoint} for scene {payload['scene'].get('id', '?')}")
-    response = requests.post(
+    response = _requests_module().post(
         endpoint,
         headers=headers,
         json=payload,

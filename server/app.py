@@ -1,4 +1,4 @@
-"""FastAPI application factory for the Cathode API server."""
+"""FastAPI application factory for the betTube Studio API server."""
 
 from __future__ import annotations
 
@@ -21,11 +21,11 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 
-from server.routers import bootstrap, footage, jobs, media, plans, projects, scenes, settings, style_refs
+from server.routers import bootstrap, footage, jobs, media, plans, projects, scenes, settings, short_form, style_refs
 
 
 def create_app() -> FastAPI:
-    application = FastAPI(title="Cathode API", version="0.1.0")
+    application = FastAPI(title="betTube Studio API", version="0.1.0")
 
     application.add_middleware(
         CORSMiddleware,
@@ -48,6 +48,7 @@ def create_app() -> FastAPI:
     application.include_router(jobs.router, prefix="/api")
     application.include_router(footage.router, prefix="/api")
     application.include_router(style_refs.router, prefix="/api")
+    application.include_router(short_form.router, prefix="/api")
     application.include_router(settings.router, prefix="/api")
 
     @application.get("/api/health")
@@ -60,7 +61,7 @@ def create_app() -> FastAPI:
         return JSONResponse(
             status_code=500,
             content={
-                "message": "Cathode API failed before it could finish the request.",
+                "message": "betTube Studio API failed before it could finish the request.",
                 "operatorHint": f"Inspect the failing route boundary and the provider call behind {exc.__class__.__name__}.",
             },
         )

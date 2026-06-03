@@ -1,6 +1,6 @@
 # Why It Works
 
-An exceptionally well-crafted pitch storyboard that functions simultaneously as a persuasive spouse pitch and a demonstration of Cathode's own capabilities. The multi-voice structure (Bella/Marcus/Jenna/Coop) is a clever meta-layer that proves the product while selling the idea. Scene architecture is tight, emotional pacing is deliberate, and deterministic anchors are consistently present across all 18 scenes. Minor weaknesses: a few scenes use 'motion' type without precise enough animation choreography for the planner, and pricing figures are vague in the narration vs. the on-screen text. Overall this is one of the strongest multi-speaker, hybrid-mode storyboards reviewed.
+An exceptionally well-crafted pitch storyboard that functions simultaneously as a persuasive spouse pitch and a demonstration of betTube Studio's own capabilities. The multi-voice structure (Bella/Marcus/Jenna/Coop) is a clever meta-layer that proves the product while selling the idea. Scene architecture is tight, emotional pacing is deliberate, and deterministic anchors are consistently present across all 18 scenes. Minor weaknesses: a few scenes use 'motion' type without precise enough animation choreography for the planner, and pricing figures are vague in the narration vs. the on-screen text. Overall this is one of the strongest multi-speaker, hybrid-mode storyboards reviewed.
 
 ## Strengths
 - Multi-speaker casting (Bella + Marcus + Jenna + Coop) is a meta-demonstration of the product concept — the storyboard proves its own thesis
@@ -23,5 +23,5 @@ An exceptionally well-crafted pitch storyboard that functions simultaneously as 
 - IMPROVE: For grid/tile reveal scenes, on_screen_text items should be wrapped in a structured hint (e.g., a 'layout': 'grid' field) so the planner doesn't default to sequential text overlays
 - IMPROVE: Motion scenes with multi-step reveals benefit from explicit step count in a dedicated field rather than prose staging_notes — consider a 'reveal_steps' array
 - TEACH: Emotional arc labeling in scene titles (Hook, Problem, Solution, Demo, Math, Objection, Close) is a best practice that helps the planner understand scene function beyond visual content
-- TEACH: The 'demo is the pitch' sales motion described in scene 12 is itself a model for how Cathode pitches should work — the storyboard embodies its own argument
+- TEACH: The 'demo is the pitch' sales motion described in scene 12 is itself a model for how betTube Studio pitches should work — the storyboard embodies its own argument
 - IMPROVE: Target duration per scene should be calculable from narration word count — future storyboards should include estimated_duration_seconds per scene for tighter pacing validation

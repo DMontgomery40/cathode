@@ -623,7 +623,7 @@ function defaultTextCompositionProps(scene: Scene): Record<string, unknown> {
   return {
     headline: lines[0] || scene.title || 'Motion beat',
     body: lines.slice(1, 3).join(' ') || scene.narration?.slice(0, 180) || '',
-    kicker: scene.title || 'Cathode',
+    kicker: scene.title || 'betTube Studio',
     bullets: lines.slice(0, 4),
     accent: '',
   }
@@ -2838,7 +2838,7 @@ export function SceneInspector({
               className="m-0 pt-[var(--space-2)] text-[var(--text-tertiary)]"
               style={{ fontSize: '10px', fontFamily: 'var(--font-mono)' }}
             >
-              Cathode keeps at least one scene in the storyboard.
+              betTube Studio keeps at least one scene in the storyboard.
             </p>
           ) : null}
         </GlassPanel>
@@ -3486,7 +3486,7 @@ export function SceneInspector({
                   ? 'Local video generation uses clip notes plus narration context. Generate audio first if you want exact duration matching.'
                   : videoGenerationProvider === 'replicate'
                   ? 'Cloud video generation creates a real scene clip from your shot direction. Automatic mode picks the cinematic or speaking lane based on clip audio plus the scene clip style. Use the scene audio source control below to choose between clip audio and separate narration.'
-                  : 'Manual video mode is upload-first. Use Agent Demo when you want Cathode to run the heavier capture and review workflow in the background.'}
+                  : 'Manual video mode is upload-first. Use Agent Demo when you want betTube Studio to run the heavier capture and review workflow in the background.'}
               </p>
 
               <div className="grid gap-[var(--space-3)] xl:grid-cols-2">

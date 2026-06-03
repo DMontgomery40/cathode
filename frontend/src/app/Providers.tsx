@@ -9,7 +9,7 @@ const queryClient = new QueryClient({
     onError: (error, _variables, _context, mutation) => {
       useNotificationsStore.getState().notify({
         title: mutation.options.mutationKey?.join(' ') || 'Action failed',
-        description: getApiErrorMessage(error, 'The request failed before Cathode could finish it.'),
+        description: getApiErrorMessage(error, 'The request failed before betTube Studio could finish it.'),
         tone: 'danger',
       })
     },
@@ -19,7 +19,7 @@ const queryClient = new QueryClient({
       if (query.state.data !== undefined) {
         useNotificationsStore.getState().notify({
           title: query.queryKey.join(' ') || 'Refresh failed',
-          description: getApiErrorMessage(error, 'Cathode could not refresh this surface.'),
+          description: getApiErrorMessage(error, 'betTube Studio could not refresh this surface.'),
           tone: 'warning',
         })
       }

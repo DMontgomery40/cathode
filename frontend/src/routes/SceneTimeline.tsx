@@ -716,7 +716,7 @@ export function SceneTimeline() {
         ]}
         status={status}
       />
-      <ProjectWorkspaceNav projectId={projectId} />
+      <ProjectWorkspaceNav projectId={projectId} plan={currentPlan} />
 
       <div
         className="scene-workspace"

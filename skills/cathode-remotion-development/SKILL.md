@@ -1,11 +1,11 @@
 ---
 name: cathode-remotion-development
-description: Debug and extend Cathode's Remotion planning and renderer pipeline without rediscovering the architecture. Use when an agent needs to trace a scene from brief to plan to treatment to Remotion manifest to final render, fix a misclassified motion or 3D scene, or validate that a Remotion feature is real in the browser and final MP4.
+description: Debug and extend betTube Studio's Remotion planning and renderer pipeline without rediscovering the architecture. Use when an agent needs to trace a scene from brief to plan to treatment to Remotion manifest to final render, fix a misclassified motion or 3D scene, or validate that a Remotion feature is real in the browser and final MP4.
 ---
 
-# Cathode Remotion Development
+# betTube Studio Remotion Development
 
-Use this skill when the problem is inside Cathode's Remotion path, not just a generic frontend bug.
+Use this skill when the problem is inside betTube Studio's Remotion path, not just a generic frontend bug.
 
 Start here:
 
@@ -20,7 +20,7 @@ Start here:
 - debugging why a motion or 3D scene was misclassified
 - extending a composition family in `frontend/src/remotion/index.tsx`
 - validating whether the React Scenes and Render workspaces actually expose and render a Remotion family correctly
-- preserving Cathode's rule that `scene.composition` is canonical and manual `plan.json` edits are not a feature path
+- preserving betTube Studio's rule that `scene.composition` is canonical and manual `plan.json` edits are not a feature path
 
 ## Guardrails
 

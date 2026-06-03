@@ -373,7 +373,7 @@
       "id": 14,
       "uid": "f4166920",
       "title": "What This Actually Costs to Start",
-      "narration": "And the startup cost? Very manageable. We're talking a voice cloning subscription, a Cathode subscription for the video pipeline, and a small budget for outreach samples. All in, you're looking at a few hundred dollars to get a real, sellable product out the door. That's it.",
+      "narration": "And the startup cost? Very manageable. We're talking a voice cloning subscription, a betTube Studio subscription for the video pipeline, and a small budget for outreach samples. All in, you're looking at a few hundred dollars to get a real, sellable product out the door. That's it.",
       "visual_prompt": "Minimal startup cost breakdown motion beat on dark navy background. Three clean line-item rows in a simple table layout. Left column: category label. Right column: estimated cost range. A horizontal rule in teal above a bold total row at the bottom.",
       "scene_type": "motion",
       "video_scene_kind": null,
@@ -390,7 +390,7 @@
       "composition_intent": null,
       "on_screen_text": [
         "Voice Cloning Platform: ~$50–$100/mo",
-        "Video Pipeline (Cathode): ~$50–$100/mo",
+        "Video Pipeline (betTube Studio): ~$50–$100/mo",
         "Outreach Samples: ~$100 one-time",
         "Total to Launch: Under $300"
       ],

@@ -1,9 +1,9 @@
 ---
 name: cathode-project-demo
-description: Turn a live product, localhost app, or software repository into a reviewed narrated demo video with Cathode. Use when Codex or Claude needs to demo a real UI or workflow from scratch, drive the real app with desktop-use, critique framing and state quality, and feed approved clips into Cathode for final render.
+description: Turn a live product, localhost app, or software repository into a reviewed narrated demo video with betTube Studio. Use when Codex or Claude needs to demo a real UI or workflow from scratch, drive the real app with desktop-use, critique framing and state quality, and feed approved clips into betTube Studio for final render.
 ---
 
-# Cathode Project Demo
+# betTube Studio Project Demo
 
 Use this skill to build a demo video from a live product, not from README screenshots. The default path is:
 
@@ -11,7 +11,7 @@ Use this skill to build a demo video from a live product, not from README screen
 2. launch or attach to the app
 3. capture fresh footage with desktop-use
 4. run a short-prompt spawned sub-agent review plus deterministic rules
-5. hand approved clips to Cathode
+5. hand approved clips to betTube Studio
 6. render
 
 Prefer the MCP path for repeatable agent-driven runs. Use the app only when a human wants scene-by-scene edits after the first render.
@@ -22,14 +22,14 @@ Prefer the MCP path for repeatable agent-driven runs. Use the app only when a hu
    - local repo path
    - app URL if already running
    - launch command and expected URL if it needs to boot locally
-2. Bootstrap Cathode with `scripts/bootstrap_cathode.py`.
+2. Bootstrap betTube Studio with `scripts/bootstrap_cathode.py`.
 3. Prepare a capture session with `scripts/prepare_live_demo_session.py`.
 4. Launch the target app with `scripts/launch_target_app.py` when the app is local.
 5. Write a capture plan/checklist for the walkthrough, record the run while driving the app with desktop-use, then run `scripts/build_capture_manifest.py` so the skill keeps raw capture video, screenshots, and a step manifest.
 6. Use `scripts/capture_live_demo.py` only when you specifically need the older Playwright fallback for headed browser automation, selector-driven retries, CI, or trace zips.
 7. Postprocess the raw capture with `scripts/postprocess_capture.py`.
 8. Extract review frames, send them to a spawned sub-agent with a deliberately short prompt, save its plain-language response, seed an observations template with `scripts/init_review_observations.py`, then turn your structured observations into a report with `scripts/review_bundle.py`.
-9. Build the Cathode `make_video` payload with `scripts/prepare_cathode_handoff.py`.
+9. Build the betTube Studio `make_video` payload with `scripts/prepare_cathode_handoff.py`.
 10. Call `make_video`, then poll `get_job_status`.
 
 Read these references before the first live run:
@@ -50,9 +50,9 @@ Read these references before the first live run:
 
 ## Workflow
 
-### 1. Prepare Cathode
+### 1. Prepare betTube Studio
 
-- Run `python3 scripts/bootstrap_cathode.py --repo-path /path/to/cathode` when Cathode is already checked out locally.
+- Run `python3 scripts/bootstrap_cathode.py --repo-path /path/to/cathode` when betTube Studio is already checked out locally.
 - Run `python3 scripts/bootstrap_cathode.py` only when no usable checkout exists.
 - Treat missing `python3.10`, `ffmpeg`, or `espeak-ng` as blockers. Surface them instead of improvising around them.
 
@@ -145,13 +145,13 @@ python3 scripts/review_bundle.py \
 - If the best available result is still imperfect, ship `warn` with a concrete heads-up instead of pretending it looks ideal.
 - After the final MP4 is rendered, extract final-render frames and run the same sub-agent review one more time before calling the demo finished.
 
-### 6. Hand Off To Cathode
+### 6. Hand Off To betTube Studio
 
 - Run `python3 scripts/prepare_cathode_handoff.py` with the bundle manifest, review report, target repo path, and demo brief fields.
 - Feed the generated JSON into `make_video`.
-- Cathode now accepts `footage_paths` and `footage_manifest`; prefer `footage_manifest` so reviewed clip status and notes survive into the project.
+- betTube Studio now accepts `footage_paths` and `footage_manifest`; prefer `footage_manifest` so reviewed clip status and notes survive into the project.
 
-### 7. Drive Cathode
+### 7. Drive betTube Studio
 
 Use `make_video` with repo context plus reviewed footage. Typical fields:
 
@@ -183,13 +183,13 @@ Use `make_video` with repo context plus reviewed footage. Typical fields:
 
 ## Resources
 
-- `scripts/bootstrap_cathode.py`: prepare or reuse a Cathode checkout
+- `scripts/bootstrap_cathode.py`: prepare or reuse a betTube Studio checkout
 - `scripts/prepare_live_demo_session.py`: create a deterministic capture bundle
 - `scripts/launch_target_app.py`: boot or attach to the target app
 - `scripts/build_capture_manifest.py`: turn a desktop-use recording plus clip notes into the standard capture manifest
 - `scripts/capture_live_demo.py`: run the packaged Playwright fallback capture flow from a capture plan
 - `scripts/apply_retry_actions.py`: mutate a capture plan using bounded retry actions
-- `scripts/postprocess_capture.py`: trim and crop raw capture clips into Cathode-ready footage
+- `scripts/postprocess_capture.py`: trim and crop raw capture clips into footage ready for betTube Studio
 - `scripts/extract_review_frames.py`: extract review frames for the spawned QC sub-agent
 - `scripts/init_review_observations.py`: seed a parent-editable observations template from the frame bundle
 - `scripts/review_bundle.py`: validate structured review observations and compute retry actions

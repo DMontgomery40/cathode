@@ -744,7 +744,7 @@ def _three_data_stage_props(scene: dict[str, Any], intent: dict[str, Any]) -> di
     layout_variant = _three_data_stage_layout_variant(scene, intent)
     return {
         "headline": lines[0] if lines else title or "Data stage",
-        "kicker": title or "Cathode",
+        "kicker": title or "betTube Studio",
         "layoutVariant": layout_variant,
         "emphasis": _three_data_stage_emphasis(scene, intent, layout_variant),
         "palette": _three_data_stage_palette(scene, intent, layout_variant),
@@ -1034,13 +1034,13 @@ def _composition_props_from_scene(scene: dict[str, Any], intent: dict[str, Any],
         if body:
             props["body"] = body
     if family in {"kinetic_statements", "bullet_stack"}:
-        props["kicker"] = title or "Cathode"
+        props["kicker"] = title or "betTube Studio"
         if lines[:4]:
             props["bullets"] = lines[:4]
         elif title:
             props["bullets"] = [title]
     if family == "quote_focus":
-        props["kicker"] = title or "Cathode"
+        props["kicker"] = title or "betTube Studio"
     if family == "three_data_stage":
         props.update(_three_data_stage_props(scene, intent))
     if family == "surreal_tableau_3d":

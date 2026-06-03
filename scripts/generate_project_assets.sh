@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Generate assets and render a Cathode project.
+# Generate assets and render a betTube Studio project.
 # Run from the repository root:
 #   scripts/generate_project_assets.sh projects/<project_name>
 
@@ -22,7 +22,7 @@ if [ -z "$project_dir" ]; then
   exit 1
 fi
 
-echo "=== Cathode Project Asset Generation ==="
+echo "=== betTube Studio Project Asset Generation ==="
 echo "Starting at $(date)"
 
 /opt/homebrew/bin/python3.10 - "$project_dir" <<'PY'

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Harvest, judge, preview, and optionally promote Cathode director examples."""
+"""Harvest, judge, preview, and optionally promote betTube Studio director examples."""
 
 from __future__ import annotations
 

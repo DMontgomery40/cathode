@@ -20,6 +20,7 @@ from core.image_gen import (
     generate_image_codex_exec,
     generate_image_local,
     generate_scene_image,
+    image_target_from_brief,
 )
 from core.runtime import available_image_generation_providers, resolve_image_profile
 
@@ -33,6 +34,20 @@ def test_default_image_edit_model_prefers_openai_when_configured(monkeypatch):
     monkeypatch.delenv("ALIBABA_API_KEY", raising=False)
 
     assert default_image_edit_model() == DEFAULT_OPENAI_IMAGE_EDIT_MODEL
+
+
+def test_image_target_from_short_form_brief_is_vertical():
+    target = image_target_from_brief(
+        {
+            "short_form_format": "vertical_short",
+            "render_profile": {"aspect_ratio": "16:9", "width": 1664, "height": 928},
+        }
+    )
+
+    assert target["replicate_aspect_ratio"] == "9:16"
+    assert target["width"] == 928
+    assert target["height"] == 1664
+    assert target["openai_size"] == "928x1664"
 
 
 def test_default_image_edit_model_falls_back_to_replicate_without_openai(monkeypatch):

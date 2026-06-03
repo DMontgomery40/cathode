@@ -1,10 +1,10 @@
 <p align="center">
-  <img src="docs/assets/cathode-logo.png" alt="Cathode logo" width="220">
+  <img src="docs/assets/cathode-logo.png" alt="betTube Studio logo" width="220">
 </p>
 
-# Cathode
+# betTube Studio
 
-Cathode is a local-first explainer-video pipeline with three main surfaces:
+betTube Studio is a local-first explainer-video pipeline with three main surfaces:
 
 - a React + FastAPI control room for the current workspace-first UI
 - a legacy Streamlit app for the older manual step-by-step path
@@ -16,20 +16,20 @@ It turns rough notes, source text, or a finished script into a local project fol
 
 <p align="center">
   <a href="https://youtu.be/HHHbcHobg-A">
-    <img src="docs/assets/cathode-demo-youtube-card.png" alt="Watch the Cathode demo on YouTube" width="720">
+    <img src="docs/assets/cathode-demo-youtube-card.png" alt="Watch the betTube Studio demo on YouTube" width="720">
   </a>
 </p>
 
-Cathode now has four practical lanes:
+betTube Studio now has four practical lanes:
 
 1. `React/FastAPI control room`
    Fill in Brief Studio, hit the primary button, watch the background job/logs, then land on the final MP4.
 2. `Legacy Streamlit app`
    Use the older manual step-by-step path when you want a more explicit scene-by-scene workflow.
 3. `MCP workflow`
-   Call `make_video` from an agent or client and let Cathode build the local project in the background.
+   Call `make_video` from an agent or client and let betTube Studio build the local project in the background.
 4. `Live demo workflow`
-   Launch or attach to a real app, capture fresh footage, review it, then feed the approved clips into Cathode for final render.
+   Launch or attach to a real app, capture fresh footage, review it, then feed the approved clips into betTube Studio for final render.
 
 If you only remember one thing, remember this:
 
@@ -84,7 +84,7 @@ This is still supported, but the React/FastAPI control room is the more current 
 
 ### 3. Agent / MCP
 
-Use this when an agent or client should drive Cathode programmatically.
+Use this when an agent or client should drive betTube Studio programmatically.
 
 ```bash
 /opt/homebrew/bin/python3.10 cathode_mcp_server.py --transport stdio
@@ -106,17 +106,17 @@ The packaged skill now lives in:
 
 Its flow is:
 
-1. bootstrap Cathode
+1. bootstrap betTube Studio
 2. prepare a live capture session
 3. launch or attach to the target app
 4. capture fresh states in a real browser
 5. review the footage
-6. hand approved clips into Cathode
+6. hand approved clips into betTube Studio
 7. render
 
 This path is capture-first and review-first. It does not assume existing README screenshots are good enough.
 The QC pass is supposed to run inside Codex or Claude as a spawned reviewer sub-agent looking at extracted images only, not as some separate external “vision model” workflow. The reviewer prompt should stay tiny and human, more like “hey, check out my demo vid” than a schema dump.
-The parent agent should save that raw reviewer reply, translate it into Cathode’s structured `accept / warn / retry` observations, and then let the deterministic review rules decide retries and handoff safety.
+The parent agent should save that raw reviewer reply, translate it into betTube Studio’s structured `accept / warn / retry` observations, and then let the deterministic review rules decide retries and handoff safety.
 
 In practice, that review loop is:
 
@@ -131,7 +131,7 @@ The packaged live-demo lane now also has a real capture driver and retry-plan to
 
 ## Remotion And Composition Modes
 
-Cathode no longer stops at still-image and clip-only storyboards.
+betTube Studio no longer stops at still-image and clip-only storyboards.
 
 - `classic`
   image + video scenes, with `ffmpeg` as the default final render backend
@@ -142,7 +142,7 @@ Cathode no longer stops at still-image and clip-only storyboards.
 
 Motion scenes are template-first in the current product and render through the local Remotion toolchain bundled in `frontend/`. The React app only exposes motion and hybrid options when the Remotion toolchain is actually runnable on this machine.
 
-Important timing rule: narration audio is still the source of truth. Cathode computes scene durations, video trim/speed/hold behavior, and the Remotion manifest from the same timing contract, so hybrid renders stay in sync instead of drifting.
+Important timing rule: narration audio is still the source of truth. betTube Studio computes scene durations, video trim/speed/hold behavior, and the Remotion manifest from the same timing contract, so hybrid renders stay in sync instead of drifting.
 
 ## Demo Assets
 
@@ -157,17 +157,17 @@ Important timing rule: narration audio is still the source of truth. Cathode com
 ### Current UI
 
 <p align="center">
-  <img src="docs/assets/motion-scene-focus.png" alt="Cathode Scenes workspace showing a motion scene with Remotion preview controls" width="100%">
+  <img src="docs/assets/motion-scene-focus.png" alt="betTube Studio Scenes workspace showing a motion scene with Remotion preview controls" width="100%">
 </p>
 
 <p align="center">
-  <img src="docs/assets/brief-studio-focus.png" alt="Cathode Brief Studio with source mode and composition mode controls" width="48%">
-  <img src="docs/assets/render-finished-focus.png" alt="Cathode Render workspace with a finished video artifact" width="48%">
+  <img src="docs/assets/brief-studio-focus.png" alt="betTube Studio Brief Studio with source mode and composition mode controls" width="48%">
+  <img src="docs/assets/render-finished-focus.png" alt="betTube Studio Render workspace with a finished video artifact" width="48%">
 </p>
 
 ## Provider Model
 
-Cathode is env-driven on purpose.
+betTube Studio is env-driven on purpose.
 
 - `OPENAI_API_KEY`: OpenAI storyboard and optional OpenAI TTS
 - `ANTHROPIC_API_KEY`: Anthropic storyboard
@@ -184,7 +184,7 @@ Only configured providers appear in the UI. If you leave a key out, the UI stays
 
 ## Local Vs Cloud
 
-Cathode is local-first, not cloud-hosted.
+betTube Studio is local-first, not cloud-hosted.
 
 - the app runs locally
 - projects live under `projects/<project>/`
@@ -199,7 +199,7 @@ For visuals, the built-in AI image path can run either through Replicate or thro
 
 ## Local Image Backend
 
-Cathode can run Qwen Image locally in two ways:
+betTube Studio can run Qwen Image locally in two ways:
 
 - `torch` runtime for CUDA, CPU, or MPS through Hugging Face `diffusers`
 - `mlx` runtime for Apple Silicon through `mflux`
@@ -237,12 +237,12 @@ export CATHODE_LOCAL_IMAGE_MLX_LOW_RAM=0
 
 ## Local Video Backend
 
-Cathode keeps local video generation generic and env-driven rather than baking in one model family.
+betTube Studio keeps local video generation generic and env-driven rather than baking in one model family.
 
 Configure one of these:
 
-- `CATHODE_LOCAL_VIDEO_COMMAND`: Cathode runs a local command and passes scene data through env vars such as `CATHODE_VIDEO_PROMPT`, `CATHODE_VIDEO_OUTPUT_PATH`, `CATHODE_VIDEO_DURATION_SECONDS`, `CATHODE_VIDEO_MODEL`, and `CATHODE_VIDEO_REQUEST_JSON`.
-- `CATHODE_LOCAL_VIDEO_ENDPOINT`: Cathode sends a JSON POST request with `prompt`, `output_path`, `duration_seconds`, `width`, `height`, `fps`, `scene`, and `brief`.
+- `CATHODE_LOCAL_VIDEO_COMMAND`: betTube Studio runs a local command and passes scene data through env vars such as `CATHODE_VIDEO_PROMPT`, `CATHODE_VIDEO_OUTPUT_PATH`, `CATHODE_VIDEO_DURATION_SECONDS`, `CATHODE_VIDEO_MODEL`, and `CATHODE_VIDEO_REQUEST_JSON`.
+- `CATHODE_LOCAL_VIDEO_ENDPOINT`: betTube Studio sends a JSON POST request with `prompt`, `output_path`, `duration_seconds`, `width`, `height`, `fps`, `scene`, and `brief`.
 
 Your local backend can satisfy the request in any of these ways:
 
@@ -294,11 +294,11 @@ Default port is `8517`. Override it with `STREAMLIT_PORT` when using `./start.sh
 React mode uses `CATHODE_API_PORT` for FastAPI (default `9321`) and `CATHODE_FRONTEND_PORT` for Vite (default `9322`).
 
 Final render now uses direct `ffmpeg` orchestration and auto-prefers hardware H.264 encoders when the local ffmpeg build supports them. Override with `CATHODE_VIDEO_ENCODER` or force CPU fallback with `CATHODE_DISABLE_HW_ENCODER=1`.
-When Remotion is available and the project resolves to `motion_only` or `hybrid`, Cathode can switch the final render backend to Remotion automatically.
+When Remotion is available and the project resolves to `motion_only` or `hybrid`, betTube Studio can switch the final render backend to Remotion automatically.
 
 ## MCP Server
 
-Cathode also ships as an MCP server.
+betTube Studio also ships as an MCP server.
 
 Run over stdio:
 
@@ -391,9 +391,9 @@ CATHODE_LOCAL_VIDEO_TIMEOUT_SECONDS=900
 
 ## Workflow
 
-### Standard Cathode Project
+### Standard betTube Studio Project
 
-Every Cathode project stores:
+Every betTube Studio project stores:
 
 - a normalized brief
 - composition mode

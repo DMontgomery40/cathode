@@ -4,6 +4,7 @@ import { clsx } from 'clsx'
 import { WorkspaceHeader } from '../components/composed/WorkspaceHeader.tsx'
 import { ProjectWorkspaceNav } from '../components/composed/ProjectWorkspaceNav.tsx'
 import { JobCard } from '../features/jobs/JobCard.tsx'
+import { usePlan } from '../lib/api/hooks.ts'
 import { useProjectJobs, useCancelJob } from '../lib/api/scene-hooks.ts'
 import type { JobStatus } from '../lib/api/jobs.ts'
 import { WorkspaceCanvas, WorkspaceEmptyState, WorkspaceGrid, WorkspacePanel } from '../design-system/recipes'
@@ -12,6 +13,7 @@ type FilterValue = 'all' | JobStatus
 
 export function QueueMonitor() {
   const { projectId = '' } = useParams<{ projectId: string }>()
+  const { data: plan } = usePlan(projectId)
   const { data: jobs, isLoading } = useProjectJobs(projectId, { refetchInterval: 3000 })
   const cancelJobMut = useCancelJob()
   const [filter, setFilter] = useState<FilterValue>('all')
@@ -50,7 +52,7 @@ export function QueueMonitor() {
         }
         status={activeCount > 0 ? 'generating' : 'idle'}
       />
-      {projectId && <ProjectWorkspaceNav projectId={projectId} />}
+      {projectId && <ProjectWorkspaceNav projectId={projectId} plan={plan} />}
       <WorkspaceCanvas>
         <WorkspaceGrid
           asideWidth={320}

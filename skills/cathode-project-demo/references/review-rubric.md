@@ -4,7 +4,7 @@ The reviewer is a spawned Codex/Claude sub-agent and is mandatory. Do not skip t
 
 Keep the reviewer prompt short. The whole point is to get a less-biased visual gut check, not another long planning document.
 Do not hand the reviewer clip metadata, plan context, or a JSON schema. Give it frames and one blunt question.
-Save the reviewer reply as raw text first. The parent agent can map that gut-check back into clip ids and Cathode's structured report afterward.
+Save the reviewer reply as raw text first. The parent agent can map that gut-check back into clip ids and betTube Studio's structured report afterward.
 
 ## Required Judgments
 
@@ -21,7 +21,7 @@ For each candidate clip, judge:
 
 - `accept`: the clip is strong enough to use without caveat
 - `warn`: the clip is usable, but needs a heads-up or should not be the hero moment
-- `retry`: capture again before handing off to Cathode
+- `retry`: capture again before handing off to betTube Studio
 
 ## When To Warn
 

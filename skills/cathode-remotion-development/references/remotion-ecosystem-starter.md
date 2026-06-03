@@ -17,13 +17,13 @@ This is a bounded official map for future agents. It is not meant to be a full e
 
 - The official Remotion homepage currently advertises "Remotion Editor Starter" and describes it as a template for custom video editing applications with React and TypeScript:
   - <https://www.remotion.dev/>
-- In Cathode today:
+- In betTube Studio today:
   - not adopted
-  - useful as reference only if Cathode ever needs a richer timeline/editor product surface
+  - useful as reference only if betTube Studio ever needs a richer timeline/editor product surface
 
-## Current Cathode Remotion Dependencies
+## Current betTube Studio Remotion Dependencies
 
-In `frontend/package.json`, Cathode currently uses:
+In `frontend/package.json`, betTube Studio currently uses:
 
 - `remotion`
 - `@remotion/player`
@@ -34,18 +34,18 @@ In `frontend/package.json`, Cathode currently uses:
 - `@react-three/drei`
 - `three`
 
-## Not Currently Adopted In Cathode
+## Not Currently Adopted In betTube Studio
 
 - Next.js Remotion starter
   - official and useful for app-level hosting/reference patterns
-  - not part of Cathode's current React + FastAPI control room
+  - not part of betTube Studio's current React + FastAPI control room
 - Vercel sandbox starter
   - official serverless/rendering reference
-  - not part of Cathode's current local-first render path
+  - not part of betTube Studio's current local-first render path
 - Editor Starter
   - official product/editor reference
-  - not part of Cathode's current scene inspector + player UI
+  - not part of betTube Studio's current scene inspector + player UI
 
 ## Why This File Exists
 
-Future agents should not have to search blindly for "what else does Remotion officially ship?" before making a scoped Cathode decision. Start here, then stop once you have the official reference you actually need.
+Future agents should not have to search blindly for "what else does Remotion officially ship?" before making a scoped betTube Studio decision. Start here, then stop once you have the official reference you actually need.

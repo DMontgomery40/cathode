@@ -9,6 +9,7 @@ from core.video_assembly import (
     compress_video_if_oversized,
     get_media_duration,
     get_video_scene_timing,
+    normalize_render_profile,
 )
 
 
@@ -89,6 +90,42 @@ def test_get_video_scene_timing_reports_effective_and_freeze_duration():
     assert timing["trimmed_duration"] == 6.0
     assert timing["effective_duration"] == 3.0
     assert timing["freeze_duration"] == 2.0
+
+
+def test_normalize_render_profile_accepts_vertical_short_dimensions():
+    profile = normalize_render_profile({"aspect_ratio": "9:16", "fps": 30})
+
+    assert profile["aspect_ratio"] == "9:16"
+    assert profile["width"] == 928
+    assert profile["height"] == 1664
+    assert profile["fps"] == 30
+
+
+def test_normalize_render_profile_infers_vertical_aspect_from_dimensions():
+    profile = normalize_render_profile({"width": 928, "height": 1664})
+
+    assert profile["aspect_ratio"] == "9:16"
+
+
+def test_get_media_duration_falls_back_to_ffmpeg_metadata(monkeypatch, tmp_path):
+    media_path = tmp_path / "media.mp4"
+    media_path.write_bytes(b"mp4")
+
+    def fake_run_command(*_args, **_kwargs):
+        raise FileNotFoundError("ffprobe")
+
+    def fake_subprocess_run(cmd, **_kwargs):
+        return subprocess.CompletedProcess(
+            cmd,
+            1,
+            stdout="",
+            stderr="Input #0, mov,mp4\n  Duration: 00:00:01.230000, start: 0.000000, bitrate: 12 kb/s\n",
+        )
+
+    monkeypatch.setattr("core.video_assembly._run_command", fake_run_command)
+    monkeypatch.setattr("core.video_assembly.subprocess.run", fake_subprocess_run)
+
+    assert get_media_duration(media_path) == 1.23
 
 
 def test_assemble_video_supports_video_scene_with_last_frame_hold(tmp_path):

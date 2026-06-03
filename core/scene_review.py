@@ -1,4 +1,4 @@
-"""Backend scene-review orchestration for Cathode slide visuals."""
+"""Backend scene-review orchestration for betTube Studio slide visuals."""
 
 from __future__ import annotations
 
@@ -621,7 +621,7 @@ def _build_scene_review_prompt(
 ) -> str:
     review_mode = "dual-path comparison" if len(prepared_candidates) > 1 else "single-candidate review"
     lines: list[str] = [
-        "You are Cathode's backend visual scene judge.",
+        "You are betTube Studio's backend visual scene judge.",
         "This is a vision-only review over rendered slide images.",
         "Do not use OCR, do not transcribe visible slide text, and do not invent hidden content.",
         "Judge each candidate by actually looking at the attached images.",

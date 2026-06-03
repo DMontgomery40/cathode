@@ -257,7 +257,7 @@ def choose_llm_provider(preferred: str | None = None) -> str:
 def resolve_workflow_llm_roles(preferred: str | None = None) -> tuple[str, str]:
     """Resolve creative and machinery LLM roles for the product workflow.
 
-    Cathode's workflow now treats Claude/Anthropic as the creative scene writer
+    betTube Studio's workflow now treats Claude/Anthropic as the creative scene writer
     and, for the product pipeline, the treatment planner must stay on Anthropic
     too so the one-click flow cannot drift back onto an incompatible OpenAI
     Responses path.
@@ -269,7 +269,7 @@ def resolve_workflow_llm_roles(preferred: str | None = None) -> tuple[str, str]:
     keys = check_api_keys()
     if not keys.get("anthropic"):
         raise ValueError(
-            "Cathode's creative workflow now requires ANTHROPIC_API_KEY because Claude writes every scene."
+            "betTube Studio's creative workflow now requires ANTHROPIC_API_KEY because Claude writes every scene."
         )
 
     creative_provider = "anthropic"

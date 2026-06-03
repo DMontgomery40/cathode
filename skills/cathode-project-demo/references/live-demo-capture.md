@@ -52,7 +52,7 @@ Avoid clips where:
 - the metrics or outputs look obviously bad for a hero shot
 - the theme is mixed, washed out, or incorrectly applied
 
-After extraction, hand only frames to the reviewer sub-agent. Keep its raw reply in the bundle before you translate it into the structured Cathode review report.
+After extraction, hand only frames to the reviewer sub-agent. Keep its raw reply in the bundle before you translate it into the structured betTube Studio review report.
 
 ## Capture Plan Shape
 

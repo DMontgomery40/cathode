@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 import subprocess
 import tempfile
 from pathlib import Path
@@ -12,6 +13,12 @@ from typing import Any, Callable
 TARGET_WIDTH = 1664
 TARGET_HEIGHT = 928
 TARGET_ASPECT_RATIO = "16:9"
+VERTICAL_TARGET_WIDTH = 928
+VERTICAL_TARGET_HEIGHT = 1664
+SUPPORTED_RENDER_SIZES = {
+    "16:9": (TARGET_WIDTH, TARGET_HEIGHT),
+    "9:16": (VERTICAL_TARGET_WIDTH, VERTICAL_TARGET_HEIGHT),
+}
 DEFAULT_FPS = 24
 DEFAULT_AUDIO_SAMPLE_RATE = 48000
 DEFAULT_AUDIO_CHANNELS = 2
@@ -25,10 +32,12 @@ DEFAULT_COMPRESSION_TARGET_VIDEO_KBPS = 2500
 DEFAULT_COMPRESSION_TARGET_AUDIO_KBPS = 128
 
 _ENCODER_CACHE: set[str] | None = None
+_FFMPEG_DURATION_RE = re.compile(r"Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)")
 
 
 def normalize_render_profile(render_profile: dict[str, Any] | None = None) -> dict[str, Any]:
     """Normalize and validate render profile configuration."""
+    raw_profile = render_profile if isinstance(render_profile, dict) else {}
     profile = {
         "version": "v1",
         "aspect_ratio": TARGET_ASPECT_RATIO,
@@ -44,12 +53,23 @@ def normalize_render_profile(render_profile: dict[str, Any] | None = None) -> di
         "compression_target_video_kbps": DEFAULT_COMPRESSION_TARGET_VIDEO_KBPS,
         "compression_target_audio_kbps": DEFAULT_COMPRESSION_TARGET_AUDIO_KBPS,
     }
-    if isinstance(render_profile, dict):
-        profile.update(render_profile)
+    requested_aspect = str(raw_profile.get("aspect_ratio") or "").strip()
+    if requested_aspect in SUPPORTED_RENDER_SIZES:
+        width, height = SUPPORTED_RENDER_SIZES[requested_aspect]
+        profile["aspect_ratio"] = requested_aspect
+        profile["width"] = width
+        profile["height"] = height
+    if raw_profile:
+        profile.update(raw_profile)
 
     profile["aspect_ratio"] = str(profile.get("aspect_ratio") or TARGET_ASPECT_RATIO)
     profile["width"] = int(profile.get("width") or TARGET_WIDTH)
     profile["height"] = int(profile.get("height") or TARGET_HEIGHT)
+    if not requested_aspect:
+        for aspect_ratio, size in SUPPORTED_RENDER_SIZES.items():
+            if (profile["width"], profile["height"]) == size:
+                profile["aspect_ratio"] = aspect_ratio
+                break
     profile["fps"] = int(profile.get("fps") or DEFAULT_FPS)
     profile["video_encoder"] = str(profile.get("video_encoder") or "auto").strip().lower() or "auto"
     profile["prefer_gpu"] = bool(profile.get("prefer_gpu", True))
@@ -85,11 +105,14 @@ def normalize_render_profile(render_profile: dict[str, Any] | None = None) -> di
     if not profile["scene_types"]:
         profile["scene_types"] = ["image", "video", "motion"]
 
-    if profile["aspect_ratio"] != TARGET_ASPECT_RATIO:
-        raise ValueError(f"Unsupported aspect_ratio={profile['aspect_ratio']!r}. v1 only supports 16:9.")
-    if profile["width"] != TARGET_WIDTH or profile["height"] != TARGET_HEIGHT:
+    if profile["aspect_ratio"] not in SUPPORTED_RENDER_SIZES:
+        supported = ", ".join(sorted(SUPPORTED_RENDER_SIZES))
+        raise ValueError(f"Unsupported aspect_ratio={profile['aspect_ratio']!r}. v1 supports {supported}.")
+    expected_width, expected_height = SUPPORTED_RENDER_SIZES[profile["aspect_ratio"]]
+    if profile["width"] != expected_width or profile["height"] != expected_height:
         raise ValueError(
-            "Unsupported render resolution. v1 only supports 1664x928; "
+            f"Unsupported render resolution for {profile['aspect_ratio']}. "
+            f"v1 supports {expected_width}x{expected_height}; "
             f"got {profile['width']}x{profile['height']}."
         )
 
@@ -148,6 +171,32 @@ def _run_command(
     )
 
 
+def _probe_duration_with_ffmpeg(path: Path) -> float | None:
+    try:
+        completed = subprocess.run(
+            [
+                "ffmpeg",
+                "-hide_banner",
+                "-i",
+                str(path),
+            ],
+            check=False,
+            text=True,
+            capture_output=True,
+        )
+    except FileNotFoundError:
+        return None
+
+    match = _FFMPEG_DURATION_RE.search(f"{completed.stderr}\n{completed.stdout}")
+    if not match:
+        return None
+    hours = float(match.group(1))
+    minutes = float(match.group(2))
+    seconds = float(match.group(3))
+    duration = hours * 3600.0 + minutes * 60.0 + seconds
+    return duration if duration >= 0 else None
+
+
 def _probe_duration(path: Path) -> float | None:
     try:
         completed = _run_command(
@@ -164,15 +213,15 @@ def _probe_duration(path: Path) -> float | None:
             capture=True,
         )
     except (FileNotFoundError, subprocess.CalledProcessError):
-        return None
+        return _probe_duration_with_ffmpeg(path)
 
     raw = completed.stdout.strip()
     if not raw or raw == "N/A":
-        return None
+        return _probe_duration_with_ffmpeg(path)
     try:
         duration = float(raw)
     except ValueError:
-        return None
+        return _probe_duration_with_ffmpeg(path)
     return duration if duration >= 0 else None
 
 

@@ -64,7 +64,7 @@
       "transition_hint": "fade",
       "composition_intent": null,
       "on_screen_text": [
-        "— Founder, Cathode"
+        "— Founder, betTube Studio"
       ],
       "refinement_history": [],
       "image_path": null,
@@ -76,20 +76,20 @@
       "id": 3,
       "uid": "54b530c7",
       "title": "What That Means",
-      "narration": "Most tools force a choice: either lock everything down, or leave it all open. Cathode was built to refuse that choice.",
+      "narration": "Most tools force a choice: either lock everything down, or leave it all open. betTube Studio was built to refuse that choice.",
       "visual_prompt": "Deep charcoal-to-midnight blue gradient background. A horizontal split composition — left half labeled in minimal type, right half labeled in minimal type. A thin vertical line divides them, glowing faintly. No icons, no imagery — pure typographic contrast. Mood: a quiet diagram of a false dilemma.",
       "scene_type": "motion",
       "video_scene_kind": null,
       "speaker_name": null,
       "footage_asset_id": null,
-      "staging_notes": "The two labels appear simultaneously on left and right, framing a tension. The dividing line glows. Then both labels dim slightly as the third line — 'Cathode refuses the choice.' — rises in the center, overlapping the divide. Feels like a resolution emerging from the tension.",
+      "staging_notes": "The two labels appear simultaneously on left and right, framing a tension. The dividing line glows. Then both labels dim slightly as the third line — 'betTube Studio refuses the choice.' — rises in the center, overlapping the divide. Feels like a resolution emerging from the tension.",
       "data_points": [],
       "transition_hint": "fade",
       "composition_intent": null,
       "on_screen_text": [
         "Lock it down",
         "Leave it open",
-        "Cathode refuses the choice."
+        "betTube Studio refuses the choice."
       ],
       "refinement_history": [],
       "image_path": null,
@@ -201,7 +201,7 @@
       "id": 8,
       "uid": "cb786df5",
       "title": "The Real Proof",
-      "narration": "This video is made with Cathode. Every frame, every word, every timing decision — designed correctly.",
+      "narration": "This video is made with betTube Studio. Every frame, every word, every timing decision — designed correctly.",
       "visual_prompt": "Return to the near-black obsidian environment from the opening. Centered composition. Clean, wide negative space. The visual layer is pure atmosphere — warm ember undertone, grain texture. No image-rendered text. Mood: a quiet, confident closing loop back to the beginning.",
       "scene_type": "motion",
       "video_scene_kind": null,
@@ -213,7 +213,7 @@
       "composition_intent": null,
       "on_screen_text": [
         "This video.",
-        "Made with Cathode.",
+        "Made with betTube Studio.",
         "Every frame. Every word. Every timing decision."
       ],
       "refinement_history": [],
@@ -232,7 +232,7 @@
       "video_scene_kind": null,
       "speaker_name": null,
       "footage_asset_id": null,
-      "staging_notes": "The quote assembles line by line, slower than any previous reveal — this is the resolution, not a tease. After all three lines are present, they rest for a long beat. Then the Cathode wordmark or a single small logotype fades in below, unhurried. Fade to black is the final move. The silence after the narration ends should feel intentional.",
+      "staging_notes": "The quote assembles line by line, slower than any previous reveal — this is the resolution, not a tease. After all three lines are present, they rest for a long beat. Then the betTube Studio wordmark or a single small logotype fades in below, unhurried. Fade to black is the final move. The silence after the narration ends should feel intentional.",
       "data_points": [],
       "transition_hint": "fade",
       "composition_intent": null,

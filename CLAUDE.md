@@ -6,7 +6,7 @@ This file provides guidance to coding agents working in this repository.
 
 ## Project Overview
 
-Cathode is a local-first explainer-video pipeline.
+betTube Studio is a local-first explainer-video pipeline.
 
 It supports:
 

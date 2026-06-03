@@ -12,8 +12,8 @@ test.describe('Home / Workspace', () => {
     const rail = page.locator('nav[aria-label="Main navigation"]')
     await expect(rail).toBeVisible()
 
-    // Brand mark shows "Cathode" when expanded
-    await expect(rail.locator('text=Cathode')).toBeVisible()
+    // Brand mark shows "betTube Studio" when expanded
+    await expect(rail.locator('text=betTube Studio')).toBeVisible()
 
     // All 4 nav items visible
     const menuItems = rail.locator('[role="menuitem"]')
@@ -37,7 +37,7 @@ test.describe('Home / Workspace', () => {
     await collapseBtn.click()
     await page.waitForTimeout(400) // wait for transition
 
-    // Now should show "C" instead of "Cathode"
+    // Now should show "C" instead of "betTube Studio"
     const brandText = rail.locator('span').filter({ hasText: /^C$/ }).first()
     await expect(brandText).toBeVisible()
 
@@ -49,8 +49,8 @@ test.describe('Home / Workspace', () => {
     await expandBtn.click()
     await page.waitForTimeout(400)
 
-    // Should show "Cathode" again
-    await expect(rail.locator('text=Cathode')).toBeVisible()
+    // Should show "betTube Studio" again
+    await expect(rail.locator('text=betTube Studio')).toBeVisible()
   })
 
   test('CommandRail keyboard navigation works', async ({ page }) => {
@@ -77,7 +77,7 @@ test.describe('Home / Workspace', () => {
 
   // ── WorkspaceHeader ────────────────────────────────────────────
   test('WorkspaceHeader shows title and subtitle', async ({ page }) => {
-    await expect(page.locator('text=Cathode').first()).toBeVisible()
+    await expect(page.locator('text=betTube Studio').first()).toBeVisible()
     await expect(page.locator('text=Video production workspace')).toBeVisible()
   })
 

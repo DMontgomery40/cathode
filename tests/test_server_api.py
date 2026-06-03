@@ -212,6 +212,31 @@ def test_get_projects(mock_list, mock_load, client, tmp_path):
     assert proj["tts_profile"] == {"provider": "kokoro"}
 
 
+@patch("server.routers.projects.load_plan")
+@patch("server.routers.projects.list_projects", return_value=["short_project"])
+def test_get_projects_exposes_short_form_mode_metadata(mock_list, mock_load, client, tmp_path):
+    project_dir = tmp_path / "short_project"
+    project_dir.mkdir()
+    (project_dir / "plan.json").write_text("{}", encoding="utf-8")
+    mock_load.return_value = {
+        "meta": {
+            "pipeline_mode": "short_form_vertical_v1",
+            "brief": {"short_form_format": "vertical_short"},
+            "render_profile": {"aspect_ratio": "9:16"},
+        },
+        "scenes": [],
+    }
+
+    with patch("server.routers.projects.PROJECTS_DIR", tmp_path):
+        resp = client.get("/api/projects")
+
+    assert resp.status_code == 200
+    proj = resp.json()[0]
+    assert proj["pipeline_mode"] == "short_form_vertical_v1"
+    assert proj["short_form_format"] == "vertical_short"
+    assert proj["render_aspect_ratio"] == "9:16"
+
+
 def test_get_projects_falls_back_to_plan_timestamp_when_meta_dates_missing(client, tmp_path):
     project_dir = tmp_path / "project_a"
     project_dir.mkdir()

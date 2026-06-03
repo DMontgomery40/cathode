@@ -49,7 +49,7 @@ def test_director_prompt_includes_source_mode_behavior_and_brief_payload():
     assert '"style_reference_summary": "High-contrast editorial lighting, restrained teal-and-amber palette, premium product-demo polish, crisp typography, dense but organized composition."' in prompt
     assert '"composition_mode": "hybrid"' in prompt
     assert "target narration words" in prompt
-    assert 'for scenes Cathode explicitly renders as deterministic overlays or motion templates' in prompt
+    assert 'for scenes betTube Studio explicitly renders as deterministic overlays or motion templates' in prompt
     assert '"staging_notes"' in prompt
     assert '"data_points"' in prompt
     assert '"transition_hint"' in prompt
@@ -84,6 +84,24 @@ def test_director_system_prompt_selects_capability_blocks():
     assert "Capability mode: multi-voice storytelling." in prompt
 
 
+def test_director_system_prompt_selects_short_form_vertical_capability():
+    prompt = build_director_system_prompt(
+        normalize_brief(
+            {
+                "source_mode": "source_text",
+                "source_material": "A source demo transcript.",
+                "short_form_format": "vertical_short",
+                "short_form_tier": "dev-native-credible",
+                "short_form_approach": "public-reframe",
+            }
+        )
+    )
+
+    assert "Short-form vertical capability." in prompt
+    assert "first 1-3 seconds" in prompt
+    assert "source anchor card" in prompt
+
+
 def test_director_system_prompt_includes_official_remotion_stack_for_anthropic_only():
     default_brief = normalize_brief(
         {
@@ -104,12 +122,12 @@ def test_director_system_prompt_includes_official_remotion_stack_for_anthropic_o
     openai_prompt = build_director_system_prompt(motion_brief, provider="openai")
 
     assert "# About Remotion" not in default_anthropic_prompt
-    assert "Cathode manifestation-path contract." not in default_anthropic_prompt
+    assert "betTube Studio manifestation-path contract." not in default_anthropic_prompt
     assert "# About Remotion" in anthropic_prompt
-    assert "Cathode manifestation-path contract." in anthropic_prompt
-    assert "Cathode supported-family registry constraints." in anthropic_prompt
+    assert "betTube Studio manifestation-path contract." in anthropic_prompt
+    assert "betTube Studio supported-family registry constraints." in anthropic_prompt
     assert "# About Remotion" not in openai_prompt
-    assert "Cathode manifestation-path contract." not in openai_prompt
+    assert "betTube Studio manifestation-path contract." not in openai_prompt
 
 
 def test_claude_print_command_uses_structured_output_flags():
@@ -214,7 +232,7 @@ def test_director_system_prompt_selects_promoted_examples(tmp_path, monkeypatch)
         )
     )
 
-    assert "Promoted Cathode examples:" in prompt
+    assert "Promoted betTube Studio examples:" in prompt
     assert 'Example "Pitch Example"' in prompt
     assert "Great multi-voice pacing." in prompt
 
@@ -286,7 +304,7 @@ def test_director_system_prompt_does_not_force_static_example_for_unclassified_b
         )
     )
 
-    assert "Promoted Cathode examples:" not in prompt
+    assert "Promoted betTube Studio examples:" not in prompt
 
 
 def test_director_prompt_mentions_reviewed_footage_assets():

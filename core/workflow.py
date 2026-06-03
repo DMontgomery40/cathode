@@ -19,6 +19,7 @@ from .project_schema import (
     default_video_profile,
     normalize_brief,
     normalize_scene,
+    pipeline_mode_for_brief,
     sanitize_project_name,
     scene_composition_payload,
 )
@@ -42,7 +43,7 @@ def _motion_scene_defaults(scene: dict[str, Any]) -> dict[str, Any]:
         "props": {
             "headline": str(props.get("headline") or (lines[0] if lines else title) or "Motion beat").strip(),
             "body": str(props.get("body") or "\n".join(lines[1:3]) or narration[:180]).strip(),
-            "kicker": str(props.get("kicker") or title or "Cathode").strip(),
+            "kicker": str(props.get("kicker") or title or "betTube Studio").strip(),
             "bullets": props.get("bullets") if isinstance(props.get("bullets"), list) else lines[:4],
             "accent": str(props.get("accent") or "").strip(),
         },
@@ -333,7 +334,7 @@ def create_plan_from_brief(
             "image_profile": resolved_image_profile,
             "video_model": str((video_profile or default_video_profile()).get("generation_model") or ""),
             "video_profile": video_profile or default_video_profile(),
-            "pipeline_mode": "generic_slides_v1",
+            "pipeline_mode": pipeline_mode_for_brief(normalized_brief),
             "brief": normalized_brief,
             "render_profile": render_profile or default_render_profile(),
             "tts_profile": resolved_tts_profile,

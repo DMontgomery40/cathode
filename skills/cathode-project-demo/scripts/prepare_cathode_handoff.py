@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Turn a reviewed capture bundle into a Cathode make_video payload."""
+"""Turn a reviewed capture bundle into a betTube Studio make_video payload."""
 
 from __future__ import annotations
 
@@ -16,19 +16,19 @@ from core.demo_assets import build_footage_summary, normalize_footage_manifest
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Prepare a Cathode make_video payload from a reviewed capture bundle.")
+    parser = argparse.ArgumentParser(description="Prepare a betTube Studio make_video payload from a reviewed capture bundle.")
     parser.add_argument("--bundle-manifest", required=True, help="Processed capture bundle manifest JSON.")
     parser.add_argument("--review-report", required=True, help="Final review report JSON.")
     parser.add_argument("--target-repo-path", required=True, help="Repo or workspace path to inspect for source context.")
-    parser.add_argument("--intent", required=True, help="Demo goal passed through to Cathode make_video.")
+    parser.add_argument("--intent", required=True, help="Demo goal passed through to betTube Studio make_video.")
     parser.add_argument("--audience", required=True, help="Audience for the final video.")
     parser.add_argument("--target-length-minutes", type=float, default=1.5)
     parser.add_argument("--tone", default="clear, technical, grounded")
     parser.add_argument("--visual-style", default="clean editorial product demo")
     parser.add_argument("--ending-cta", default="")
     parser.add_argument("--must-include", default="")
-    parser.add_argument("--source-path", action="append", default=[], help="High-signal source file to pass through to Cathode.")
-    parser.add_argument("--output-json", required=True, help="Where to write the final Cathode payload JSON.")
+    parser.add_argument("--source-path", action="append", default=[], help="High-signal source file to pass through to betTube Studio.")
+    parser.add_argument("--output-json", required=True, help="Where to write the final betTube Studio payload JSON.")
     return parser.parse_args()
 
 

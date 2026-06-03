@@ -119,6 +119,79 @@ def test_render_project_service_allows_clip_audio_video_without_audio_path(monke
     assert result["video_path"] == str(rendered_video_path)
 
 
+def test_render_project_service_reasserts_short_form_render_profile(monkeypatch, tmp_path):
+    project_dir = tmp_path / "short_render_project"
+    project_dir.mkdir(parents=True, exist_ok=True)
+    audio_path = project_dir / "audio" / "scene_000.wav"
+    audio_path.parent.mkdir(parents=True, exist_ok=True)
+    audio_path.write_bytes(b"wav")
+
+    plan = {
+        "meta": {
+            "pipeline_mode": "short_form_vertical_v1",
+            "brief": {"short_form_format": "vertical_short"},
+            "render_profile": {
+                "render_backend": "remotion",
+                "aspect_ratio": "16:9",
+                "width": 1664,
+                "height": 928,
+                "fps": 24,
+            },
+        },
+        "scenes": [
+            {
+                "id": 1,
+                "scene_type": "image",
+                "audio_path": str(audio_path),
+            }
+        ],
+    }
+    plan_state = copy.deepcopy(plan)
+    rendered_video_path = project_dir / "rendered.mp4"
+    rendered_video_path.write_bytes(b"mp4")
+    saved_plans: list[dict] = []
+    assemble_calls: list[dict] = []
+
+    def fake_load(_project_dir):
+        return plan_state
+
+    def fake_save(_project_dir, updated_plan):
+        nonlocal plan_state
+        plan_state = copy.deepcopy(updated_plan)
+        saved_plans.append(copy.deepcopy(updated_plan))
+        return updated_plan
+
+    def fake_assemble(*_args, **kwargs):
+        assemble_calls.append(copy.deepcopy(kwargs))
+        return rendered_video_path
+
+    monkeypatch.setattr("core.pipeline_service.load_plan", fake_load)
+    monkeypatch.setattr("core.pipeline_service.save_plan", fake_save)
+    monkeypatch.setattr("core.pipeline_service._scene_has_primary_visual", lambda *args, **kwargs: True)
+    monkeypatch.setattr("core.pipeline_service.assemble_video", fake_assemble)
+    monkeypatch.setattr(
+        "core.pipeline_service.compress_video_if_oversized",
+        lambda *args, **kwargs: {"path": str(rendered_video_path), "compressed": False},
+    )
+    monkeypatch.setattr(
+        "core.pipeline_service.review_project_scenes",
+        lambda *_args, **_kwargs: {"provider": "codex", "scene_count": 1, "review_dir": "/tmp/review"},
+    )
+
+    result = render_project_service(project_dir, fps=60)
+
+    assert result["status"] == "succeeded"
+    assert assemble_calls
+    render_kwargs = assemble_calls[0]
+    assert render_kwargs["fps"] == 30
+    assert render_kwargs["render_profile"]["aspect_ratio"] == "9:16"
+    assert render_kwargs["render_profile"]["width"] == 928
+    assert render_kwargs["render_profile"]["height"] == 1664
+    assert render_kwargs["render_profile"]["render_strategy"] == "force_ffmpeg"
+    assert saved_plans[0]["meta"]["render_profile"]["fps"] == 30
+    assert saved_plans[0]["meta"]["render_profile"]["render_backend"] == "ffmpeg"
+
+
 def test_normalize_authored_image_scene_identities_preserves_existing_mixed_timeline_paths(tmp_path):
     project_dir = tmp_path / "mixed_project"
     images_dir = project_dir / "images"

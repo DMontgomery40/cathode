@@ -55,7 +55,7 @@ test.describe('Cross-route navigation', () => {
   // ── Browser back/forward ───────────────────────────────────────
   test('browser back navigates to previous route', async ({ page }) => {
     await page.goto('/')
-    await expect(page.locator('text=Cathode').first()).toBeVisible()
+    await expect(page.locator('text=betTube Studio').first()).toBeVisible()
 
     // Navigate to projects
     await page.locator('[role="menuitem"]').nth(1).click()

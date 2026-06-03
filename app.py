@@ -1,5 +1,5 @@
 """
-Cathode video generator.
+betTube Studio video generator.
 
 Pipeline:
 Brief input -> director storyboard -> per-scene image + audio assets -> video render.
@@ -803,7 +803,7 @@ def render_sidebar():
             if model_label:
                 st.caption(f"Configured local video model: `{model_label}`")
             st.caption(
-                "Local video generation is env-driven. Cathode will call the configured local command or HTTP endpoint when you generate video clips."
+                "Local video generation is env-driven. betTube Studio will call the configured local command or HTTP endpoint when you generate video clips."
             )
         elif st.session_state.video_provider == "replicate":
             st.selectbox(
@@ -821,7 +821,7 @@ def render_sidebar():
             if st.session_state.video_model_selection_mode == "automatic":
                 st.session_state.video_generation_model = ""
                 st.caption(
-                    "Automatic route: Cathode uses Kling 3 Video for cinematic clips and switches to Kling Avatar v2 for speaking clips when clip audio is enabled."
+                    "Automatic route: betTube Studio uses Kling 3 Video for cinematic clips and switches to Kling Avatar v2 for speaking clips when clip audio is enabled."
                 )
             else:
                 current_preset = _replicate_video_model_preset(st.session_state.video_generation_model)
@@ -1145,7 +1145,7 @@ def render_step_1():
             if str(defaults.get("video_scene_style") or "auto") in BRIEF_VIDEO_SCENE_STYLE_LABELS
             else "auto"
         ),
-        help="Use this to steer whether the director should plan generated video scenes as cinematic motion, speaking clips, or let Cathode decide beat by beat.",
+        help="Use this to steer whether the director should plan generated video scenes as cinematic motion, speaking clips, or let betTube Studio decide beat by beat.",
     )
     st.caption(
         "This setting steers the director and the automatic video route. You can still change individual scenes later."
@@ -1439,7 +1439,7 @@ def render_step_2():
                 prompt_help = (
                     "Describe the still image you want to generate for this scene."
                     if scene_type == "image"
-                    else "Describe the clip moment you want. Cathode uses this for planning and, when local video generation is enabled, as part of the generation prompt."
+                    else "Describe the clip moment you want. betTube Studio uses this for planning and, when local video generation is enabled, as part of the generation prompt."
                 )
                 new_prompt = st.text_area(
                     prompt_label,
@@ -1636,7 +1636,7 @@ def render_step_2():
                         index=list(VIDEO_SCENE_KIND_LABELS.keys()).index(current_video_scene_kind),
                         format_func=lambda value: VIDEO_SCENE_KIND_LABELS[value],
                         key=f"video_scene_kind_{scene_uid}",
-                        help="Auto lets Cathode decide from the brief plus clip-audio setting. Cinematic keeps the motion lane. Speaking prefers the talking-avatar lane.",
+                        help="Auto lets betTube Studio decide from the brief plus clip-audio setting. Cinematic keeps the motion lane. Speaking prefers the talking-avatar lane.",
                     )
                     normalized_video_scene_kind = None if selected_video_scene_kind == "auto" else selected_video_scene_kind
                     if normalized_video_scene_kind != scene.get("video_scene_kind"):

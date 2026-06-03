@@ -3,6 +3,7 @@ import { GlassPanel } from '../../components/primitives/GlassPanel.tsx'
 import { Badge } from '../../components/primitives/Badge.tsx'
 import type { ProjectSummary } from '../../lib/api/projects.ts'
 import { projectMediaUrl } from '../../lib/media-url.ts'
+import { projectModeFromSummary } from '../../lib/project-mode.ts'
 
 interface ProjectCardProps {
   project: ProjectSummary
@@ -24,6 +25,7 @@ export function ProjectCard({ project }: ProjectCardProps) {
 
   const statusVariant = project.has_video ? 'success' : project.scene_count > 0 ? 'active' : 'default'
   const statusLabel = project.has_video ? 'Rendered' : project.scene_count > 0 ? 'In Progress' : 'Empty'
+  const projectMode = projectModeFromSummary(project)
   const createdLabel = formatProjectDate(project.created_utc || project.updated_utc)
 
   const target = project.scene_count > 0
@@ -89,6 +91,13 @@ export function ProjectCard({ project }: ProjectCardProps) {
             {statusLabel}
           </Badge>
         </div>
+        {projectMode.id === 'vertical_short' ? (
+          <div className="mt-[var(--space-2)]">
+            <Badge variant="active" size="sm">
+              {projectMode.badge}
+            </Badge>
+          </div>
+        ) : null}
         <p
           className="text-[var(--text-tertiary)] m-0"
           style={{

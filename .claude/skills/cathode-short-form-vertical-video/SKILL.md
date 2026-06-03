@@ -1,11 +1,11 @@
 ---
 name: cathode-short-form-vertical-video
-description: Create or adapt Cathode briefs, scripts, and source-video plans for catchy 30-50 second vertical short-form videos for TikTok, Instagram Reels, YouTube Shorts, or similar feeds. Use when Claude needs a short vertical video, reel, short, TikTok-style cutdown, hook-first social clip, or a short made from existing Cathode source material or an uploaded video.
+description: Create or adapt betTube Studio briefs, scripts, and source-video plans for catchy 30-50 second vertical short-form videos for TikTok, Instagram Reels, YouTube Shorts, or similar feeds. Use when Claude needs a short vertical video, reel, short, TikTok-style cutdown, hook-first social clip, or a short made from existing betTube Studio source material or an uploaded video.
 ---
 
-# Cathode Short-Form Vertical Video
+# betTube Studio Short-Form Vertical Video
 
-This Claude-facing mirror points at the canonical Cathode skill resources in the repository root.
+This Claude-facing mirror points at the canonical betTube Studio skill resources in the repository root.
 
 Use the canonical resources here:
 
@@ -28,4 +28,4 @@ Default workflow:
 8. calibrate voice, visuals, and motion so energy does not come from forced slang, cartoon overload, heavy shake, or chipmunked speed
 9. pay off the hook before one CTA
 10. for real footage, sample frames/contact sheets before choosing the hook
-11. hand Cathode a compact brief, source-video cutdown plan, or storyboard-only validation request
+11. use betTube Studio's first-class `/short-form` GUI/API surface, or set `short_form_format="vertical_short"` on Brief Studio/MCP `make_video`

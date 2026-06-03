@@ -5,9 +5,9 @@ Use this reference when the user wants a video about a software project, product
 ## Fast Path
 
 1. Confirm the repo to showcase.
-2. Bootstrap Cathode with `scripts/bootstrap_cathode.py`.
-3. Prepare a fresh live-capture session and capture walkthrough footage before you build the final Cathode payload.
-4. Start Cathode over MCP when the whole flow should stay agent-driven.
+2. Bootstrap betTube Studio with `scripts/bootstrap_cathode.py`.
+3. Prepare a fresh live-capture session and capture walkthrough footage before you build the final betTube Studio payload.
+4. Start betTube Studio over MCP when the whole flow should stay agent-driven.
 5. Pass the target repo as `workspace_path`.
 6. Add only the most useful `source_paths`.
 7. Render first, then tighten scenes only if the first pass misses the story.
@@ -21,7 +21,7 @@ Prefer high-signal files that explain what the project does and why it matters:
 - `package.json`, `pyproject.toml`, `Cargo.toml`, `go.mod`, or `requirements.txt`
 - top-level app entrypoints such as `app.py`, `main.py`, `index.tsx`, or `server.ts`
 
-Do not overload the brief with source files that only contain implementation detail. Cathode already uses bounded excerpts. The goal is product story, not architecture archaeology.
+Do not overload the brief with source files that only contain implementation detail. betTube Studio already uses bounded excerpts. The goal is product story, not architecture archaeology.
 
 ## Dev-Demo Defaults
 
@@ -60,7 +60,7 @@ When the demo depends on showing a running app:
 2. Capture the strongest interaction path with desktop-use in a real visible app window.
 3. Use explicit viewport and explicit theme on every attempt.
 4. Prefer short deliberate beats with meaningful state changes over a long raw session.
-5. Postprocess raw capture video into focused clips, extract review frames, run a short-prompt spawned sub-agent gut check, save that raw reply, then feed only the approved clips into Cathode.
+5. Postprocess raw capture video into focused clips, extract review frames, run a short-prompt spawned sub-agent gut check, save that raw reply, then feed only the approved clips into betTube Studio.
 
 Use the older Playwright capture flow only when you explicitly need selector-driven replay, a trace zip, or headless/CI coverage.
 

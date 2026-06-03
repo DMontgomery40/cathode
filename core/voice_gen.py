@@ -1,5 +1,7 @@
 """Text-to-speech generation using Kokoro, ElevenLabs, Chatterbox, or OpenAI."""
 
+from __future__ import annotations
+
 import base64
 import json
 import os
@@ -8,9 +10,20 @@ import wave
 from pathlib import Path
 from typing import Literal
 
-import replicate
-import requests
-import soundfile as sf
+try:
+    import replicate
+except ImportError:  # Replicate is optional unless cloud TTS fallback is selected.
+    replicate = None  # type: ignore[assignment]
+
+try:
+    import requests
+except ImportError:  # Requests is optional unless cloud TTS is selected.
+    requests = None  # type: ignore[assignment]
+
+try:
+    import soundfile as sf
+except ImportError:  # SoundFile is optional until local Kokoro/Chatterbox audio materialization is used.
+    sf = None  # type: ignore[assignment]
 
 from core.rate_limiter import NonRetryableError, elevenlabs_limiter, openai_limiter, image_limiter
 from core.runtime import available_tts_providers
@@ -128,6 +141,24 @@ OPENAI_REALTIME_VOICES = {
 
 # TTS Provider type
 TTSProvider = Literal["kokoro", "elevenlabs", "chatterbox", "openai", "openai_realtime"]
+
+
+def _replicate_module():
+    if replicate is None:
+        raise RuntimeError("The replicate package is not installed. Select local/OpenAI/direct ElevenLabs TTS or install replicate.")
+    return replicate
+
+
+def _requests_module():
+    if requests is None:
+        raise RuntimeError("The requests package is not installed. Cloud TTS downloads are unavailable.")
+    return requests
+
+
+def _soundfile_module():
+    if sf is None:
+        raise RuntimeError("The soundfile package is not installed. Local TTS audio writing is unavailable.")
+    return sf
 
 
 def _safe_float(value, fallback: float) -> float:
@@ -357,7 +388,7 @@ def _generate_with_kokoro(text: str, output_path: Path, voice: str, speed: float
     # Concatenate all chunks and save
     if all_audio:
         audio_data = np.concatenate(all_audio) if len(all_audio) > 1 else all_audio[0]
-        sf.write(str(output_path), audio_data, sample_rate)
+        _soundfile_module().write(str(output_path), audio_data, sample_rate)
     else:
         raise ValueError("No audio generated")
 
@@ -386,10 +417,11 @@ def _generate_with_chatterbox(
     Returns:
         Path to the saved audio file
     """
-    import replicate
+    replicate_client = _replicate_module()
+    requests_client = _requests_module()
 
     def _call_chatterbox():
-        return replicate.run(
+        return replicate_client.run(
             "resemble-ai/chatterbox",
             input={
                 "prompt": text,
@@ -404,7 +436,7 @@ def _generate_with_chatterbox(
     output_url = image_limiter.call_with_retry(_call_chatterbox)
 
     # Download the audio file
-    response = requests.get(output_url)
+    response = requests_client.get(output_url)
     response.raise_for_status()
 
     # Chatterbox returns WAV, save directly
@@ -436,10 +468,12 @@ def _generate_with_replicate_elevenlabs(
     if not (os.getenv("REPLICATE_API_TOKEN") or "").strip():
         raise RuntimeError("REPLICATE_API_TOKEN is not set.")
 
+    replicate_client = _replicate_module()
+    requests_client = _requests_module()
     mapped_voice = _normalize_voice_for_replicate_elevenlabs(voice)
 
     def _call_replicate():
-        return replicate.run(
+        return replicate_client.run(
             DEFAULT_REPLICATE_ELEVENLABS_MODEL,
             input={
                 "prompt": text,
@@ -453,7 +487,7 @@ def _generate_with_replicate_elevenlabs(
         )
 
     output_url = image_limiter.call_with_retry(_call_replicate)
-    response = requests.get(str(output_url), timeout=(10, 180))
+    response = requests_client.get(str(output_url), timeout=(10, 180))
     response.raise_for_status()
 
     mp3_path = output_path.with_suffix(".mp3")
@@ -515,8 +549,10 @@ def _generate_with_elevenlabs(
         "apply_text_normalization": apply_text_normalization,
     }
 
+    requests_client = _requests_module()
+
     def _call_elevenlabs() -> requests.Response:
-        resp = requests.post(
+        resp = requests_client.post(
             url,
             params={"output_format": "mp3_44100_128"},
             headers=headers,

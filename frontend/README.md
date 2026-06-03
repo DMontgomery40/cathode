@@ -1,6 +1,6 @@
-# Cathode Frontend
+# betTube Studio Frontend
 
-This is the React + TypeScript + Vite frontend for Cathode.
+This is the React + TypeScript + Vite frontend for betTube Studio.
 
 Use the repo-root launcher to run the full web stack:
 

@@ -218,6 +218,13 @@ def build_brief_from_intent(
     else:
         source_mode = "ideas_notes"
 
+    short_form_requested = str(overrides.get("short_form_format") or "").strip() == "vertical_short"
+    target_length_override = overrides.get("target_length_minutes")
+    if target_length_override is None and short_form_requested and not overrides.get("short_form_duration_seconds"):
+        target_length_value: Any = ""
+    else:
+        target_length_value = target_length_override or 2.0
+
     brief = normalize_brief(
         {
             "project_name": derive_project_name(intent, project_name),
@@ -225,7 +232,7 @@ def build_brief_from_intent(
             "video_goal": overrides.get("video_goal") or intent.strip(),
             "audience": overrides.get("audience") or "",
             "source_material": source_material,
-            "target_length_minutes": overrides.get("target_length_minutes") or 2.0,
+            "target_length_minutes": target_length_value,
             "tone": overrides.get("tone") or "",
             "visual_style": overrides.get("visual_style") or "",
             "must_include": overrides.get("must_include") or "",
@@ -233,11 +240,27 @@ def build_brief_from_intent(
             "ending_cta": overrides.get("ending_cta") or "",
             "composition_mode": overrides.get("composition_mode") or "",
             "visual_source_strategy": resolved_visual_source_strategy,
+            "video_scene_style": overrides.get("video_scene_style") or "",
+            "text_render_mode": overrides.get("text_render_mode") or "",
             "available_footage": overrides.get("available_footage") or derived_footage_summary,
             "footage_manifest": normalized_footage_manifest,
             "style_reference_paths": overrides.get("style_reference_paths") or [],
             "style_reference_summary": overrides.get("style_reference_summary") or "",
             "raw_brief": overrides.get("raw_brief") or f"User intent: {intent.strip()}",
+            "short_form_format": overrides.get("short_form_format") or "",
+            "short_form_tier": overrides.get("short_form_tier") or "",
+            "short_form_approach": overrides.get("short_form_approach") or "",
+            "short_form_duration_seconds": overrides.get("short_form_duration_seconds") or 0.0,
+            "platform_targets": overrides.get("platform_targets") or [],
+            "hook_promise": overrides.get("hook_promise") or "",
+            "payoff": overrides.get("payoff") or "",
+            "source_anchor_card": overrides.get("source_anchor_card") or "",
+            "source_context_lock": overrides.get("source_context_lock") or "",
+            "caption_strategy": overrides.get("caption_strategy") or "",
+            "caption_timing_source": overrides.get("caption_timing_source") or "",
+            "caption_renderer": overrides.get("caption_renderer") or "",
+            "voice_direction": overrides.get("voice_direction") or "",
+            "motion_intensity": overrides.get("motion_intensity") or "",
         },
         base_dir=workspace_path,
     )

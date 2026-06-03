@@ -26,6 +26,20 @@ VIDEO_MODEL_SELECTION_MODES = ("automatic", "advanced")
 VIDEO_SCENE_KINDS = ("cinematic", "speaking")
 RENDER_BACKENDS = ("ffmpeg", "remotion")
 RENDER_STRATEGIES = ("auto", "force_ffmpeg", "force_remotion")
+SHORT_FORM_FORMATS = ("", "vertical_short")
+SHORT_FORM_TIERS = ("", "mass-native-technical", "dev-native-credible")
+SHORT_FORM_APPROACHES = ("", "public-reframe", "source-cutdown", "mixed-media-proof")
+CAPTION_STRATEGIES = ("", "word-level-highlight", "meaning-card-captions", "keyword-labels")
+SHORT_FORM_PLATFORMS = ("tiktok", "instagram-reels", "youtube-shorts")
+DEFAULT_SHORT_FORM_TIER = "dev-native-credible"
+DEFAULT_SHORT_FORM_APPROACH = "public-reframe"
+DEFAULT_CAPTION_STRATEGY = "meaning-card-captions"
+DEFAULT_SHORT_FORM_DURATION_SECONDS = 42.0
+MIN_SHORT_FORM_DURATION_SECONDS = 30.0
+MAX_SHORT_FORM_DURATION_SECONDS = 50.0
+DEFAULT_SHORT_FORM_PLATFORMS = ["tiktok", "instagram-reels", "youtube-shorts"]
+GENERIC_PIPELINE_MODE = "generic_slides_v1"
+SHORT_FORM_PIPELINE_MODE = "short_form_vertical_v1"
 AGENT_DEMO_PROFILE_KEYS = (
     "workspace_path",
     "app_url",
@@ -133,7 +147,61 @@ def default_brief() -> dict[str, Any]:
         "style_reference_summary": "",
         "style_reference_paths": [],
         "raw_brief": "",
+        "short_form_format": "",
+        "short_form_tier": "",
+        "short_form_approach": "",
+        "short_form_duration_seconds": 0.0,
+        "platform_targets": [],
+        "hook_promise": "",
+        "payoff": "",
+        "source_anchor_card": "",
+        "source_context_lock": "",
+        "caption_strategy": "",
+        "caption_timing_source": "",
+        "caption_renderer": "",
+        "voice_direction": "",
+        "motion_intensity": "",
     }
+
+
+def pipeline_mode_for_brief(brief: dict[str, Any] | None, current: Any = "") -> str:
+    """Return the persisted pipeline mode implied by a normalized brief."""
+    normalized = brief if isinstance(brief, dict) else {}
+    current_mode = str(current or "").strip()
+    if normalized.get("short_form_format") == "vertical_short":
+        return SHORT_FORM_PIPELINE_MODE
+    if current_mode and current_mode != SHORT_FORM_PIPELINE_MODE:
+        return current_mode
+    return GENERIC_PIPELINE_MODE
+
+
+def _clamp_short_form_duration_seconds(value: Any) -> float:
+    return min(
+        max(_normalize_float(value, DEFAULT_SHORT_FORM_DURATION_SECONDS), MIN_SHORT_FORM_DURATION_SECONDS),
+        MAX_SHORT_FORM_DURATION_SECONDS,
+    )
+
+
+def apply_short_form_render_profile(profile: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Force the v1 render contract required by vertical short-form projects."""
+    result = dict(profile or {})
+    result.update(
+        {
+            "version": "v1",
+            "aspect_ratio": "9:16",
+            "width": 928,
+            "height": 1664,
+            "fps": 30,
+            "scene_types": ["image", "video", "motion"],
+            "render_strategy": "force_ffmpeg",
+            "render_backend": "ffmpeg",
+            "render_backend_reason": "Vertical short-form brief selected 9:16 ffmpeg assembly.",
+            "text_render_mode": "visual_authored",
+            "auto_compress_oversized_video": True,
+            "compression_min_size_mb": 75.0,
+        }
+    )
+    return result
 
 
 def default_render_profile() -> dict[str, Any]:
@@ -967,8 +1035,42 @@ def normalize_brief(
         "available_footage",
         "style_reference_summary",
         "raw_brief",
+        "short_form_format",
+        "short_form_tier",
+        "short_form_approach",
+        "hook_promise",
+        "payoff",
+        "source_anchor_card",
+        "source_context_lock",
+        "caption_strategy",
+        "caption_timing_source",
+        "caption_renderer",
+        "voice_direction",
+        "motion_intensity",
     ):
         result[key] = str(result.get(key) or "").strip()
+
+    result["short_form_format"] = (
+        result["short_form_format"] if result["short_form_format"] in SHORT_FORM_FORMATS else ""
+    )
+    result["short_form_tier"] = result["short_form_tier"] if result["short_form_tier"] in SHORT_FORM_TIERS else ""
+    result["short_form_approach"] = (
+        result["short_form_approach"] if result["short_form_approach"] in SHORT_FORM_APPROACHES else ""
+    )
+    result["caption_strategy"] = (
+        result["caption_strategy"] if result["caption_strategy"] in CAPTION_STRATEGIES else ""
+    )
+    result["short_form_duration_seconds"] = _normalize_float(result.get("short_form_duration_seconds"), 0.0)
+    platform_targets = result.get("platform_targets")
+    if isinstance(platform_targets, list):
+        normalized_platforms = [
+            str(item).strip().lower().replace("_", "-").replace(" ", "-")
+            for item in platform_targets
+            if str(item).strip().lower().replace("_", "-").replace(" ", "-") in SHORT_FORM_PLATFORMS
+        ]
+        result["platform_targets"] = normalized_platforms
+    else:
+        result["platform_targets"] = []
 
     composition_mode = str(result.get("composition_mode") or "").strip()
     result["composition_mode"] = composition_mode if composition_mode in COMPOSITION_MODES else "auto"
@@ -1005,6 +1107,69 @@ def normalize_brief(
         video_scene_style if video_scene_style in VIDEO_SCENE_STYLE_OPTIONS else "auto"
     )
     result["text_render_mode"] = resolve_text_render_mode(result.get("text_render_mode"))
+
+    if result["short_form_format"] == "vertical_short":
+        if not result["short_form_tier"]:
+            result["short_form_tier"] = DEFAULT_SHORT_FORM_TIER
+        if not result["short_form_approach"]:
+            result["short_form_approach"] = DEFAULT_SHORT_FORM_APPROACH
+        if not result["caption_strategy"]:
+            result["caption_strategy"] = DEFAULT_CAPTION_STRATEGY
+        if result["short_form_duration_seconds"] <= 0:
+            if "target_length_minutes" in data and data.get("target_length_minutes") not in (None, ""):
+                result["short_form_duration_seconds"] = _clamp_short_form_duration_seconds(
+                    _normalize_float(data.get("target_length_minutes"), 0.0) * 60.0
+                )
+            else:
+                result["short_form_duration_seconds"] = DEFAULT_SHORT_FORM_DURATION_SECONDS
+        else:
+            result["short_form_duration_seconds"] = _clamp_short_form_duration_seconds(
+                result["short_form_duration_seconds"]
+            )
+        result["target_length_minutes"] = round(result["short_form_duration_seconds"] / 60.0, 3)
+        if not result["platform_targets"]:
+            result["platform_targets"] = list(DEFAULT_SHORT_FORM_PLATFORMS)
+        if result["short_form_approach"] in {"source-cutdown", "mixed-media-proof"}:
+            result["visual_source_strategy"] = "mixed_media"
+            result["video_scene_style"] = "mixed"
+        elif result["short_form_approach"] == "public-reframe":
+            result["visual_source_strategy"] = "images_only"
+            result["video_scene_style"] = "auto"
+        if result["composition_mode"] == "auto":
+            result["composition_mode"] = "classic"
+        result["text_render_mode"] = "visual_authored"
+        if not result["tone"]:
+            result["tone"] = "fast, clear, confident, social-native, and not forced"
+        if not result["visual_style"]:
+            result["visual_style"] = (
+                "9:16 vertical short-form, tight mobile-safe framing, kinetic captions, "
+                "fast visual resets, source-loyal visuals"
+            )
+        if not result["voice_direction"]:
+            result["voice_direction"] = (
+                "naturally fast presenter, clear consonants, no chipmunk pitch, "
+                "no exaggerated influencer cadence"
+            )
+        if not result["motion_intensity"]:
+            result["motion_intensity"] = (
+                "high but purposeful"
+                if result["short_form_tier"] == "mass-native-technical"
+                else "medium-high and inspectable"
+            )
+    else:
+        result["short_form_tier"] = ""
+        result["short_form_approach"] = ""
+        result["short_form_duration_seconds"] = 0.0
+        result["platform_targets"] = []
+        result["hook_promise"] = ""
+        result["payoff"] = ""
+        result["source_anchor_card"] = ""
+        result["source_context_lock"] = ""
+        result["caption_strategy"] = ""
+        result["caption_timing_source"] = ""
+        result["caption_renderer"] = ""
+        result["voice_direction"] = ""
+        result["motion_intensity"] = ""
 
     # Allow raw_brief as a direct input path when source material is intentionally empty.
     if not result["source_material"] and result["raw_brief"]:
@@ -1295,13 +1460,16 @@ def backfill_plan(
     ]
 
     render_profile = _merge_with_defaults(default_render_profile(), raw_render_profile)
+    if brief.get("short_form_format") == "vertical_short":
+        render_profile = apply_short_form_render_profile(render_profile)
     render_profile["aspect_ratio"] = str(render_profile.get("aspect_ratio") or "16:9")
     render_profile["width"] = int(render_profile.get("width") or 1664)
     render_profile["height"] = int(render_profile.get("height") or 928)
     render_profile["fps"] = int(render_profile.get("fps") or 24)
-    render_profile["render_strategy"] = resolve_render_strategy(
-        raw_render_profile.get("render_strategy")
-    )
+    render_strategy_input = raw_render_profile.get("render_strategy") or render_profile.get("render_strategy")
+    if brief.get("short_form_format") == "vertical_short" and str(render_strategy_input or "").strip().lower() in {"", "auto"}:
+        render_strategy_input = render_profile.get("render_strategy")
+    render_profile["render_strategy"] = resolve_render_strategy(render_strategy_input)
     if not isinstance(render_profile.get("scene_types"), list):
         render_profile["scene_types"] = ["image", "video", "motion"]
     else:
@@ -1311,13 +1479,14 @@ def backfill_plan(
             if str(scene_type).strip().lower() in SCENE_TYPES
         ]
         render_profile["scene_types"] = normalized_scene_types or ["image", "video", "motion"]
+    render_backend_input = render_profile if render_profile["render_strategy"] != "auto" else raw_render_profile
     render_profile["render_backend"] = resolve_render_backend(
-        raw_render_profile,
+        render_backend_input,
         composition_mode=str(brief.get("composition_mode") or "classic"),
         scenes=scenes,
     )
     render_profile["render_backend_reason"] = resolve_render_backend_details(
-        raw_render_profile,
+        render_backend_input,
         composition_mode=str(brief.get("composition_mode") or "classic"),
         scenes=scenes,
     )[1]
@@ -1355,7 +1524,7 @@ def backfill_plan(
     meta["footage_manifest"] = brief.get("footage_manifest", [])
     if isinstance(meta.get("agent_demo_profile"), dict):
         meta["agent_demo_profile"] = normalize_agent_demo_profile(meta["agent_demo_profile"])
-    meta["pipeline_mode"] = str(meta.get("pipeline_mode") or "generic_slides_v1")
+    meta["pipeline_mode"] = pipeline_mode_for_brief(brief, meta.get("pipeline_mode"))
     meta["render_profile"] = render_profile
     meta["image_profile"] = image_profile
     meta["image_model"] = image_profile["generation_model"]

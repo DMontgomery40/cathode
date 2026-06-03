@@ -1,4 +1,4 @@
-"""Anthropic-harvested director example tooling for Cathode."""
+"""Anthropic-harvested director example tooling for betTube Studio."""
 
 from __future__ import annotations
 
@@ -135,7 +135,7 @@ def build_judge_payload(
                 "role": "user",
                 "content": textwrap.dedent(
                     f"""\
-                    Judge this storyboard candidate for Cathode's golden example corpus.
+                    Judge this storyboard candidate for betTube Studio's golden example corpus.
 
                     Brief:
                     {brief_json}

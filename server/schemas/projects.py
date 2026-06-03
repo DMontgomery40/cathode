@@ -17,6 +17,9 @@ class ProjectSummary(BaseModel):
     updated_utc: str | None = None
     image_profile: dict[str, Any] | None = None
     tts_profile: dict[str, Any] | None = None
+    pipeline_mode: str | None = None
+    short_form_format: str | None = None
+    render_aspect_ratio: str | None = None
 
 
 class CreateProjectRequest(BaseModel):

@@ -1,11 +1,11 @@
 ---
 name: cathode-project-demo
-description: Turn a live product, localhost app, or software repository into a reviewed narrated demo video with Cathode. Use when Claude needs to drive the real app with desktop-use, critique fresh UI footage, and hand approved clips to Cathode for final render.
+description: Turn a live product, localhost app, or software repository into a reviewed narrated demo video with betTube Studio. Use when Claude needs to drive the real app with desktop-use, critique fresh UI footage, and hand approved clips to betTube Studio for final render.
 ---
 
-# Cathode Project Demo
+# betTube Studio Project Demo
 
-This Claude-facing mirror points at the canonical Cathode skill resources in the repository root.
+This Claude-facing mirror points at the canonical betTube Studio skill resources in the repository root.
 
 Use the canonical resources here:
 
@@ -30,5 +30,5 @@ Default workflow:
 1. prepare a live demo session
 2. launch or attach to the app
 3. capture fresh footage by driving the real app with desktop-use, then build the standard capture manifest
-4. run the short-prompt spawned sub-agent review before handoff, save the raw reply, and translate it into the structured Cathode review bundle
-5. feed reviewed clips into Cathode over MCP
+4. run the short-prompt spawned sub-agent review before handoff, save the raw reply, and translate it into the structured betTube Studio review bundle
+5. feed reviewed clips into betTube Studio over MCP

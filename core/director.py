@@ -12,8 +12,30 @@ import uuid
 from pathlib import Path
 from typing import Any, Literal
 
-import anthropic
-import openai
+
+class _MissingAnthropicModule:
+    Anthropic = None
+
+
+class _MissingOpenAIModule:
+    OpenAI = None
+
+
+try:
+    import anthropic
+except ImportError as exc:  # Anthropic is optional unless that provider is selected.
+    anthropic = _MissingAnthropicModule()  # type: ignore[assignment]
+    _ANTHROPIC_IMPORT_ERROR: ImportError | None = exc
+else:
+    _ANTHROPIC_IMPORT_ERROR = None
+
+try:
+    import openai
+except ImportError as exc:  # OpenAI is optional unless that provider is selected.
+    openai = _MissingOpenAIModule()  # type: ignore[assignment]
+    _OPENAI_IMPORT_ERROR: ImportError | None = exc
+else:
+    _OPENAI_IMPORT_ERROR = None
 
 from .costs import llm_actual_entry, llm_preflight_entry
 from .project_schema import normalize_brief
@@ -25,6 +47,8 @@ _anthropic_client = None
 
 def _get_openai_client():
     """Get or create singleton OpenAI client."""
+    if _OPENAI_IMPORT_ERROR is not None and getattr(openai, "OpenAI", None) is None:
+        raise RuntimeError("The openai package is not installed. Select another LLM provider or install openai.")
     global _openai_client
     if _openai_client is None:
         _openai_client = openai.OpenAI()
@@ -33,6 +57,8 @@ def _get_openai_client():
 
 def _get_anthropic_client():
     """Get or create singleton Anthropic client."""
+    if _ANTHROPIC_IMPORT_ERROR is not None and getattr(anthropic, "Anthropic", None) is None:
+        raise RuntimeError("The anthropic package is not installed. Select another LLM provider or install anthropic.")
     global _anthropic_client
     if _anthropic_client is None:
         _anthropic_client = anthropic.Anthropic(
@@ -43,12 +69,12 @@ def _get_anthropic_client():
 
 
 def _openai_reasoning_config() -> dict[str, str]:
-    """Return the reasoning settings Cathode requires for OpenAI API calls."""
+    """Return the reasoning settings betTube Studio requires for OpenAI API calls."""
     return {"effort": _OPENAI_DIRECTOR_REASONING_EFFORT}
 
 
 def _create_openai_response(**kwargs: Any) -> Any:
-    """Create a Responses API call using Cathode's locked OpenAI model policy."""
+    """Create a Responses API call using betTube Studio's locked OpenAI model policy."""
     payload = dict(kwargs)
     # GPT-5.4 reasoning models reject temperature, so strip it centrally from any
     # lingering OpenAI call sites instead of letting product flows fail at runtime.
@@ -160,9 +186,9 @@ def load_optional_prompt(name: str) -> str:
 
 
 def _director_manifestation_path_contract() -> str:
-    return """Cathode manifestation-path contract.
+    return """betTube Studio manifestation-path contract.
 
-- You are writing Cathode storyboard JSON, not Remotion code.
+- You are writing betTube Studio storyboard JSON, not Remotion code.
 - Every scene should carry an explicit `manifestation_plan`:
   - `primary_path` must choose one path: `authored_image`, `native_remotion`, or `source_video`.
   - `fallback_path` may name a second allowed path when a real fallback exists; otherwise omit it.
@@ -170,8 +196,8 @@ def _director_manifestation_path_contract() -> str:
   - `text_expected` should be true when visible text matters for comprehension.
   - `text_critical` should be true only when exact visible text correctness is mission-critical.
 - Path meanings:
-  - `authored_image`: the ordinary Anthropic-authored still/image path. `visual_prompt` must already be the final self-contained authored prompt. Do not expect Cathode to mutate it before Qwen.
-  - `native_remotion`: the explicit native deterministic Cathode/Remotion path. Use this only when the beat truly needs exact staged text, deterministic data choreography, or an unmistakably native supported family.
+  - `authored_image`: the ordinary Anthropic-authored still/image path. `visual_prompt` must already be the final self-contained authored prompt. Do not expect betTube Studio to mutate it before Qwen.
+  - `native_remotion`: the explicit native deterministic betTube Studio/Remotion path. Use this only when the beat truly needs exact staged text, deterministic data choreography, or an unmistakably native supported family.
   - `source_video`: the footage/video path. Use this when the beat should come from supplied footage or an intentional video clip.
 - `native_build_prompt` is allowed only when the primary or fallback path is `native_remotion`.
 - `failure_notes` should explain what could fail, why the fallback exists, or what operator risk needs attention.
@@ -195,10 +221,10 @@ def _director_supported_family_registry_constraints(brief: dict[str, Any] | None
             "unless the brief explicitly asks for motion or the scene truly needs deterministic data staging. "
             "Do not choose `media_pan`. Do not ask for decorative fades."
         )
-    return f"""Cathode supported-family registry constraints.
+    return f"""betTube Studio supported-family registry constraints.
 
-- Cathode remains registry-based. Do not generate arbitrary TSX, JSX, React components, renderer APIs, or freeform Remotion code.
-- Use `manifestation_plan.native_family_hint` only when the scene unmistakably maps to a supported Cathode family already named in Cathode prompt context, such as `three_data_stage` for deterministic data staging or `surreal_tableau_3d` for a true 3D tableau.
+- betTube Studio remains registry-based. Do not generate arbitrary TSX, JSX, React components, renderer APIs, or freeform Remotion code.
+- Use `manifestation_plan.native_family_hint` only when the scene unmistakably maps to a supported betTube Studio family already named in betTube Studio prompt context, such as `three_data_stage` for deterministic data staging or `surreal_tableau_3d` for a true 3D tableau.
 - `native_build_prompt` should elaborate the art direction for a native family, not invent a new family or bypass the registry.
 {clinical_line}
 """
@@ -501,6 +527,9 @@ def _brief_wants_abstract_concept_example(brief: dict[str, Any]) -> bool:
 def _director_capability_prompt_names(brief: dict[str, Any]) -> list[str]:
     normalized = normalize_brief(brief)
     names: list[str] = []
+    if normalized.get("short_form_format") == "vertical_short":
+        names.append("director_capability_short_form_vertical")
+
     visual_source_strategy = normalized.get("visual_source_strategy")
     if visual_source_strategy == "mixed_media":
         names.append("director_capability_visual_source_mixed_media")
@@ -642,7 +671,7 @@ def build_director_system_prompt(
             sections.append(clinical_template_content)
     examples = _selected_director_examples(normalized)
     if examples:
-        sections.append("Promoted Cathode examples:\n\n" + "\n\n---\n\n".join(examples))
+        sections.append("Promoted betTube Studio examples:\n\n" + "\n\n---\n\n".join(examples))
     return "\n\n".join(section for section in sections if section.strip())
 
 
@@ -827,12 +856,12 @@ def _build_storyboard_user_prompt_from_brief(brief: dict[str, Any]) -> str:
     text_render_contract = (
         '- Treat text_render_mode as a hard contract:\n'
         '  - "visual_authored": visible copy may be authored into the generated visual itself, and on_screen_text should stay aligned with that authored text when present.\n'
-        '  - "deterministic_overlay": for scenes Cathode explicitly renders as deterministic overlays or motion templates, reserve on_screen_text as the exact visible copy Cathode should place. Do not treat this as blanket permission to rewrite ordinary authored image scenes away from their intended layout.'
+        '  - "deterministic_overlay": for scenes betTube Studio explicitly renders as deterministic overlays or motion templates, reserve on_screen_text as the exact visible copy betTube Studio should place. Do not treat this as blanket permission to rewrite ordinary authored image scenes away from their intended layout.'
         if native_renderer_requested
         else '- Treat text_render_mode as a hard contract: visible copy should be authored into the generated visual itself, and on_screen_text should stay aligned with that authored text when present.'
     )
     native_manifestation_contract = (
-        '  - "native_remotion": the deterministic native Cathode/Remotion path. Use it only when exact staged text, deterministic overlays/data staging, or a clearly native supported family is genuinely needed.\n'
+        '  - "native_remotion": the deterministic native betTube Studio/Remotion path. Use it only when exact staged text, deterministic overlays/data staging, or a clearly native supported family is genuinely needed.\n'
         '- `manifestation_plan.native_build_prompt` is allowed only when `manifestation_plan.primary_path` or `manifestation_plan.fallback_path` is "native_remotion".\n'
         '- If a scene uses `native_remotion`, keep the request registry-friendly: no arbitrary TSX, no freeform renderer code, no invented family names.\n'
         '- Use scene_type "motion" when the beat should be deterministically staged as a text-led or data-led Remotion beat instead of relying on authored text inside an image.\n'
@@ -1697,7 +1726,7 @@ def rewrite_prompt_for_synonym_fallback_with_metadata(
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     """Rewrite an authored-image prompt to use a semantically equivalent visible phrase."""
     system_prompt = (
-        "You rewrite Cathode image prompts when an exact visible word keeps failing after a direct image edit.\n"
+        "You rewrite betTube Studio image prompts when an exact visible word keeps failing after a direct image edit.\n"
         "Preserve the scene meaning, visual hierarchy, and layout intent.\n"
         "Choose a semantically equivalent replacement phrase when possible.\n"
         "Return JSON only with keys: replacement_text, rewritten_prompt, rewritten_on_screen_text.\n"

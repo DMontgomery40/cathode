@@ -1,4 +1,4 @@
-"""Lazy exports for Cathode pipeline helpers."""
+"""Lazy exports for betTube Studio pipeline helpers."""
 
 
 def generate_storyboard(*args, **kwargs):

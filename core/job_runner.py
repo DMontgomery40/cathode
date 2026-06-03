@@ -1,4 +1,4 @@
-"""Persisted local background jobs for Cathode pipeline runs."""
+"""Persisted local background jobs for betTube Studio pipeline runs."""
 
 from __future__ import annotations
 
@@ -588,7 +588,7 @@ def run_job_file(job_file: Path) -> dict[str, Any]:
         return _finish_job(
             job_file,
             status=JOB_STATUS_FAILED,
-            result={"retryable": False, "suggestion": "Use a supported Cathode job type."},
+            result={"retryable": False, "suggestion": "Use a supported betTube Studio job type."},
             error={"message": f"Unsupported job kind: {kind}"},
         )
     except Exception as exc:  # pragma: no cover - surfaced in job metadata
@@ -774,7 +774,7 @@ def create_agent_demo_job(
 
 def main() -> None:
     """CLI entrypoint for worker subprocesses."""
-    parser = argparse.ArgumentParser(description="Run a persisted Cathode background job.")
+    parser = argparse.ArgumentParser(description="Run a persisted betTube Studio background job.")
     parser.add_argument("--job-file", required=True, help="Path to the persisted job JSON file.")
     args = parser.parse_args()
     run_job_file(Path(args.job_file))

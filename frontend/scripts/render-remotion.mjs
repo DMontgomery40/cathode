@@ -121,7 +121,7 @@ async function main() {
 
   const composition = await selectComposition({
     serveUrl,
-    id: 'CathodeRender',
+    id: 'BetTubeStudioRender',
     inputProps: manifest,
   })
   const attempts = getRenderAttempts()
