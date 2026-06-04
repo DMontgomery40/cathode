@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="frontend/public/favicon.png" alt="betTube Studio" width="240">
+</p>
+
 # betTube Studio
 
 betTube Studio is a local-first explainer-video pipeline with three main surfaces:
@@ -10,11 +14,7 @@ It turns rough notes, source text, or a finished script into a local project fol
 
 ## Watch The Demo
 
-<p align="center">
-  <a href="https://youtu.be/HHHbcHobg-A">
-    <img src="docs/assets/cathode-demo-youtube-card.png" alt="Watch the betTube Studio demo on YouTube" width="720">
-  </a>
-</p>
+[Watch the betTube Studio demo on YouTube](https://youtu.be/HHHbcHobg-A).
 
 betTube Studio now has four practical lanes:
 
