@@ -233,7 +233,7 @@ def test_choose_llm_provider_ignores_storyboard_only_env_default_for_generic_fal
     assert choose_llm_provider() == "openai"
 
 
-def test_choose_llm_provider_allows_explicit_storyboard_provider_request(monkeypatch):
+def test_choose_llm_provider_allows_storyboard_provider_request_when_opted_in(monkeypatch):
     monkeypatch.setattr(
         "core.runtime.check_api_keys",
         lambda: {
@@ -247,8 +247,43 @@ def test_choose_llm_provider_allows_explicit_storyboard_provider_request(monkeyp
         },
     )
 
-    assert choose_llm_provider("glm") == "openrouter_glm"
-    assert choose_llm_provider("deepseek") == "deepseek"
+    assert choose_llm_provider("glm", allow_storyboard_providers=True) == "openrouter_glm"
+    assert choose_llm_provider("deepseek", allow_storyboard_providers=True) == "deepseek"
+
+
+def test_choose_llm_provider_storyboard_opt_in_uses_env_storyboard_provider(monkeypatch):
+    monkeypatch.setenv("CATHODE_PREFERRED_LLM_PROVIDER", "openrouter_glm")
+    monkeypatch.setattr(
+        "core.runtime.check_api_keys",
+        lambda: {
+            "openai": True,
+            "anthropic": False,
+            "openrouter": True,
+            "deepseek": True,
+            "replicate": False,
+            "dashscope": False,
+            "elevenlabs": False,
+        },
+    )
+
+    assert choose_llm_provider(allow_storyboard_providers=True) == "openrouter_glm"
+
+
+def test_choose_llm_provider_storyboard_opt_in_can_fall_back_to_extended_provider(monkeypatch):
+    monkeypatch.setattr(
+        "core.runtime.check_api_keys",
+        lambda: {
+            "openai": False,
+            "anthropic": False,
+            "openrouter": False,
+            "deepseek": True,
+            "replicate": False,
+            "dashscope": False,
+            "elevenlabs": False,
+        },
+    )
+
+    assert choose_llm_provider(allow_storyboard_providers=True) == "deepseek"
 
 
 def test_resolve_workflow_llm_roles_allows_claude_print_story_writer(monkeypatch):

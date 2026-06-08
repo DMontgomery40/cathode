@@ -86,7 +86,7 @@ def _tts_voice_options() -> dict[str, list[dict[str, str]]]:
 async def bootstrap() -> BootstrapResponse:
     keys = check_api_keys()
     try:
-        llm_provider = choose_llm_provider()
+        llm_provider = choose_llm_provider(allow_storyboard_providers=True)
     except ValueError:
         llm_provider = None
 

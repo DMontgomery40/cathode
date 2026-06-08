@@ -28,7 +28,7 @@ def _write_wrapper_script(path: Path) -> None:
 
             import cathode_mcp_server as cathode
 
-            def fake_choose_llm_provider(preferred=None):
+            def fake_choose_llm_provider(preferred=None, **_kwargs):
                 return preferred or "openai"
 
             def fake_create_make_video_job(**kwargs):
