@@ -287,12 +287,12 @@ def available_render_backends() -> list[str]:
     return backends
 
 
-def choose_llm_provider(preferred: str | None = None) -> str:
+def choose_llm_provider(preferred: str | None = None, *, allow_storyboard_providers: bool = False) -> str:
     """Choose an LLM provider that generic LLM endpoints can safely call.
 
     OpenRouter GLM and DeepSeek are supported by the brief/storyboard workflow,
     but not by every scene-refinement or image-analysis route that uses this
-    generic chooser. Only an explicit caller preference may select those lanes.
+    generic chooser. Storyboard-capable callers must opt into those lanes.
     """
     keys = check_api_keys()
     explicit_candidate = str(preferred or "").strip().lower()
@@ -302,18 +302,25 @@ def choose_llm_provider(preferred: str | None = None) -> str:
         or ""
     ).strip().lower()
     candidate = explicit_candidate or env_candidate
-    if explicit_candidate in {"glm", "openrouter", OPENROUTER_PROVIDER} and keys.get("openrouter"):
+    if allow_storyboard_providers and candidate in {"glm", "openrouter", OPENROUTER_PROVIDER} and keys.get("openrouter"):
         return OPENROUTER_PROVIDER
-    if explicit_candidate in {"deepseek", "deepseek_v4", "deepseek-v4", DEEPSEEK_PROVIDER} and keys.get("deepseek"):
+    if allow_storyboard_providers and candidate in {"deepseek", "deepseek_v4", "deepseek-v4", DEEPSEEK_PROVIDER} and keys.get("deepseek"):
         return DEEPSEEK_PROVIDER
-    if candidate == "claude_print" and shutil.which(os.getenv("CLAUDE_CODE_BINARY") or "claude"):
+    if allow_storyboard_providers and candidate == "claude_print" and shutil.which(os.getenv("CLAUDE_CODE_BINARY") or "claude"):
         return candidate
     if candidate in {"anthropic", "openai"} and _llm_key_present(keys, candidate):
         return candidate
 
-    for provider in ("anthropic", "openai"):
+    provider_order = (
+        ("deepseek", "openrouter", "anthropic", "openai")
+        if allow_storyboard_providers
+        else ("anthropic", "openai")
+    )
+    for provider in provider_order:
         if keys.get(provider):
-            return provider
+            return OPENROUTER_PROVIDER if provider == "openrouter" else provider
+    if allow_storyboard_providers:
+        raise ValueError("No LLM API keys configured. Set DEEPSEEK_API_KEY, OPENROUTER_API_KEY, ANTHROPIC_API_KEY, or OPENAI_API_KEY.")
     raise ValueError("No generic LLM API keys configured. Set ANTHROPIC_API_KEY or OPENAI_API_KEY.")
 
 

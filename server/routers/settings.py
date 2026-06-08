@@ -70,7 +70,7 @@ def _tts_voice_options() -> dict[str, list[dict[str, str]]]:
 async def get_providers() -> dict[str, Any]:
     keys = check_api_keys()
     try:
-        llm_provider = choose_llm_provider()
+        llm_provider = choose_llm_provider(allow_storyboard_providers=True)
     except ValueError:
         llm_provider = "none"
 

@@ -209,7 +209,7 @@ def build_server() -> FastMCP:
         overwrite: Annotated[bool, Field(description="If true, replace an existing project folder with the same name.", default=False)] = False,
     ) -> dict[str, Any]:
         try:
-            provider = choose_llm_provider(llm_provider)
+            provider = choose_llm_provider(llm_provider, allow_storyboard_providers=True)
         except ValueError as exc:
             return _error_response(
                 message=str(exc),
