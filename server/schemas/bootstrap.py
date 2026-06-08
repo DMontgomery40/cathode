@@ -10,6 +10,8 @@ from pydantic import BaseModel
 class ApiKeysStatus(BaseModel):
     openai: bool = False
     anthropic: bool = False
+    openrouter: bool = False
+    deepseek: bool = False
     replicate: bool = False
     dashscope: bool = False
     elevenlabs: bool = False

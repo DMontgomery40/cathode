@@ -75,7 +75,7 @@ export function SceneTimeline() {
   const genAssets = useGenerateAssets(projectId)
   const startRender = useStartRender(projectId)
   const runAgentDemo = useRunAgentDemo(projectId)
-  const { data: jobs } = useProjectJobs(projectId, { refetchInterval: 2000 })
+  const { data: jobs } = useProjectJobs(projectId, { refetchInterval: 2000, pollWhileActive: true })
   const refineP = useRefinePrompt(projectId)
   const refineN = useRefineNarration(projectId)
   const genPreview = useGenerateScenePreview(projectId)

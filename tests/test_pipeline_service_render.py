@@ -119,6 +119,71 @@ def test_render_project_service_allows_clip_audio_video_without_audio_path(monke
     assert result["video_path"] == str(rendered_video_path)
 
 
+def test_render_project_service_skips_automatic_scene_review_when_brief_bans_model_lanes(
+    monkeypatch,
+    tmp_path,
+):
+    project_dir = tmp_path / "render_project"
+    project_dir.mkdir(parents=True, exist_ok=True)
+    audio_path = project_dir / "audio" / "scene_000.wav"
+    audio_path.parent.mkdir(parents=True, exist_ok=True)
+    audio_path.write_bytes(b"wav")
+    image_path = project_dir / "images" / "scene_000.png"
+    image_path.parent.mkdir(parents=True, exist_ok=True)
+    image_path.write_bytes(b"png")
+
+    plan = {
+        "meta": {
+            "brief": {
+                "must_avoid": "No Anthropic. No GPT 5.5. No Qwen.",
+            },
+            "image_profile": {"provider": "codex", "generation_model": "gpt-image-2"},
+            "render_profile": {
+                "render_backend": "ffmpeg",
+                "fps": 24,
+            },
+        },
+        "scenes": [
+            {
+                "id": 1,
+                "uid": "scene_000",
+                "scene_type": "image",
+                "image_path": str(image_path),
+                "audio_path": str(audio_path),
+                "composition": {"manifestation": "authored_image"},
+            }
+        ],
+    }
+    rendered_video_path = project_dir / "rendered.mp4"
+    rendered_video_path.write_bytes(b"mp4")
+    saved_plans: list[dict] = []
+
+    monkeypatch.setattr("core.pipeline_service.load_plan", lambda _: copy.deepcopy(plan))
+    monkeypatch.setattr("core.pipeline_service._scene_has_primary_visual", lambda *args, **kwargs: True)
+    monkeypatch.setattr("core.pipeline_service.assemble_video", lambda *args, **kwargs: rendered_video_path)
+    monkeypatch.setattr(
+        "core.pipeline_service.compress_video_if_oversized",
+        lambda *args, **kwargs: {"path": str(rendered_video_path), "compressed": False},
+    )
+    monkeypatch.setattr(
+        "core.pipeline_service.save_plan",
+        lambda _project_dir, updated_plan: saved_plans.append(updated_plan) or updated_plan,
+    )
+
+    def fail_review(*_args, **_kwargs):
+        raise AssertionError("automatic scene review should be skipped for restricted qEEG briefs")
+
+    monkeypatch.setattr("core.pipeline_service.review_project_scenes", fail_review)
+
+    result = render_project_service(project_dir)
+
+    assert result["status"] == "succeeded"
+    assert result["video_path"] == str(rendered_video_path)
+    assert result["scene_review"] is None
+    assert result["scene_review_skipped"] == "automatic scene review skipped because the brief restricts model/provider lanes"
+    assert saved_plans
+
+
 def test_normalize_authored_image_scene_identities_preserves_existing_mixed_timeline_paths(tmp_path):
     project_dir = tmp_path / "mixed_project"
     images_dir = project_dir / "images"
@@ -193,6 +258,7 @@ def test_render_project_service_scopes_exact_repairs_and_preserves_canonical_sli
                 "generation_model": "qwen/qwen-image-2512",
                 "edit_model": "qwen/qwen-image-edit-2511",
             },
+            "creative_llm_provider": "openrouter_glm",
             "render_profile": {
                 "render_backend": "ffmpeg",
                 "fps": 24,
@@ -218,7 +284,7 @@ def test_render_project_service_scopes_exact_repairs_and_preserves_canonical_sli
     rendered_video_path.write_bytes(b"mp4")
     review_calls: list[tuple[str, tuple[str, ...] | None]] = []
     edit_prompts: list[str] = []
-    rewrite_inputs: list[tuple[str, str]] = []
+    rewrite_inputs: list[tuple[str, str, str]] = []
     exact_review_count = 0
     edit_output_count = 0
 
@@ -292,7 +358,7 @@ def test_render_project_service_scopes_exact_repairs_and_preserves_canonical_sli
     monkeypatch.setattr("core.pipeline_service.edit_image", fake_edit_image)
     monkeypatch.setattr(
         "core.pipeline_service.rewrite_prompt_for_synonym_fallback_with_metadata",
-        lambda **kwargs: rewrite_inputs.append((kwargs["wrong_text"], kwargs["correct_text"])) or (
+        lambda **kwargs: rewrite_inputs.append((kwargs["wrong_text"], kwargs["correct_text"], kwargs["provider"])) or (
             {
                 "replacement_text": "Family name",
                 "rewritten_prompt": 'Title card with "Family name"',
@@ -320,7 +386,7 @@ def test_render_project_service_scopes_exact_repairs_and_preserves_canonical_sli
         'change "Mongogmery" to "Montgomery"',
         'change "Montgomey" to "Montgomery"',
     ]
-    assert rewrite_inputs == [("Montgomey", "Montgomery")]
+    assert rewrite_inputs == [("Montgomey", "Montgomery", "openrouter_glm")]
     assert plan_state["scenes"][0]["image_path"] == str(image_path.resolve())
     assert plan_state["scenes"][0]["candidate_outputs"]["primary"]["source_path"] == str(image_path.resolve())
     assert plan_state["scenes"][0]["visual_prompt"] == 'Title card with "Family name"'

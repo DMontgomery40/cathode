@@ -60,6 +60,19 @@ export function BriefStudio() {
   const footageSummary = briefMeta.available_footage as string | null | undefined
   const imageProviders = bootstrap?.providers?.image_providers ?? []
   const videoProviders = bootstrap?.providers?.video_providers ?? []
+  const activeProvider = bootstrap?.providers?.llm_provider ?? undefined
+  const llmProviderOptions = [
+    bootstrap?.providers?.api_keys?.deepseek ? { value: 'deepseek', label: 'DeepSeek V4 Pro (1M reasoning)' } : null,
+    bootstrap?.providers?.api_keys?.openrouter ? { value: 'openrouter_glm', label: 'OpenRouter GLM 5.1' } : null,
+    bootstrap?.providers?.api_keys?.anthropic ? { value: 'anthropic', label: 'Anthropic' } : null,
+    bootstrap?.providers?.api_keys?.openai ? { value: 'openai', label: 'OpenAI' } : null,
+  ].filter((option): option is { value: string; label: string } => Boolean(option))
+  const [selectedLlmProvider, setSelectedLlmProvider] = useState('')
+  const requestedProvider = selectedLlmProvider || activeProvider
+  const defaultImageProfile = bootstrap?.defaults?.image_profile as Record<string, unknown> | undefined
+  const defaultVideoProfile = bootstrap?.defaults?.video_profile as Record<string, unknown> | undefined
+  const defaultTtsProfile = bootstrap?.defaults?.tts_profile as Record<string, unknown> | undefined
+  const defaultRenderProfile = bootstrap?.defaults?.render_profile as Record<string, unknown> | undefined
   const paidMediaGenerationAvailable = imageProviders.includes('replicate') || videoProviders.includes('replicate')
 
   useEffect(() => {
@@ -75,6 +88,12 @@ export function BriefStudio() {
         : String(agentDemoProfile.flow_hints ?? ''),
     })
   }, [agentDemoProfile.app_url, agentDemoProfile.expected_url, agentDemoProfile.flow_hints, agentDemoProfile.launch_command, agentDemoProfile.preferred_agent, agentDemoProfile.repo_url, agentDemoProfile.workspace_path])
+
+  useEffect(() => {
+    if (!selectedLlmProvider && activeProvider) {
+      setSelectedLlmProvider(activeProvider)
+    }
+  }, [activeProvider, selectedLlmProvider])
 
   function normalizedDemoTarget() {
     const flowHints = demoTarget.flow_hints
@@ -120,6 +139,11 @@ export function BriefStudio() {
         {
           project_name,
           brief: nextBrief,
+          provider: requestedProvider,
+          image_profile: defaultImageProfile ?? null,
+          video_profile: defaultVideoProfile ?? null,
+          tts_profile: defaultTtsProfile ?? null,
+          render_profile: defaultRenderProfile ?? null,
           agent_demo_profile: Object.keys(nextDemoTarget).length > 0 ? nextDemoTarget : null,
           run_until: 'render',
         },
@@ -136,16 +160,25 @@ export function BriefStudio() {
 
     if (isNew) {
       const { project_name, ...brief } = data
-      createProject.mutate(
+      startMakeVideoJob.mutate(
         {
           project_name,
-          brief,
+          brief: {
+            ...brief,
+            project_name,
+          },
+          provider: requestedProvider,
+          image_profile: defaultImageProfile ?? null,
+          video_profile: defaultVideoProfile ?? null,
+          tts_profile: defaultTtsProfile ?? null,
+          render_profile: defaultRenderProfile ?? null,
           agent_demo_profile: Object.keys(nextDemoTarget).length > 0 ? nextDemoTarget : null,
+          run_until: 'storyboard',
         },
         {
-          onSuccess: (result) => {
-            const name = (result as Record<string, unknown>).project_name as string ?? project_name
-            navigate(`/projects/${encodeURIComponent(name)}/scenes`)
+          onSuccess: (job) => {
+            const name = job.project_name || project_name
+            navigate(`/projects/${encodeURIComponent(name)}/render`)
           },
           onSettled: () => setLoadingAction(null),
         },
@@ -153,6 +186,7 @@ export function BriefStudio() {
     } else {
       rebuildStoryboard.mutate(
         {
+          provider: requestedProvider,
           brief: {
             ...data,
             project_name: projectId,
@@ -212,6 +246,17 @@ export function BriefStudio() {
                 eyebrow="Intent-driven setup"
                 copy="The brief drives the real pipeline. Define the outcome, source material, and clip preferences here so the director can plan the storyboard and generated-video beats before assets and render run."
               >
+                {llmProviderOptions.length > 0 && (
+                  <div style={{ marginBottom: 'var(--space-4)' }}>
+                    <Select
+                      label="Writing Model"
+                      options={llmProviderOptions}
+                      value={selectedLlmProvider}
+                      onChange={(event) => setSelectedLlmProvider(event.target.value)}
+                      hint="Applied to this storyboard/video job request so DeepSeek and OpenRouter jobs can run side by side."
+                    />
+                  </div>
+                )}
                 <BriefForm
                   defaults={defaults}
                   onSubmit={handleSubmit}

@@ -207,3 +207,62 @@ def test_resolve_workflow_llm_roles_allows_claude_print_story_writer(monkeypatch
 
     assert creative_provider == "claude_print"
     assert treatment_provider == "anthropic"
+
+
+def test_resolve_workflow_llm_roles_routes_openrouter_glm_for_both_writing_roles(monkeypatch):
+    monkeypatch.setattr(
+        "core.runtime.check_api_keys",
+        lambda: {
+            "openai": True,
+            "anthropic": True,
+            "openrouter": True,
+            "replicate": False,
+            "dashscope": False,
+            "elevenlabs": False,
+        },
+    )
+
+    creative_provider, treatment_provider = resolve_workflow_llm_roles("glm")
+
+    assert creative_provider == "openrouter_glm"
+    assert treatment_provider == "openrouter_glm"
+
+
+def test_resolve_workflow_llm_roles_routes_deepseek_for_both_writing_roles(monkeypatch):
+    monkeypatch.setattr(
+        "core.runtime.check_api_keys",
+        lambda: {
+            "openai": True,
+            "anthropic": True,
+            "openrouter": True,
+            "deepseek": True,
+            "replicate": False,
+            "dashscope": False,
+            "elevenlabs": False,
+        },
+    )
+
+    creative_provider, treatment_provider = resolve_workflow_llm_roles("deepseek")
+
+    assert creative_provider == "deepseek"
+    assert treatment_provider == "deepseek"
+
+
+def test_resolve_workflow_llm_roles_uses_env_provider_override(monkeypatch):
+    monkeypatch.setenv("CATHODE_PREFERRED_LLM_PROVIDER", "openrouter_glm")
+    monkeypatch.setattr(
+        "core.runtime.check_api_keys",
+        lambda: {
+            "openai": True,
+            "anthropic": True,
+            "openrouter": True,
+            "replicate": False,
+            "dashscope": False,
+            "elevenlabs": False,
+        },
+    )
+
+    creative_provider, treatment_provider = resolve_workflow_llm_roles()
+
+    assert creative_provider == "openrouter_glm"
+    assert treatment_provider == "openrouter_glm"

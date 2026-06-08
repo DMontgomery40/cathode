@@ -17,6 +17,8 @@ const PROJECT_SORT_OPTIONS = [
   { value: 'name-asc', label: 'A to Z' },
 ] as const
 
+const INITIAL_VISIBLE_PROJECTS = 24
+
 function timestampValue(iso?: string | null): number {
   if (!iso) return 0
   const timestamp = new Date(iso).valueOf()
@@ -48,11 +50,14 @@ export function ProjectsList() {
   const navigate = useNavigate()
   const { data: projects, isLoading } = useProjects()
   const [sortOrder, setSortOrder] = useState<ProjectSortOrder>('created-desc')
+  const [visibleCount, setVisibleCount] = useState(INITIAL_VISIBLE_PROJECTS)
   const projectCount = projects?.length ?? 0
   const sortedProjects = useMemo(
     () => sortProjects(projects ?? [], sortOrder),
     [projects, sortOrder],
   )
+  const visibleProjects = sortedProjects.slice(0, visibleCount)
+  const hiddenProjectCount = Math.max(sortedProjects.length - visibleProjects.length, 0)
 
   return (
     <div className="flex flex-col h-full">
@@ -97,7 +102,10 @@ export function ProjectsList() {
               <Select
                 label="Sort projects"
                 value={sortOrder}
-                onChange={(event) => setSortOrder(event.target.value as ProjectSortOrder)}
+                onChange={(event) => {
+                  setSortOrder(event.target.value as ProjectSortOrder)
+                  setVisibleCount(INITIAL_VISIBLE_PROJECTS)
+                }}
                 options={PROJECT_SORT_OPTIONS.map((option) => ({ value: option.value, label: option.label }))}
                 hint="Newest first uses project creation time. Recently updated uses the latest plan activity."
               />
@@ -144,10 +152,22 @@ export function ProjectsList() {
             )}
           />
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-[var(--space-4)]">
-            {sortedProjects.map((project) => (
-              <ProjectCard key={project.name} project={project} />
-            ))}
+          <div className="flex flex-col gap-[var(--space-4)]">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-[var(--space-4)]">
+              {visibleProjects.map((project) => (
+                <ProjectCard key={project.name} project={project} />
+              ))}
+            </div>
+            {hiddenProjectCount > 0 ? (
+              <div className="flex justify-center">
+                <Button
+                  variant="secondary"
+                  onClick={() => setVisibleCount((count) => count + INITIAL_VISIBLE_PROJECTS)}
+                >
+                  Show {Math.min(INITIAL_VISIBLE_PROJECTS, hiddenProjectCount)} more
+                </Button>
+              </div>
+            ) : null}
           </div>
         )}
       </WorkspaceCanvas>

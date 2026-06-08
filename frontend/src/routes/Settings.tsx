@@ -81,7 +81,7 @@ export function Settings() {
   }, [selectedProject])
 
   const { data: plan } = usePlan(selectedProject)
-  const { data: projectJobs } = useProjectJobs(selectedProject, { refetchInterval: 4000 })
+  const { data: projectJobs } = useProjectJobs(selectedProject, { refetchInterval: 4000, pollWhileActive: true })
   const savePlan = useSavePlan(selectedProject)
 
   const ttsProfile = useMemo(

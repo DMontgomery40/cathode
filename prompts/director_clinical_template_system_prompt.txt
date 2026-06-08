@@ -3,7 +3,7 @@ Clinical template compositions
 For clinical, patient-facing, and data-heavy explainer videos, most scenes fall into a small set of recurring visual patterns. Rather than writing a unique visual prompt for every scene and hoping the image model renders readable text correctly, use clinical template compositions: pre-cataloged background images paired with deterministic Remotion text overlays.
 
 A template composition has two layers:
-1. Background image — a reusable, text-free Qwen-generated visual that sets the mood and spatial context. You do not write a visual_prompt for this. Instead you set composition.props.background_id to identify which stock background to use.
+1. Background image — a reusable, text-free generated visual that sets the mood and spatial context. You do not write a visual_prompt for this. Instead you set composition.props.background_id to identify which stock background to use.
 2. Text overlay — all visible text is rendered deterministically by Remotion from structured props you provide. Text placement is computed automatically using vision-based negative-space detection on the background image.
 
 This means: you write the content (headlines, values, labels, bullets), not the visual design. The renderer handles typography, animation, and placement.

@@ -8,11 +8,15 @@ import mimetypes
 import os
 import shutil
 import subprocess
+import ssl
+import urllib.error
+import urllib.request
 import uuid
 from pathlib import Path
 from typing import Any, Literal
 
 import anthropic
+import certifi
 import openai
 
 from .costs import llm_actual_entry, llm_preflight_entry
@@ -67,6 +71,14 @@ _MANIFESTATION_RISK_LEVELS = {"low", "medium", "high"}
 _OPENAI_DIRECTOR_MODEL = "gpt-5.4"
 _OPENAI_DIRECTOR_REASONING_EFFORT = "xhigh"
 _ANTHROPIC_DIRECTOR_MODEL = "claude-sonnet-4-6"
+_OPENROUTER_PROVIDER = "openrouter_glm"
+_OPENROUTER_GLM_MODEL = os.getenv("CATHODE_OPENROUTER_GLM_MODEL", os.getenv("OPENROUTER_GLM_MODEL", "z-ai/glm-5.1"))
+_OPENROUTER_GLM_STORYBOARD_MAX_TOKENS = int(
+    os.getenv("CATHODE_OPENROUTER_GLM_STORYBOARD_MAX_TOKENS", "24000")
+)
+_DEEPSEEK_PROVIDER = "deepseek"
+_DEEPSEEK_MODEL = os.getenv("CATHODE_DEEPSEEK_MODEL", os.getenv("DEEPSEEK_MODEL", "deepseek-v4-pro"))
+_DEEPSEEK_STORYBOARD_MAX_TOKENS = int(os.getenv("CATHODE_DEEPSEEK_STORYBOARD_MAX_TOKENS", "32000"))
 _CLAUDE_PRINT_DIRECTOR_MODEL = os.getenv("CATHODE_CLAUDE_PRINT_MODEL", "claude-sonnet-4-6")
 _CLAUDE_PRINT_TOOLS = os.getenv("CATHODE_CLAUDE_PRINT_TOOLS", "Read,Grep,Glob")
 _DEFAULT_ANTHROPIC_TIMEOUT_SECONDS = 45.0
@@ -88,6 +100,250 @@ def _anthropic_timeout_seconds() -> float:
     except ValueError:
         return _DEFAULT_ANTHROPIC_TIMEOUT_SECONDS
     return value if value > 0 else _DEFAULT_ANTHROPIC_TIMEOUT_SECONDS
+
+
+def _openrouter_api_key() -> str:
+    """Return the OpenRouter API key from env or the operator's home .env."""
+    direct = str(os.getenv("OPENROUTER_API_KEY") or "").strip()
+    if direct:
+        return direct
+    home_env = Path.home() / ".env"
+    if home_env.exists():
+        for line in home_env.read_text(errors="ignore").splitlines():
+            stripped = line.strip()
+            if not stripped or stripped.startswith("#") or "=" not in stripped:
+                continue
+            key, _, value = stripped.partition("=")
+            if key.strip() == "OPENROUTER_API_KEY":
+                candidate = value.strip().strip("'\"")
+                if candidate:
+                    return candidate
+    raise ValueError("OPENROUTER_API_KEY is required for OpenRouter GLM storyboard generation.")
+
+
+def _deepseek_env_paths() -> list[Path]:
+    """Return local .env locations allowed to provide a DeepSeek key."""
+    paths: list[Path] = []
+    configured = str(os.getenv("DEEPSEEK_ENV_PATH") or "").strip()
+    if configured:
+        paths.append(Path(configured).expanduser())
+    paths.extend(
+        [
+            Path.home() / ".env",
+            Path.home() / "ragweld" / ".env",
+            Path.home() / "deepseek-mcp-server" / ".env",
+        ]
+    )
+    return paths
+
+
+def _deepseek_api_key() -> str:
+    """Return the DeepSeek API key from env or known local operator .env files."""
+    direct = str(os.getenv("DEEPSEEK_API_KEY") or "").strip()
+    if direct:
+        return direct
+    for path in _deepseek_env_paths():
+        if not path.exists():
+            continue
+        for line in path.read_text(errors="ignore").splitlines():
+            stripped = line.strip()
+            if not stripped or stripped.startswith("#") or "=" not in stripped:
+                continue
+            key, _, value = stripped.partition("=")
+            if key.strip() == "DEEPSEEK_API_KEY":
+                candidate = value.strip().strip("'\"")
+                if candidate:
+                    return candidate
+    raise ValueError("DEEPSEEK_API_KEY is required for DeepSeek storyboard generation.")
+
+
+def _extract_json_object_text(content: str) -> str:
+    """Extract the first JSON object from a model response string."""
+    text = str(content or "").strip()
+    if text.startswith("```"):
+        lines = text.splitlines()
+        if lines:
+            lines = lines[1:]
+        if lines and lines[-1].strip() == "```":
+            lines = lines[:-1]
+        text = "\n".join(lines).strip()
+    first = text.find("{")
+    last = text.rfind("}")
+    if first >= 0 and last > first:
+        return text[first : last + 1]
+    return text
+
+
+def _openrouter_usage_payload(usage: Any) -> dict[str, int]:
+    """Normalize OpenRouter chat usage into the token fields Cathode tracks."""
+    if not isinstance(usage, dict):
+        return {}
+    normalized: dict[str, int] = {}
+    for source, target in (
+        ("input_tokens", "input_tokens"),
+        ("output_tokens", "output_tokens"),
+        ("prompt_tokens", "input_tokens"),
+        ("completion_tokens", "output_tokens"),
+    ):
+        value = usage.get(source)
+        try:
+            if value is not None:
+                normalized[target] = int(value)
+        except (TypeError, ValueError):
+            continue
+    return normalized
+
+
+def _call_openrouter_glm_json(
+    system_prompt: str,
+    user_prompt: str,
+    *,
+    temperature: float,
+    max_tokens: int,
+) -> tuple[Any, dict[str, Any]]:
+    """Call OpenRouter GLM and parse a JSON object response."""
+    payload = {
+        "model": _OPENROUTER_GLM_MODEL,
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ],
+        "temperature": temperature,
+        "max_tokens": max_tokens,
+        "response_format": {"type": "json_object"},
+    }
+    request = urllib.request.Request(
+        "https://openrouter.ai/api/v1/chat/completions",
+        data=json.dumps(payload).encode("utf-8"),
+        headers={
+            "Authorization": f"Bearer {_openrouter_api_key()}",
+            "Content-Type": "application/json",
+            "HTTP-Referer": "https://thrylen.com/qeeg",
+            "X-Title": "Cathode Neuro-Luminance qEEG",
+        },
+        method="POST",
+    )
+    context = ssl.create_default_context(cafile=certifi.where())
+    try:
+        with urllib.request.urlopen(request, timeout=180, context=context) as response:
+            response_payload = json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        body = exc.read().decode("utf-8", errors="replace")
+        raise ValueError(f"OpenRouter GLM request failed with HTTP {exc.code}: {body[:1000]}") from exc
+
+    choices = response_payload.get("choices") if isinstance(response_payload, dict) else None
+    if not choices or not isinstance(choices[0], dict):
+        raise ValueError("OpenRouter GLM returned no choices")
+    message = choices[0].get("message") or {}
+    content = message.get("content")
+    if isinstance(content, list):
+        content = "".join(
+            str(item.get("text") or item.get("content") or "")
+            for item in content
+            if isinstance(item, dict)
+        )
+    if not isinstance(content, str) or not content.strip():
+        raise ValueError("OpenRouter GLM returned an empty response")
+
+    parsed = json.loads(_extract_json_object_text(content))
+    response_payload["usage"] = _openrouter_usage_payload(response_payload.get("usage"))
+    return parsed, response_payload
+
+
+def _call_deepseek_json(
+    system_prompt: str,
+    user_prompt: str,
+    *,
+    max_tokens: int,
+) -> tuple[Any, dict[str, Any]]:
+    """Call DeepSeek V4 thinking mode through the OpenAI-compatible chat API."""
+    payload = {
+        "model": _DEEPSEEK_MODEL,
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ],
+        "max_tokens": max_tokens,
+        "response_format": {"type": "json_object"},
+    }
+    response_payload = _post_deepseek_chat_completion(payload)
+    content = _choice_message_content(response_payload, provider_name="DeepSeek")
+
+    try:
+        parsed = json.loads(_extract_json_object_text(content))
+    except json.JSONDecodeError:
+        parsed, repair_payload = _repair_deepseek_json(content, max_tokens=max_tokens)
+        response_payload["json_repair"] = {
+            "model": repair_payload.get("model"),
+            "usage": _openrouter_usage_payload(repair_payload.get("usage")),
+        }
+
+    response_payload["usage"] = _openrouter_usage_payload(response_payload.get("usage"))
+    return parsed, response_payload
+
+
+def _post_deepseek_chat_completion(payload: dict[str, Any]) -> dict[str, Any]:
+    """Post a DeepSeek chat completion payload and return the decoded response."""
+    request = urllib.request.Request(
+        "https://api.deepseek.com/chat/completions",
+        data=json.dumps(payload).encode("utf-8"),
+        headers={
+            "Authorization": f"Bearer {_deepseek_api_key()}",
+            "Content-Type": "application/json",
+        },
+        method="POST",
+    )
+    context = ssl.create_default_context(cafile=certifi.where())
+    try:
+        with urllib.request.urlopen(request, timeout=300, context=context) as response:
+            return json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        body = exc.read().decode("utf-8", errors="replace")
+        raise ValueError(f"DeepSeek request failed with HTTP {exc.code}: {body[:1000]}") from exc
+
+
+def _choice_message_content(response_payload: dict[str, Any], *, provider_name: str) -> str:
+    """Extract text content from the first chat-completion choice."""
+    choices = response_payload.get("choices") if isinstance(response_payload, dict) else None
+    if not choices or not isinstance(choices[0], dict):
+        raise ValueError(f"{provider_name} returned no choices")
+    message = choices[0].get("message") or {}
+    content = message.get("content")
+    if isinstance(content, list):
+        content = "".join(
+            str(item.get("text") or item.get("content") or "")
+            for item in content
+            if isinstance(item, dict)
+        )
+    if not isinstance(content, str) or not content.strip():
+        raise ValueError(f"{provider_name} returned an empty response")
+    return content
+
+
+def _repair_deepseek_json(raw_jsonish: str, *, max_tokens: int) -> tuple[Any, dict[str, Any]]:
+    """Ask DeepSeek to repair malformed JSON emitted by the first DeepSeek call."""
+    repair_payload = {
+        "model": _DEEPSEEK_MODEL,
+        "messages": [
+            {
+                "role": "system",
+                "content": (
+                    "You repair malformed JSON. Return one syntactically valid JSON object only. "
+                    "Preserve the original fields and values as much as possible. Do not summarize."
+                ),
+            },
+            {
+                "role": "user",
+                "content": "Repair this malformed JSON into valid JSON:\n\n" + raw_jsonish,
+            },
+        ],
+        "max_tokens": max_tokens,
+        "response_format": {"type": "json_object"},
+    }
+    response_payload = _post_deepseek_chat_completion(repair_payload)
+    content = _choice_message_content(response_payload, provider_name="DeepSeek JSON repair")
+    return json.loads(_extract_json_object_text(content)), response_payload
+
 
 def _cached_system(text: str) -> list[dict[str, Any]]:
     """Wrap a system prompt string with cache_control for Anthropic prompt caching."""
@@ -170,7 +426,7 @@ def _director_manifestation_path_contract() -> str:
   - `text_expected` should be true when visible text matters for comprehension.
   - `text_critical` should be true only when exact visible text correctness is mission-critical.
 - Path meanings:
-  - `authored_image`: the ordinary Anthropic-authored still/image path. `visual_prompt` must already be the final self-contained authored prompt. Do not expect Cathode to mutate it before Qwen.
+  - `authored_image`: the ordinary authored still/image path. `visual_prompt` must already be the final self-contained authored prompt. Do not expect Cathode to mutate it before image generation.
   - `native_remotion`: the explicit native deterministic Cathode/Remotion path. Use this only when the beat truly needs exact staged text, deterministic data choreography, or an unmistakably native supported family.
   - `source_video`: the footage/video path. Use this when the beat should come from supplied footage or an intentional video clip.
 - `native_build_prompt` is allowed only when the primary or fallback path is `native_remotion`.
@@ -397,6 +653,21 @@ def _brief_wants_clinical_data_authored_stills(brief: dict[str, Any]) -> bool:
     return has_patient_context and has_data_context
 
 
+def _brief_requests_positive_patient_family_mode(brief: dict[str, Any]) -> bool:
+    """Return whether source caveats should be excluded from patient-family narration."""
+    text = _brief_intent_text(brief)
+    return (
+        "patient" in text
+        and (
+            "stay positive" in text
+            or "no disclaimers" in text
+            or "no uncertainty" in text
+            or "data-quality caveats" in text
+            or "positive family-facing" in text
+        )
+    )
+
+
 def _brief_requests_multi_voice(brief: dict[str, Any]) -> bool:
     text = _brief_intent_text(brief)
     phrases = (
@@ -618,7 +889,7 @@ def _selected_director_examples(brief: dict[str, Any]) -> list[str]:
 def build_director_system_prompt(
     brief: dict[str, Any],
     *,
-    provider: Literal["openai", "anthropic"] | None = None,
+    provider: str | None = None,
 ) -> str:
     """Assemble the director system prompt from the base prompt, capability blocks, and promoted examples."""
     normalized = normalize_brief(brief)
@@ -798,6 +1069,15 @@ def _build_storyboard_user_prompt_from_brief(brief: dict[str, Any]) -> str:
                 '- For patient-facing clinical or results explainers, prefer calm authored stills with exact labels, charts, '
                 'and comparison layouts rather than camera-pan treatment unless the brief explicitly asks for motion.\n'
             )
+    positive_patient_guidance = ""
+    if _brief_requests_positive_patient_family_mode(normalized):
+        positive_patient_guidance = (
+            "- Positive patient-family mode is active. Do not turn source caveat, uncertainty, limitation, "
+            "artifact, practice-effect, control-group, data-quality, or follow-up-confirmation language into "
+            "narration, on-screen text, titles, visual prompts, or closing beats. Do not say what cannot be "
+            "determined, what is uncertain, what needs confirmation, or what may be limited. Frame continued "
+            "support and tracking as encouraging next steps grounded in the positive findings.\n"
+        )
 
     scene_type_contract = (
         '- "scene_type" ("image", "video", or "motion"; default to "image")'
@@ -897,6 +1177,7 @@ Output requirements:
 
 Quality constraints:
 - Keep narration conversational, vivid, and easy to follow for the specified audience.
+{positive_patient_guidance.rstrip()}
 - Treat the requested runtime as a real budget, not a loose vibe:
   - the total narration word count MUST land within the target range specified above — landing below 85% of the target is a failure, not a virtue
   - staying 5-10% short is acceptable; being 30%+ short is not
@@ -923,7 +1204,7 @@ Quality constraints:
   - lighting, mood, and finish
 {text_render_contract}
 - Treat manifestation paths as a hard contract:
-  - "authored_image": the ordinary Anthropic-authored still/image path. `visual_prompt` must already be the final authored prompt. Do not expect code-side prompt mutation before Qwen.
+  - "authored_image": the ordinary authored still/image path. `visual_prompt` must already be the final authored prompt. Do not expect code-side prompt mutation before image generation.
   - "source_video": the footage/video path. Use it when the beat should be manifested from supplied footage or an intentional video clip.
 {native_manifestation_contract.rstrip()}
 - When "visual_authored" is active and on_screen_text is present, visual_prompt should include the actual visible words and their placement, not vague placeholders like "headline zone," "space for text," or "typography" without naming the text itself.
@@ -965,7 +1246,7 @@ Quality constraints:
 
 def generate_storyboard(
     source: str | dict[str, Any],
-    provider: Literal["openai", "anthropic"] = "openai",
+    provider: str = "openai",
 ) -> list[dict]:
     """
     Generate storyboard scenes from either a generic brief or legacy source text.
@@ -997,7 +1278,7 @@ def _response_usage_value(usage: Any, key: str) -> int | None:
 
 def _llm_call_metadata(
     *,
-    provider: Literal["openai", "anthropic"],
+    provider: str,
     model: str,
     operation: str,
     system_prompt: str,
@@ -1034,7 +1315,7 @@ def _llm_call_metadata(
 
 def generate_storyboard_with_metadata(
     source: str | dict[str, Any],
-    provider: Literal["openai", "anthropic", "claude_print"] = "openai",
+    provider: str = "openai",
 ) -> tuple[list[dict], dict[str, Any]]:
     """Generate storyboard scenes and return cost-aware LLM metadata."""
     if isinstance(source, dict):
@@ -1093,6 +1374,62 @@ def generate_storyboard_with_metadata(
                     response=repair_response,
                 )
         return scenes, metadata
+    if provider == _OPENROUTER_PROVIDER:
+        scenes, response = _generate_with_openrouter_glm(system_prompt, user_prompt, return_response=True)
+        metadata = _llm_call_metadata(
+            provider=_OPENROUTER_PROVIDER,
+            model=_OPENROUTER_GLM_MODEL,
+            operation="storyboard",
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            response=response,
+        )
+        if _storyboard_exceeds_runtime_budget(scenes, brief["target_length_minutes"]):
+            repair_prompt = _build_storyboard_runtime_repair_prompt(brief, scenes)
+            repaired_scenes, repair_response = _generate_with_openrouter_glm(
+                system_prompt,
+                repair_prompt,
+                return_response=True,
+            )
+            if _runtime_budget_pressure(repaired_scenes, brief["target_length_minutes"]) < _runtime_budget_pressure(scenes, brief["target_length_minutes"]):
+                scenes = repaired_scenes
+                metadata["runtime_repair"] = _llm_call_metadata(
+                    provider=_OPENROUTER_PROVIDER,
+                    model=_OPENROUTER_GLM_MODEL,
+                    operation="storyboard_runtime_repair",
+                    system_prompt=system_prompt,
+                    user_prompt=repair_prompt,
+                    response=repair_response,
+                )
+        return scenes, metadata
+    if provider == _DEEPSEEK_PROVIDER:
+        scenes, response = _generate_with_deepseek(system_prompt, user_prompt, return_response=True)
+        metadata = _llm_call_metadata(
+            provider=_DEEPSEEK_PROVIDER,
+            model=_DEEPSEEK_MODEL,
+            operation="storyboard",
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            response=response,
+        )
+        if _storyboard_exceeds_runtime_budget(scenes, brief["target_length_minutes"]):
+            repair_prompt = _build_storyboard_runtime_repair_prompt(brief, scenes)
+            repaired_scenes, repair_response = _generate_with_deepseek(
+                system_prompt,
+                repair_prompt,
+                return_response=True,
+            )
+            if _runtime_budget_pressure(repaired_scenes, brief["target_length_minutes"]) < _runtime_budget_pressure(scenes, brief["target_length_minutes"]):
+                scenes = repaired_scenes
+                metadata["runtime_repair"] = _llm_call_metadata(
+                    provider=_DEEPSEEK_PROVIDER,
+                    model=_DEEPSEEK_MODEL,
+                    operation="storyboard_runtime_repair",
+                    system_prompt=system_prompt,
+                    user_prompt=repair_prompt,
+                    response=repair_response,
+                )
+        return scenes, metadata
     if provider == "claude_print":
         scenes, response = _generate_with_claude_print(system_prompt, user_prompt, return_response=True)
         metadata = _llm_call_metadata(
@@ -1122,7 +1459,7 @@ def generate_storyboard_with_metadata(
 
 def generate_storyboard_from_text(
     input_text: str,
-    provider: Literal["openai", "anthropic"] = "openai",
+    provider: str = "openai",
 ) -> list[dict]:
     """Compatibility wrapper for callers that still pass raw source text."""
     return generate_storyboard(_legacy_brief_from_text(input_text), provider=provider)
@@ -1401,6 +1738,33 @@ def _generate_with_anthropic(system_prompt: str, user_prompt: str, *, return_res
     return scenes
 
 
+def _generate_with_openrouter_glm(system_prompt: str, user_prompt: str, *, return_response: bool = False) -> list[dict] | tuple[list[dict], Any]:
+    """Generate storyboard through OpenRouter GLM JSON mode."""
+    result, response = _call_openrouter_glm_json(
+        system_prompt,
+        user_prompt,
+        temperature=0.7,
+        max_tokens=_OPENROUTER_GLM_STORYBOARD_MAX_TOKENS,
+    )
+    scenes = _validate_scenes(extract_scenes_array(result))
+    if return_response:
+        return scenes, response
+    return scenes
+
+
+def _generate_with_deepseek(system_prompt: str, user_prompt: str, *, return_response: bool = False) -> list[dict] | tuple[list[dict], Any]:
+    """Generate storyboard through DeepSeek V4 Pro thinking mode."""
+    result, response = _call_deepseek_json(
+        system_prompt,
+        user_prompt,
+        max_tokens=_DEEPSEEK_STORYBOARD_MAX_TOKENS,
+    )
+    scenes = _validate_scenes(extract_scenes_array(result))
+    if return_response:
+        return scenes, response
+    return scenes
+
+
 def _claude_print_storyboard_schema() -> dict[str, Any]:
     return storyboard_tool_schema()["input_schema"]
 
@@ -1588,7 +1952,7 @@ def refine_prompt(
     original_prompt: str,
     feedback: str,
     narration: str = "",
-    provider: Literal["openai", "anthropic"] = "openai",
+    provider: str = "openai",
 ) -> str:
     """
     Refine an image prompt based on user feedback.
@@ -1613,7 +1977,7 @@ def refine_prompt(
 def refine_narration(
     original_narration: str,
     feedback: str,
-    provider: Literal["openai", "anthropic"] = "openai",
+    provider: str = "openai",
 ) -> str:
     """
     Refine a scene narration based on user feedback.
@@ -1637,7 +2001,7 @@ def refine_prompt_with_metadata(
     original_prompt: str,
     feedback: str,
     narration: str = "",
-    provider: Literal["openai", "anthropic"] = "openai",
+    provider: str = "openai",
 ) -> tuple[str, dict[str, Any]]:
     """Refine an image prompt and return LLM usage metadata."""
     system_prompt = load_prompt("refiner_system")
@@ -1683,6 +2047,25 @@ Please provide the refined prompt."""
             response=response,
         )
 
+    if provider == _OPENROUTER_PROVIDER:
+        result, response = _call_openrouter_glm_json(
+            system_prompt,
+            f"{user_prompt}\n\nReturn JSON only with key refined_prompt.",
+            temperature=0.7,
+            max_tokens=2048,
+        )
+        refined = str(result.get("refined_prompt") or result.get("prompt") or result.get("text") or "").strip()
+        if not refined:
+            raise ValueError("OpenRouter GLM did not return refined_prompt")
+        return refined, _llm_call_metadata(
+            provider=_OPENROUTER_PROVIDER,
+            model=_OPENROUTER_GLM_MODEL,
+            operation="refine_prompt",
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            response=response,
+        )
+
     raise ValueError(f"Unknown provider: {provider}")
 
 
@@ -1693,7 +2076,7 @@ def rewrite_prompt_for_synonym_fallback_with_metadata(
     wrong_text: str,
     correct_text: str,
     narration: str = "",
-    provider: Literal["openai", "anthropic"] = "anthropic",
+    provider: str = "anthropic",
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     """Rewrite an authored-image prompt to use a semantically equivalent visible phrase."""
     system_prompt = (
@@ -1776,13 +2159,29 @@ def rewrite_prompt_for_synonym_fallback_with_metadata(
             response=response,
         )
 
+    if provider == _OPENROUTER_PROVIDER:
+        payload, response = _call_openrouter_glm_json(
+            system_prompt,
+            user_prompt,
+            temperature=0.3,
+            max_tokens=2048,
+        )
+        return _normalize_payload(payload), _llm_call_metadata(
+            provider=_OPENROUTER_PROVIDER,
+            model=_OPENROUTER_GLM_MODEL,
+            operation="synonym_prompt_rewrite",
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            response=response,
+        )
+
     raise ValueError(f"Unknown provider: {provider}")
 
 
 def refine_narration_with_metadata(
     original_narration: str,
     feedback: str,
-    provider: Literal["openai", "anthropic"] = "openai",
+    provider: str = "openai",
 ) -> tuple[str, dict[str, Any]]:
     """Refine narration and return LLM usage metadata."""
     system_prompt = load_prompt("refiner_narration_system")
@@ -1821,6 +2220,25 @@ Please provide the refined narration."""
         return text_block.text.strip(), _llm_call_metadata(
             provider="anthropic",
             model=_ANTHROPIC_DIRECTOR_MODEL,
+            operation="refine_narration",
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            response=response,
+        )
+
+    if provider == _OPENROUTER_PROVIDER:
+        result, response = _call_openrouter_glm_json(
+            system_prompt,
+            f"{user_prompt}\n\nReturn JSON only with key refined_narration.",
+            temperature=0.7,
+            max_tokens=2048,
+        )
+        refined = str(result.get("refined_narration") or result.get("narration") or result.get("text") or "").strip()
+        if not refined:
+            raise ValueError("OpenRouter GLM did not return refined_narration")
+        return refined, _llm_call_metadata(
+            provider=_OPENROUTER_PROVIDER,
+            model=_OPENROUTER_GLM_MODEL,
             operation="refine_narration",
             system_prompt=system_prompt,
             user_prompt=user_prompt,

@@ -8,6 +8,8 @@ interface ProjectCardProps {
   project: ProjectSummary
 }
 
+const IMAGE_THUMBNAIL_EXTENSIONS = new Set(['.avif', '.gif', '.jpeg', '.jpg', '.png', '.svg', '.webp'])
+
 function formatProjectDate(iso?: string | null): string | null {
   if (!iso) return null
   const date = new Date(iso)
@@ -17,6 +19,13 @@ function formatProjectDate(iso?: string | null): string | null {
     day: 'numeric',
     year: 'numeric',
   })
+}
+
+function isImageThumbnail(path: string | null): path is string {
+  if (!path) return false
+  const cleanPath = path.split(/[?#]/, 1)[0].toLowerCase()
+  const dotIndex = cleanPath.lastIndexOf('.')
+  return dotIndex >= 0 && IMAGE_THUMBNAIL_EXTENSIONS.has(cleanPath.slice(dotIndex))
 }
 
 export function ProjectCard({ project }: ProjectCardProps) {
@@ -29,7 +38,9 @@ export function ProjectCard({ project }: ProjectCardProps) {
   const target = project.scene_count > 0
     ? `/projects/${encodeURIComponent(project.name)}/scenes`
     : `/projects/${encodeURIComponent(project.name)}/brief`
-  const thumbnailUrl = projectMediaUrl(project.name, project.thumbnail_path)
+  const thumbnailUrl = isImageThumbnail(project.thumbnail_path)
+    ? projectMediaUrl(project.name, project.thumbnail_path)
+    : null
 
   return (
     <GlassPanel
@@ -51,6 +62,8 @@ export function ProjectCard({ project }: ProjectCardProps) {
             src={thumbnailUrl}
             alt={`${project.name} thumbnail`}
             className="w-full h-full object-cover"
+            loading="lazy"
+            decoding="async"
             onError={(e) => {
               e.currentTarget.style.display = 'none'
             }}

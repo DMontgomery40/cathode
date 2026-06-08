@@ -45,6 +45,8 @@ _OPENAI_REALTIME_VOICES = {
     "verse",
 }
 DEFAULT_REPLICATE_VIDEO_MODEL = "kwaivgi/kling-v3-video"
+OPENROUTER_PROVIDER = "openrouter_glm"
+DEEPSEEK_PROVIDER = "deepseek"
 
 
 def load_repo_env(*, override: bool = False, env_path: Path | None = None) -> Path | None:
@@ -70,11 +72,57 @@ def load_repo_env(*, override: bool = False, env_path: Path | None = None) -> Pa
 load_repo_env()
 
 
+def openrouter_api_key_available() -> bool:
+    """Return whether OpenRouter is configured, including the operator's home .env."""
+    return _env_key_available("OPENROUTER_API_KEY", [Path.home() / ".env"])
+
+
+def deepseek_api_key_available() -> bool:
+    """Return whether DeepSeek is configured in env or known local key files."""
+    return _env_key_available(
+        "DEEPSEEK_API_KEY",
+        [
+            Path(os.getenv("DEEPSEEK_ENV_PATH", "")).expanduser() if os.getenv("DEEPSEEK_ENV_PATH") else None,
+            Path.home() / ".env",
+            Path.home() / "ragweld" / ".env",
+            Path.home() / "deepseek-mcp-server" / ".env",
+        ],
+    )
+
+
+def _env_key_available(key_name: str, env_paths: list[Path | None]) -> bool:
+    """Return whether a named key exists in process env or selected .env files."""
+    if str(os.getenv(key_name) or "").strip():
+        return True
+    for path in env_paths:
+        if path is None or not path.exists():
+            continue
+        for line in path.read_text(errors="ignore").splitlines():
+            stripped = line.strip()
+            if not stripped or stripped.startswith("#") or "=" not in stripped:
+                continue
+            key, _, value = stripped.partition("=")
+            if key.strip() == key_name and value.strip().strip("'\""):
+                return True
+    return False
+
+
+def _llm_key_present(keys: dict[str, bool], candidate: str) -> bool:
+    """Return whether a requested LLM provider name has a configured key."""
+    if candidate in {"glm", "openrouter", OPENROUTER_PROVIDER}:
+        return bool(keys.get("openrouter"))
+    if candidate in {"deepseek", "deepseek_v4", "deepseek-v4", DEEPSEEK_PROVIDER}:
+        return bool(keys.get("deepseek"))
+    return bool(keys.get(candidate))
+
+
 def check_api_keys() -> dict[str, bool]:
     """Return which external providers are configured in the current environment."""
     return {
         "openai": bool(os.getenv("OPENAI_API_KEY")),
         "anthropic": bool(os.getenv("ANTHROPIC_API_KEY")),
+        "openrouter": openrouter_api_key_available(),
+        "deepseek": deepseek_api_key_available(),
         "replicate": bool(os.getenv("REPLICATE_API_TOKEN")),
         "dashscope": bool(os.getenv("DASHSCOPE_API_KEY") or os.getenv("ALIBABA_API_KEY")),
         "elevenlabs": bool(os.getenv("ELEVENLABS_API_KEY")),
@@ -242,16 +290,25 @@ def available_render_backends() -> list[str]:
 def choose_llm_provider(preferred: str | None = None) -> str:
     """Choose the best available storyboard LLM provider for the current environment."""
     keys = check_api_keys()
-    candidate = str(preferred or "").strip().lower()
+    candidate = str(
+        preferred
+        or os.getenv("CATHODE_PREFERRED_LLM_PROVIDER")
+        or os.getenv("CATHODE_LLM_PROVIDER")
+        or ""
+    ).strip().lower()
+    if candidate in {"glm", "openrouter", OPENROUTER_PROVIDER} and keys.get("openrouter"):
+        return OPENROUTER_PROVIDER
+    if candidate in {"deepseek", "deepseek_v4", "deepseek-v4", DEEPSEEK_PROVIDER} and keys.get("deepseek"):
+        return DEEPSEEK_PROVIDER
     if candidate == "claude_print" and shutil.which(os.getenv("CLAUDE_CODE_BINARY") or "claude"):
         return candidate
-    if candidate and keys.get(candidate):
+    if candidate and _llm_key_present(keys, candidate):
         return candidate
 
-    for provider in ("anthropic", "openai"):
+    for provider in ("deepseek", "openrouter", "anthropic", "openai"):
         if keys.get(provider):
-            return provider
-    raise ValueError("No LLM API keys configured. Set ANTHROPIC_API_KEY or OPENAI_API_KEY.")
+            return OPENROUTER_PROVIDER if provider == "openrouter" else provider
+    raise ValueError("No LLM API keys configured. Set DEEPSEEK_API_KEY, OPENROUTER_API_KEY, ANTHROPIC_API_KEY, or OPENAI_API_KEY.")
 
 
 def resolve_workflow_llm_roles(preferred: str | None = None) -> tuple[str, str]:
@@ -262,7 +319,20 @@ def resolve_workflow_llm_roles(preferred: str | None = None) -> tuple[str, str]:
     too so the one-click flow cannot drift back onto an incompatible OpenAI
     Responses path.
     """
-    requested = str(preferred or "").strip().lower()
+    requested = str(
+        preferred
+        or os.getenv("CATHODE_PREFERRED_LLM_PROVIDER")
+        or os.getenv("CATHODE_LLM_PROVIDER")
+        or ""
+    ).strip().lower()
+    if requested in {"glm", "openrouter", OPENROUTER_PROVIDER}:
+        if not check_api_keys().get("openrouter"):
+            raise ValueError("OPENROUTER_API_KEY is required for OpenRouter GLM storyboard generation.")
+        return OPENROUTER_PROVIDER, OPENROUTER_PROVIDER
+    if requested in {"deepseek", "deepseek_v4", "deepseek-v4", DEEPSEEK_PROVIDER}:
+        if not check_api_keys().get("deepseek"):
+            raise ValueError("DEEPSEEK_API_KEY is required for DeepSeek storyboard generation.")
+        return DEEPSEEK_PROVIDER, DEEPSEEK_PROVIDER
     if requested == "claude_print":
         return "claude_print", "anthropic"
 

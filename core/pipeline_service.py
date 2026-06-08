@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable
@@ -367,6 +368,36 @@ def _primary_only_scene_review_candidates(
     return candidates
 
 
+def _automatic_scene_review_skip_reason(plan: dict[str, Any]) -> str | None:
+    meta = plan.get("meta") if isinstance(plan.get("meta"), dict) else {}
+    env_value = str(os.getenv("CATHODE_DISABLE_AUTOMATIC_SCENE_REVIEW") or "").strip().lower()
+    if env_value in {"1", "true", "yes", "on"}:
+        return "automatic scene review disabled by CATHODE_DISABLE_AUTOMATIC_SCENE_REVIEW"
+    if meta.get("skip_automatic_scene_review") is True:
+        return "automatic scene review disabled by project metadata"
+    if meta.get("automatic_scene_review_enabled") is False:
+        return "automatic scene review disabled by project metadata"
+
+    brief = meta.get("brief") if isinstance(meta.get("brief"), dict) else {}
+    constraint_text = " ".join(
+        str(brief.get(key) or "")
+        for key in ("must_avoid", "source_material", "video_goal", "raw_brief")
+    ).lower()
+    banned_markers = (
+        "no anthropic",
+        "do not use anthropic",
+        "no claude",
+        "do not use claude",
+        "no gpt 5.5",
+        "do not use gpt 5.5",
+        "no qwen",
+        "do not use qwen",
+    )
+    if any(marker in constraint_text for marker in banned_markers):
+        return "automatic scene review skipped because the brief restricts model/provider lanes"
+    return None
+
+
 def _resolve_project_path(project_dir: Path, raw_path: Any) -> Path | None:
     value = str(raw_path or "").strip()
     if not value:
@@ -674,13 +705,21 @@ def _attempt_text_repairs(
         if not repairs_after_edit or text_critical:
             continue
 
+        meta = current_plan.get("meta") if isinstance(current_plan.get("meta"), dict) else {}
+        synonym_provider = str(
+            meta.get("creative_llm_provider")
+            or meta.get("treatment_llm_provider")
+            or "anthropic"
+        ).strip()
+        if synonym_provider == "claude_print":
+            synonym_provider = "anthropic"
         synonym_payload, synonym_meta = rewrite_prompt_for_synonym_fallback_with_metadata(
             original_prompt=str(refreshed_scene.get("visual_prompt") or ""),
             on_screen_text=refreshed_scene.get("on_screen_text") if isinstance(refreshed_scene.get("on_screen_text"), list) else [],
             wrong_text=repairs_after_edit[0]["wrong_text"],
             correct_text=repairs_after_edit[0]["correct_text"],
             narration=str(refreshed_scene.get("narration") or ""),
-            provider="anthropic",
+            provider=synonym_provider,
         )
         refreshed_scene["visual_prompt"] = synonym_payload["rewritten_prompt"]
         refreshed_scene["on_screen_text"] = synonym_payload["rewritten_on_screen_text"]
@@ -735,6 +774,7 @@ def generate_project_assets_service(
     image_generation_model = str(
         image_profile.get("generation_model") or default_image_profile()["generation_model"]
     )
+    scene_review_skip_reason = _automatic_scene_review_skip_reason(plan)
     video_profile = resolve_video_profile(meta.get("video_profile"))
     video_provider = str(video_profile.get("provider") or "manual")
     video_generation_model = str(video_profile.get("generation_model") or "")
@@ -1167,7 +1207,10 @@ def generate_project_assets_service(
         save_plan(project_dir, plan)
         plan = load_plan(project_dir) or plan
     primary_review_candidates = _primary_only_scene_review_candidates(plan)
-    if primary_review_candidates:
+    scene_review_skip_reason = _automatic_scene_review_skip_reason(plan)
+    if primary_review_candidates and scene_review_skip_reason:
+        result["scene_review_skipped"] = scene_review_skip_reason
+    elif primary_review_candidates:
         def _run_asset_review(trigger: str, scene_uids: list[str] | None = None) -> dict[str, Any]:
             refreshed_plan = load_plan(project_dir) or plan
             refreshed_plan, normalized = normalize_authored_image_scene_identities(
@@ -1291,6 +1334,7 @@ def render_project_service(
     image_generation_model = str(
         image_profile.get("generation_model") or default_image_profile()["generation_model"]
     )
+    scene_review_skip_reason = _automatic_scene_review_skip_reason(plan)
 
     def _render_video(current_plan: dict[str, Any]) -> tuple[Path, dict[str, Any]]:
         if render_backend == "remotion":
@@ -1431,7 +1475,18 @@ def render_project_service(
         for scene in plan.get("scenes", [])
         if isinstance(scene, dict) and _scene_requests_fallback(scene)
     ]
-    if candidate_scene_uids:
+    if candidate_scene_uids and scene_review_skip_reason:
+        if progress_callback is not None:
+            progress_callback(
+                {
+                    "progress": 0.05,
+                    "progress_kind": "render",
+                    "progress_label": "Skipping automatic scene review",
+                    "progress_detail": scene_review_skip_reason,
+                    "progress_status": "review_skipped",
+                }
+            )
+    elif candidate_scene_uids:
         try:
             _run_review_for_scenes("pre_render_candidate_selection", candidate_scene_uids)
         except Exception as exc:
@@ -1455,6 +1510,28 @@ def render_project_service(
     plan.setdefault("meta", {})["rendered_utc"] = utc_now_iso()
     plan.setdefault("meta", {})["video_compression"] = compression_result
     save_plan(project_dir, plan)
+    if scene_review_skip_reason:
+        if progress_callback is not None:
+            progress_callback(
+                {
+                    "progress": 1.0,
+                    "progress_kind": "render",
+                    "progress_label": "Render complete, scene review skipped",
+                    "progress_detail": scene_review_skip_reason,
+                    "progress_status": "done",
+                }
+            )
+        return {
+            "status": "succeeded",
+            "retryable": False,
+            "suggestion": "",
+            "missing_visual_scenes": [],
+            "missing_audio_scenes": [],
+            "video_path": str(video_path),
+            "compression": compression_result,
+            "scene_review": None,
+            "scene_review_skipped": scene_review_skip_reason,
+        }
     try:
         scene_review = _run_review("post_render_review")
     except Exception as exc:

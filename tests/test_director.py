@@ -4,6 +4,7 @@ import json
 from core.director import (
     _build_claude_print_command,
     _claude_print_binary_path,
+    _call_deepseek_json,
     _generate_with_claude_print,
     _generate_with_anthropic,
     _get_anthropic_client,
@@ -59,7 +60,8 @@ def test_director_prompt_includes_source_mode_behavior_and_brief_payload():
     assert '"authored_image"' in prompt
     assert '"native_remotion"' in prompt
     assert '"source_video"' in prompt
-    assert "Do not expect code-side prompt mutation before Qwen." in prompt
+    assert "Do not expect code-side prompt mutation before image generation." in prompt
+    assert "Qwen" not in prompt
     assert "No OCR." in prompt
 
 
@@ -188,6 +190,24 @@ def test_director_system_prompt_selects_clinical_data_authored_stills_capability
     )
 
     assert "Capability mode: authored clinical data stills." in prompt
+
+
+def test_storyboard_prompt_adds_positive_patient_family_mode():
+    prompt = _build_storyboard_user_prompt_from_brief(
+        normalize_brief(
+            {
+                "source_mode": "source_text",
+                "video_goal": "Create a patient-facing qEEG explainer.",
+                "audience": "The patient and family.",
+                "source_material": "Positive findings plus follow-up uncertainty and practice effects.",
+                "must_avoid": "No disclaimers. No uncertainty framing. No data-quality caveats.",
+            }
+        )
+    )
+
+    assert "Positive patient-family mode is active" in prompt
+    assert "Do not say what cannot be determined" in prompt
+    assert "Frame continued support and tracking as encouraging next steps" in prompt
 
 
 def test_director_system_prompt_selects_promoted_examples(tmp_path, monkeypatch):
@@ -585,6 +605,127 @@ def test_generate_with_openai_uses_gpt_5_4_with_xhigh_reasoning(monkeypatch):
     assert captured["reasoning"] == {"effort": "xhigh"}
     assert captured["text"] == {"format": {"type": "json_object"}}
     assert "temperature" not in captured
+
+
+def test_generate_storyboard_with_openrouter_glm_uses_json_chat_route(monkeypatch):
+    captured = {}
+
+    def fake_call(system_prompt, user_prompt, *, temperature, max_tokens):
+        captured.update(
+            {
+                "system_prompt": system_prompt,
+                "user_prompt": user_prompt,
+                "temperature": temperature,
+                "max_tokens": max_tokens,
+            }
+        )
+        return (
+            {
+                "scenes": [
+                    {
+                        "id": 0,
+                        "title": "Scene 1",
+                        "narration": "Short narration.",
+                        "visual_prompt": "Premium still.",
+                    }
+                ]
+            },
+            {"usage": {"input_tokens": 11, "output_tokens": 7}},
+        )
+
+    monkeypatch.setattr("core.director.build_director_system_prompt", lambda brief, **kwargs: "system prompt")
+    monkeypatch.setattr("core.director._call_openrouter_glm_json", fake_call)
+
+    scenes, metadata = generate_storyboard_with_metadata(
+        {
+            "project_name": "glm_storyboard",
+            "source_mode": "ideas_notes",
+            "video_goal": "Explain the case.",
+            "audience": "Patient",
+            "source_material": "Facts to preserve.",
+            "target_length_minutes": 6.5,
+        },
+        provider="openrouter_glm",
+    )
+
+    assert scenes[0]["title"] == "Scene 1"
+    assert captured["temperature"] == 0.7
+    assert captured["max_tokens"] == 24000
+    assert metadata["provider"] == "openrouter_glm"
+    assert metadata["model"] == "z-ai/glm-5.1"
+
+
+def test_generate_storyboard_with_deepseek_uses_v4_pro_route(monkeypatch):
+    captured = {}
+
+    def fake_call(system_prompt, user_prompt, *, max_tokens):
+        captured.update(
+            {
+                "system_prompt": system_prompt,
+                "user_prompt": user_prompt,
+                "max_tokens": max_tokens,
+            }
+        )
+        return (
+            {
+                "scenes": [
+                    {
+                        "id": 0,
+                        "title": "Scene 1",
+                        "narration": "Short narration.",
+                        "visual_prompt": "Premium still.",
+                    }
+                ]
+            },
+            {"usage": {"input_tokens": 11, "output_tokens": 7}},
+        )
+
+    monkeypatch.setattr("core.director.build_director_system_prompt", lambda brief, **kwargs: "system prompt")
+    monkeypatch.setattr("core.director._call_deepseek_json", fake_call)
+
+    scenes, metadata = generate_storyboard_with_metadata(
+        {
+            "project_name": "deepseek_storyboard",
+            "source_mode": "ideas_notes",
+            "video_goal": "Explain the case.",
+            "audience": "Patient",
+            "source_material": "Facts to preserve.",
+            "target_length_minutes": 6.5,
+        },
+        provider="deepseek",
+    )
+
+    assert scenes[0]["title"] == "Scene 1"
+    assert captured["max_tokens"] == 32000
+    assert metadata["provider"] == "deepseek"
+    assert metadata["model"] == "deepseek-v4-pro"
+
+
+def test_deepseek_json_route_repairs_malformed_json(monkeypatch):
+    calls = []
+
+    def fake_post(payload):
+        calls.append(payload)
+        if len(calls) == 1:
+            return {
+                "model": "deepseek-v4-pro",
+                "choices": [{"message": {"content": '{"scenes":[{"id":0 "title":"Broken"}]}'}}],
+                "usage": {"prompt_tokens": 10, "completion_tokens": 5},
+            }
+        return {
+            "model": "deepseek-v4-pro",
+            "choices": [{"message": {"content": '{"scenes":[{"id":0,"title":"Fixed"}]}'}}],
+            "usage": {"prompt_tokens": 8, "completion_tokens": 4},
+        }
+
+    monkeypatch.setattr("core.director._post_deepseek_chat_completion", fake_post)
+
+    parsed, response = _call_deepseek_json("system", "user", max_tokens=123)
+
+    assert parsed["scenes"][0]["title"] == "Fixed"
+    assert len(calls) == 2
+    assert calls[1]["messages"][0]["content"].startswith("You repair malformed JSON")
+    assert response["json_repair"]["model"] == "deepseek-v4-pro"
 
 
 def test_analyze_style_references_anthropic_builds_multimodal_request(tmp_path, monkeypatch):

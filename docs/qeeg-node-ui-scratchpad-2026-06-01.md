@@ -1,0 +1,30 @@
+# qEEG Node UI Scratchpad - 2026-06-01
+
+Running notes from using the React/FastAPI Cathode control room for the Neuro-Luminance qEEG patient-video workflow.
+
+## Issues
+
+- [ ] The current app start path is easy to confuse with the legacy Streamlit path because both are nearby in repo docs and `start.sh` defaults to Streamlit. For this workflow the operator intended `./start.sh --react`.
+- [ ] React Brief Studio did not expose or pass the active LLM provider, so new jobs silently fell back to backend defaults.
+- [ ] Provider Matrix listed OpenAI and Anthropic but not OpenRouter, even when OpenRouter was configured and intended as the active writing route.
+- [ ] React dev API target is effectively hard-coded to `127.0.0.1:9321` unless `VITE_API_BASE_URL` is supplied, so a stale API on 9321 can silently steal the UI session.
+- [ ] Neuro-Luminance patient-family video briefs need a reusable positivity-only mode. The report source contains uncertainty/data-quality language, but this specific patient-facing video workflow should exclude disclaimer framing and keep narration encouraging.
+- [ ] Target Length can look set by automation while the submitted request keeps the default `2.0` minutes. The first 04-08-1986-0 Node UI job had to be cancelled after its request payload showed `target_length_minutes: 2.0` despite a 6-8 minute brief.
+  - Mitigation added in React Brief Studio: a numeric `Target Length Minutes` input is bound to the same form value so the effective runtime can be filled and verified before submission.
+- [ ] `Storyboard Only` runs synchronously through `POST /api/projects`; a long GLM call can fail with `400 Bad Request` while the UI returns to Idle with no visible error text or job log. For expensive planning, this should use the same persisted job/log surface as the full make-video path.
+  - Mitigation added in React Brief Studio: new-project `Storyboard Only` now dispatches a persisted make-video job with `run_until: "storyboard"` and navigates to the job/render surface.
+- [ ] GLM storyboard generation for 6-8 minute, 13-15 scene qEEG briefs can exceed the previous 12k output cap and fail as truncated JSON (`Expecting ',' delimiter` around character 17k-21k). The output budget needs to match the runtime/storyboard target.
+- [ ] Patient-family qEEG storyboards can leak source caveat wording into the closing scene even when the brief says no disclaimers. Example: the first successful 04-08-1986-0 GLM storyboard ended with "follow-up assessment would help determine..." and was rejected before paid image generation.
+- [ ] The React Brief Studio originally treated the backend's active LLM provider as global. That made it awkward to run OpenRouter and DeepSeek jobs side by side. Mitigation added: a `Writing Model` selector now sends the provider per job request.
+- [ ] Render/job pages show completed storyboard jobs and asset jobs in the same list without a clear stage/type column. A completed `storyboard` job can look like a completed render job until the operator opens the JSON or checks for an MP4.
+- [ ] Asset jobs can finish with `status: succeeded` while still carrying a hidden `scene_review_error`; the UI should surface "assets are ready, review failed/skipped" separately from actual asset failure.
+- [ ] Automatic scene review was hidden behind both asset generation and render. In strict qEEG runs it tried to call the default local Codex scene judge, which reported `model: gpt-5.5`; this violates model-lane constraints even though the review did not author the storyboard. Mitigation added: restricted briefs or `CATHODE_DISABLE_AUTOMATIC_SCENE_REVIEW=1` skip automatic scene review.
+- [ ] Browser/UI automation against the local React app can be blocked by the in-app Browser URL policy for `127.0.0.1:9322`, leaving the operator stuck even when the app is visible and running. The UI needs a first-class resumable job queue that can be audited and triggered without fragile tab state.
+- [ ] Publishing has no "patient deliverables only" mode. The patient-sync path walks every file under a patient folder, so a simple video/PDF publish can re-upload old council artifacts and stale model-lane filenames. The operator needs a targeted publish action for just the patient-facing PDF, HandBrake MP4, and provenance metadata.
+- [ ] The portal does not protect against duplicate/stale video versions after a late HandBrake requirement. If a non-HandBrake MP4 is uploaded first and the HandBrake MP4 later, both can remain visible unless the operator manually deletes the stale blob and edits `$index.json`.
+- [ ] Large historical patient indexes can make Netlify CLI telemetry fail with `E2BIG` when setting `$index.json` as an inline argument. The sync tooling should write index payloads through `--input` or an API path that does not pass huge JSON through argv.
+- [x] Thrylen qEEG portal patient-file load fetched and hydrated every blob plus feedback for large folders, causing multi-minute waits on 09-05-1954-0. Mitigation shipped in `../thrylen`: fast initial/index-only modes, lazy archive behavior, and reviewable-file prioritization over technical council logs.
+- [x] Portal file panel could show a selected patient header with another patient's files after a slow previous request returned late. Mitigation shipped in `../thrylen`: request-token guard invalidates stale patient-file responses.
+- [x] Patient Summary hero filename used raw generated/upload keys, producing long inconsistent patient-facing PDF names. Mitigation shipped in `../thrylen`: hero display normalizes to `<patientId>-patient-summary.pdf`.
+- [x] `Watch Video` used a top-level download/preview URL and could download instead of playing. Mitigation shipped in `../thrylen`: Watch opens an inline client-side video modal; the download icon remains the download path.
+- [x] Portal patient list crawled the whole Netlify `patients/` blob tree just to find patient metadata. Mitigation shipped in `../thrylen`: cached `patients/$index.json` fast path, seeded for current patients, with upload/sync/watch maintenance hooks.

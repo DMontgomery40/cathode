@@ -431,3 +431,55 @@ def test_treatment_planner_preserves_scene_copy_and_rebuilds_data_from_scene_sou
             "yMax": 4.0,
         }
     ]
+
+
+def test_treatment_planner_routes_openrouter_glm_for_native_scene_overrides(monkeypatch):
+    captured = {}
+
+    def fake_call(system_prompt, user_prompt, *, temperature, max_tokens):
+        captured.update(
+            {
+                "system_prompt": system_prompt,
+                "user_prompt": user_prompt,
+                "temperature": temperature,
+                "max_tokens": max_tokens,
+            }
+        )
+        return (
+            {
+                "scenes": [
+                    {
+                        "uid": "scene_data",
+                        "family": "quote_focus",
+                        "mode": "native",
+                        "props": {},
+                        "rationale": "Keep this as a native quote-focused scene.",
+                    }
+                ]
+            },
+            {"usage": {"input_tokens": 9, "output_tokens": 5}},
+        )
+
+    monkeypatch.setattr("core.treatment_planner.load_prompt", lambda name: "system prompt")
+    monkeypatch.setattr("core.treatment_planner._call_openrouter_glm_json", fake_call)
+
+    scenes, metadata = plan_scene_treatments_with_metadata(
+        [
+            {
+                "uid": "scene_data",
+                "title": "Key Finding",
+                "scene_type": "image",
+                "narration": "The key finding is preserved.",
+                "visual_prompt": "Clinical graphic.",
+                "composition": {"family": "quote_focus", "mode": "native", "props": {}},
+            }
+        ],
+        brief={"source_mode": "ideas_notes", "source_material": "Preserve the finding."},
+        provider="openrouter_glm",
+    )
+
+    assert scenes[0]["composition"]["family"] == "quote_focus"
+    assert captured["temperature"] == 0.2
+    assert captured["max_tokens"] == 4000
+    assert metadata["provider"] == "openrouter_glm"
+    assert metadata["model"] == "z-ai/glm-5.1"

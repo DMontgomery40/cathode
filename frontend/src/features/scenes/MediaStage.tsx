@@ -1,11 +1,14 @@
-import { useRef, useState, useCallback } from 'react'
+import { Suspense, lazy, useRef, useState, useCallback } from 'react'
 import { clsx } from 'clsx'
 import type { Scene } from '../../lib/schemas/plan.ts'
 import { scenePreviewUrl, sceneVisualUrl } from '../../lib/scene-media.ts'
 import { GlassPanel } from '../../components/primitives/GlassPanel.tsx'
 import { Button } from '../../components/primitives/Button.tsx'
 import { describeRejectedFiles, splitAcceptedFiles } from '../../lib/uploads.ts'
-import { PlayerSurface } from '../../remotion/PlayerSurface.tsx'
+
+const PlayerSurface = lazy(() =>
+  import('../../remotion/PlayerSurface.tsx').then((module) => ({ default: module.PlayerSurface })),
+)
 
 interface MediaStageProps {
   scene: Scene | null
@@ -245,7 +248,15 @@ export function MediaStage({ scene, project, remotionEnabled = false, remotionMa
 
         {scene && remotionManifest && (
           <div className="flex min-h-0 flex-1 p-[var(--space-4)]">
-            <PlayerSurface manifest={remotionManifest} className="flex-1" height={420} />
+            <Suspense
+              fallback={(
+                <div className="flex flex-1 items-center justify-center text-[var(--text-tertiary)]" style={{ fontSize: 'var(--text-sm)' }}>
+                  Loading player
+                </div>
+              )}
+            >
+              <PlayerSurface manifest={remotionManifest} className="flex-1" height={420} />
+            </Suspense>
           </div>
         )}
 

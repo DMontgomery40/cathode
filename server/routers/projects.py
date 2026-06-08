@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import shutil
+import json
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -11,11 +12,16 @@ from fastapi import APIRouter, HTTPException
 
 from core.job_runner import list_project_jobs
 from core.pipeline_service import create_project_from_brief_service
-from core.project_store import annotate_plan_asset_existence, collect_project_artifacts, list_projects, load_plan
+from core.project_store import annotate_plan_asset_existence, collect_project_artifacts, load_plan
 from core.runtime import PROJECTS_DIR
 from server.schemas.projects import CreateProjectRequest, ProjectSummary
 
 router = APIRouter()
+
+ProjectListSignature = tuple[tuple[str, str, int, int], ...]
+
+_projects_summary_signature: ProjectListSignature | None = None
+_projects_summary_cache: list[ProjectSummary] = []
 
 
 def _normalize_utc_iso(raw_value: Any) -> str | None:
@@ -66,6 +72,28 @@ def _project_dates(project_dir: Path, meta: dict[str, Any]) -> tuple[str | None,
     return created_utc, updated_utc
 
 
+def _project_plan_signature() -> ProjectListSignature:
+    entries: list[tuple[str, str, int, int]] = []
+    for path in sorted(PROJECTS_DIR.iterdir()):
+        plan_path = path / "plan.json"
+        if not path.is_dir() or not plan_path.exists():
+            continue
+        try:
+            stat = plan_path.stat()
+        except OSError:
+            continue
+        entries.append((path.name, str(plan_path.resolve()), stat.st_mtime_ns, stat.st_size))
+    return tuple(entries)
+
+
+def _load_summary_plan(project_dir: Path) -> dict[str, Any] | None:
+    try:
+        raw_plan = json.loads((project_dir / "plan.json").read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    return raw_plan if isinstance(raw_plan, dict) else None
+
+
 def _project_asset_path(project_dir: Path, raw_path: Any) -> str | None:
     value = str(raw_path or "").strip()
     if not value:
@@ -91,42 +119,57 @@ def _project_asset_path(project_dir: Path, raw_path: Any) -> str | None:
     return str(candidate.relative_to(project_root)).replace("\\", "/")
 
 
-@router.get("/projects", response_model=list[ProjectSummary])
-async def get_projects() -> list[ProjectSummary]:
-    summaries: list[ProjectSummary] = []
-    for name in list_projects():
-        project_dir = PROJECTS_DIR / name
-        plan = load_plan(project_dir)
-        if plan is None:
+def _summarize_project(name: str) -> ProjectSummary | None:
+    project_dir = PROJECTS_DIR / name
+    plan = _load_summary_plan(project_dir)
+    if plan is None:
+        return None
+    meta = plan.get("meta") if isinstance(plan.get("meta"), dict) else {}
+    scenes = plan.get("scenes") if isinstance(plan.get("scenes"), list) else []
+    created_utc, updated_utc = _project_dates(project_dir, meta)
+    video_path = _project_asset_path(project_dir, meta.get("video_path"))
+    thumbnail_path = None
+    for scene in scenes:
+        if not isinstance(scene, dict):
             continue
-        meta = plan.get("meta") or {}
-        created_utc, updated_utc = _project_dates(project_dir, meta)
-        video_path = _project_asset_path(project_dir, meta.get("video_path"))
-        thumbnail_path = None
-        for scene in plan.get("scenes", []):
-            motion = scene.get("motion") if isinstance(scene.get("motion"), dict) else {}
-            thumbnail_path = (
-                _project_asset_path(project_dir, scene.get("image_path"))
-                or _project_asset_path(project_dir, scene.get("video_path"))
-                or _project_asset_path(project_dir, motion.get("preview_path"))
-                or _project_asset_path(project_dir, motion.get("render_path"))
-                or _project_asset_path(project_dir, scene.get("preview_path"))
-            )
-            if thumbnail_path:
-                break
-        summaries.append(
-            ProjectSummary(
-                name=name,
-                scene_count=len(plan.get("scenes", [])),
-                has_video=bool(video_path),
-                video_path=video_path,
-                thumbnail_path=thumbnail_path,
-                created_utc=created_utc,
-                updated_utc=updated_utc,
-                image_profile=meta.get("image_profile"),
-                tts_profile=meta.get("tts_profile"),
-            )
+        motion = scene.get("motion") if isinstance(scene.get("motion"), dict) else {}
+        thumbnail_path = (
+            _project_asset_path(project_dir, scene.get("image_path"))
+            or _project_asset_path(project_dir, scene.get("video_path"))
+            or _project_asset_path(project_dir, motion.get("preview_path"))
+            or _project_asset_path(project_dir, motion.get("render_path"))
+            or _project_asset_path(project_dir, scene.get("preview_path"))
         )
+        if thumbnail_path:
+            break
+    return ProjectSummary(
+        name=name,
+        scene_count=len(scenes),
+        has_video=bool(video_path),
+        video_path=video_path,
+        thumbnail_path=thumbnail_path,
+        created_utc=created_utc,
+        updated_utc=updated_utc,
+        image_profile=meta.get("image_profile") if isinstance(meta.get("image_profile"), dict) else None,
+        tts_profile=meta.get("tts_profile") if isinstance(meta.get("tts_profile"), dict) else None,
+    )
+
+
+@router.get("/projects", response_model=list[ProjectSummary])
+def get_projects() -> list[ProjectSummary]:
+    global _projects_summary_signature, _projects_summary_cache
+
+    signature = _project_plan_signature()
+    if signature == _projects_summary_signature:
+        return list(_projects_summary_cache)
+
+    summaries: list[ProjectSummary] = []
+    for name, _plan_path, _mtime_ns, _size in signature:
+        summary = _summarize_project(name)
+        if summary is not None:
+            summaries.append(summary)
+    _projects_summary_signature = signature
+    _projects_summary_cache = summaries
     return summaries
 
 

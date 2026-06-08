@@ -39,6 +39,13 @@ const TEXT_RENDER_MODE_OPTIONS = [
   { value: 'deterministic_overlay', label: 'Deterministic Overlay' },
 ]
 
+function normalizeTargetLength(value: string): number {
+  const parsed = Number.parseFloat(value)
+  if (!Number.isFinite(parsed)) return 2
+  const rounded = Math.round(parsed * 2) / 2
+  return Math.min(10, Math.max(0.5, rounded))
+}
+
 interface BriefFormProps {
   defaults?: Partial<Brief>
   onSubmit: (data: Brief, action: 'video' | 'storyboard') => void
@@ -175,15 +182,31 @@ export function BriefForm({
                 control={control}
                 name="target_length_minutes"
                 render={({ field }) => (
-                  <Slider
-                    label="Target Length"
-                    min={0.5}
-                    max={10}
-                    step={0.5}
-                    displayValue={`${targetLength} min`}
-                    value={field.value}
-                    onChange={(e) => field.onChange(parseFloat(e.currentTarget.value))}
-                  />
+                  <div className="flex flex-col gap-[var(--space-2)]">
+                    <Slider
+                      label="Target Length"
+                      min={0.5}
+                      max={10}
+                      step={0.5}
+                      displayValue={`${targetLength} min`}
+                      value={field.value}
+                      onChange={(e) => field.onChange(normalizeTargetLength(e.currentTarget.value))}
+                    />
+                    <label className="flex w-fit items-center gap-[var(--space-2)] text-[var(--text-secondary)]" style={{ fontSize: 'var(--text-sm)' }}>
+                      <span>Minutes</span>
+                      <input
+                        aria-label="Target Length Minutes"
+                        type="number"
+                        min={0.5}
+                        max={10}
+                        step={0.5}
+                        value={field.value}
+                        onBlur={field.onBlur}
+                        onChange={(e) => field.onChange(normalizeTargetLength(e.currentTarget.value))}
+                        className="w-24 rounded-[var(--radius-sm)] border border-[var(--border-primary)] bg-[var(--surface-elevated)] px-[var(--space-2)] py-[var(--space-1)] text-[var(--text-primary)] outline-none focus-visible:shadow-[var(--focus-ring)]"
+                      />
+                    </label>
+                  </div>
                 )}
               />
             </div>

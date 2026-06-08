@@ -164,6 +164,7 @@ VISUAL_SOURCE_STRATEGY_GUIDANCE: dict[str, str] = {
 }
 
 IMAGE_PROVIDER_LABELS: dict[str, str] = {
+    "codex": "Codex / GPT Image 2",
     "replicate": "Replicate Qwen (Cloud)",
     "local": "Local Qwen (Hugging Face)",
     "manual": "Upload / Local Assets Only",
@@ -696,10 +697,10 @@ def render_sidebar():
             icon = "OK" if configured else "MISSING"
             st.write(f"- {service}: {icon}")
 
-        if not keys.get("replicate"):
-            st.info("REPLICATE_API_TOKEN missing. AI image generation will be disabled, but uploaded/local visuals still work.")
-        if not (keys.get("openai") or keys.get("anthropic")):
-            st.warning("Missing LLM key (set OPENAI_API_KEY or ANTHROPIC_API_KEY).")
+        if not _available_image_generation_providers(keys) or _available_image_generation_providers(keys) == ["manual"]:
+            st.info("No AI image generation backend is available. Uploaded/local visuals still work.")
+        if not (keys.get("openai") or keys.get("anthropic") or keys.get("openrouter")):
+            st.warning("Missing LLM key (set OPENAI_API_KEY, ANTHROPIC_API_KEY, or OPENROUTER_API_KEY).")
 
         st.divider()
 
@@ -720,7 +721,9 @@ def render_sidebar():
             in {"", default_image_profile()["generation_model"]}
         ):
             st.session_state.image_generation_model = _default_local_image_generation_model_impl()
-        if st.session_state.image_provider == "replicate":
+        if st.session_state.image_provider == "codex":
+            st.caption("Codex image generation uses OpenAI GPT Image 2.")
+        elif st.session_state.image_provider == "replicate":
             st.caption("Cloud image generation uses Qwen Image 2512 on Replicate.")
         elif st.session_state.image_provider == "local":
             model_label = str(st.session_state.image_generation_model or _default_local_image_generation_model_impl()).strip()
@@ -1094,14 +1097,15 @@ def render_step_1():
         overwrite = False
 
     keys = check_api_keys()
-    available_providers = [p for p in ["anthropic", "openai"] if keys.get(p)]
+    available_providers = [p for p in ["openrouter_glm", "anthropic", "openai"] if keys.get("openrouter" if p == "openrouter_glm" else p)]
     if not available_providers:
-        st.error("No LLM API keys configured. Set OPENAI_API_KEY or ANTHROPIC_API_KEY.")
+        st.error("No LLM API keys configured. Set OPENROUTER_API_KEY, OPENAI_API_KEY, or ANTHROPIC_API_KEY.")
         return
 
     provider = st.selectbox(
         "LLM Provider",
         options=available_providers,
+        format_func=lambda p: "OpenRouter GLM 5.1" if p == "openrouter_glm" else p,
         help="Which AI model should write the first storyboard draft from your brief and pasted text.",
     )
 
