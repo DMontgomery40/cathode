@@ -6,7 +6,7 @@ import { useProjectJobs, useCancelJob } from '../../lib/api/scene-hooks.ts'
 
 export function JobDock() {
   const { projectId = '' } = useParams<{ projectId: string }>()
-  const { data: jobs } = useProjectJobs(projectId, { refetchInterval: 3000 })
+  const { data: jobs } = useProjectJobs(projectId, { refetchInterval: 3000, pollWhileActive: true })
   const cancelJob = useCancelJob()
   const [expanded, setExpanded] = useState(false)
 

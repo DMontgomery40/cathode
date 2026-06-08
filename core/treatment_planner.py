@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from typing import Any, Literal
+from typing import Any
 
 from .composition_planner import (
     _brief_prefers_authored_clinical_stills,
@@ -15,8 +15,14 @@ from .composition_planner import (
 )
 from .director import (
     _ANTHROPIC_DIRECTOR_MODEL,
+    _DEEPSEEK_MODEL,
+    _DEEPSEEK_PROVIDER,
     _OPENAI_DIRECTOR_MODEL,
+    _OPENROUTER_GLM_MODEL,
+    _OPENROUTER_PROVIDER,
     _cached_system,
+    _call_deepseek_json,
+    _call_openrouter_glm_json,
     _create_openai_response,
     _get_anthropic_client,
     _llm_call_metadata,
@@ -376,11 +382,30 @@ def _plan_with_anthropic(system_prompt: str, user_prompt: str) -> tuple[list[dic
     return _validate_treatment_items(tool_input), response
 
 
+def _plan_with_openrouter_glm(system_prompt: str, user_prompt: str) -> tuple[list[dict[str, Any]], Any]:
+    parsed, response = _call_openrouter_glm_json(
+        system_prompt,
+        user_prompt,
+        temperature=0.2,
+        max_tokens=4000,
+    )
+    return _validate_treatment_items(parsed), response
+
+
+def _plan_with_deepseek(system_prompt: str, user_prompt: str) -> tuple[list[dict[str, Any]], Any]:
+    parsed, response = _call_deepseek_json(
+        system_prompt,
+        user_prompt,
+        max_tokens=6000,
+    )
+    return _validate_treatment_items(parsed), response
+
+
 def plan_scene_treatments_with_metadata(
     scenes: list[dict[str, Any]],
     *,
     brief: dict[str, Any] | None = None,
-    provider: Literal["openai", "anthropic"] = "openai",
+    provider: str = "openai",
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     normalized_brief = normalize_brief(brief or {})
     eligible_scenes = _eligible_treatment_scenes(scenes)
@@ -410,6 +435,26 @@ def plan_scene_treatments_with_metadata(
             user_prompt=user_prompt,
             response=response,
         )
+    if provider == _OPENROUTER_PROVIDER:
+        overrides, response = _plan_with_openrouter_glm(system_prompt, user_prompt)
+        return _merge_treatment_overrides(scenes, overrides, brief=normalized_brief), _llm_call_metadata(
+            provider=_OPENROUTER_PROVIDER,
+            model=_OPENROUTER_GLM_MODEL,
+            operation="treatment_planning",
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            response=response,
+        )
+    if provider == _DEEPSEEK_PROVIDER:
+        overrides, response = _plan_with_deepseek(system_prompt, user_prompt)
+        return _merge_treatment_overrides(scenes, overrides, brief=normalized_brief), _llm_call_metadata(
+            provider=_DEEPSEEK_PROVIDER,
+            model=_DEEPSEEK_MODEL,
+            operation="treatment_planning",
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            response=response,
+        )
     raise ValueError(f"Unknown provider: {provider}")
 
 
@@ -417,7 +462,7 @@ def plan_scene_treatments(
     scenes: list[dict[str, Any]],
     *,
     brief: dict[str, Any] | None = None,
-    provider: Literal["openai", "anthropic"] = "openai",
+    provider: str = "openai",
 ) -> list[dict[str, Any]]:
     return plan_scene_treatments_with_metadata(
         scenes,

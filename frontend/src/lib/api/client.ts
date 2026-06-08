@@ -1,5 +1,4 @@
-const DEV_API_BASE = 'http://127.0.0.1:9321/api'
-const BASE_URL = import.meta.env.VITE_API_BASE_URL || (import.meta.env.DEV ? DEV_API_BASE : '/api')
+const BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api'
 
 export class ApiError extends Error {
   status: number

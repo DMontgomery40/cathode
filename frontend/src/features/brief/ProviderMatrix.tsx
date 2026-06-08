@@ -6,6 +6,14 @@ function displayProviderName(name: string): string {
   switch (name) {
     case 'codex':
       return 'codex exec'
+    case 'deepseek':
+      return 'DeepSeek V4 Pro'
+    case 'openrouter_glm':
+      return 'OpenRouter GLM 5.1'
+    case 'anthropic':
+      return 'Anthropic'
+    case 'openai':
+      return 'OpenAI'
     default:
       return name
   }
@@ -53,13 +61,21 @@ export function ProviderMatrix() {
   const { providers } = bootstrap
 
   const llmItems = [
+    providers.api_keys.deepseek ? {
+      name: 'deepseek',
+      available: providers.llm_provider === 'deepseek',
+    } : null,
+    providers.api_keys.openrouter ? {
+      name: 'openrouter_glm',
+      available: providers.llm_provider === 'openrouter_glm',
+    } : null,
     providers.api_keys.anthropic ? {
       name: 'anthropic',
-      available: true,
+      available: providers.llm_provider === 'anthropic',
     } : null,
     providers.api_keys.openai ? {
       name: 'openai',
-      available: true,
+      available: providers.llm_provider === 'openai',
     } : null,
   ].filter((item): item is { name: string; available: boolean } => Boolean(item))
 
@@ -105,7 +121,7 @@ export function ProviderMatrix() {
           <p className="workspace-eyebrow">Capability matrix</p>
           <h3 className="workspace-panel-title">Providers</h3>
           <p className="workspace-panel-copy m-0 mt-[var(--space-1)]">
-            Cathode only surfaces configured or always-available capabilities, so this page mirrors the real machine instead of pretending every backend exists. For stills, the intended default lane is local Codex execution when it is available.
+            Cathode only surfaces configured or always-available capabilities, so this page mirrors the real machine instead of pretending every backend exists. The active writing route is {displayProviderName(providers.llm_provider || 'Unavailable')}; for stills, the intended default lane is local Codex execution when it is available.
           </p>
           <p className="workspace-panel-copy m-0 mt-[var(--space-1)]">
             Exact costs are model- and route-specific. Provider badges stay generic; the precise pricing belongs on the model or route choice itself.

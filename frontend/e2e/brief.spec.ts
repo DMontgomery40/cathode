@@ -406,7 +406,7 @@ test.describe('Brief Studio', () => {
 
       await page.locator('button[type="submit"]:has-text("F#@K it, we\'re doing it live!!")').click()
 
-      await expect(page.getByText('Could not reach the Cathode API at http://127.0.0.1:9321. Make sure the server is running and try again.')).toBeVisible()
+      await expect(page.getByText(/Could not reach the Cathode API at .*\/api\. Make sure the server is running and try again\./)).toBeVisible()
       await expect(page).toHaveURL(/\/projects\/new\/brief$/)
     })
 

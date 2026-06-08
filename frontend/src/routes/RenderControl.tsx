@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { Suspense, lazy, useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { clsx } from 'clsx'
 import { WorkspaceHeader } from '../components/composed/WorkspaceHeader.tsx'
@@ -21,7 +21,10 @@ import { WorkspaceCanvas, WorkspaceGrid, WorkspacePanel } from '../design-system
 import { sceneHasRenderableAudio, sceneHasRenderableVisual } from '../lib/scene-media.ts'
 import { useInvalidateProjectOnJobCompletion } from '../lib/api/project-job-sync.ts'
 import { resolveRenderOutputFilename } from '../lib/render-output.ts'
-import { PlayerSurface } from '../remotion/PlayerSurface.tsx'
+
+const PlayerSurface = lazy(() =>
+  import('../remotion/PlayerSurface.tsx').then((module) => ({ default: module.PlayerSurface })),
+)
 
 const DEFAULT_FPS = 24
 
@@ -42,7 +45,7 @@ export function RenderControl() {
   const { projectId = '' } = useParams<{ projectId: string }>()
   const { data: bootstrap } = useBootstrap()
   const { data: plan } = usePlan(projectId)
-  const { data: jobs } = useProjectJobs(projectId, { refetchInterval: 2000 })
+  const { data: jobs } = useProjectJobs(projectId, { refetchInterval: 2000, pollWhileActive: true })
   const startRender = useStartRender(projectId)
   const genAssets = useGenerateAssets(projectId)
   const cancelJobMut = useCancelJob()
@@ -217,7 +220,15 @@ export function RenderControl() {
               >
                 {remotionManifest.data && (
                   <div style={{ marginBottom: 'var(--space-4)' }}>
-                    <PlayerSurface manifest={remotionManifest.data} height={420} />
+                    <Suspense
+                      fallback={(
+                        <div className="flex min-h-[18rem] items-center justify-center text-[var(--text-tertiary)]" style={{ fontSize: 'var(--text-sm)' }}>
+                          Loading player
+                        </div>
+                      )}
+                    >
+                      <PlayerSurface manifest={remotionManifest.data} height={420} />
+                    </Suspense>
                   </div>
                 )}
                 <ArtifactShelf

@@ -175,14 +175,11 @@ _FAKE_PLAN = {
 }
 
 
-@patch("server.routers.projects.load_plan", return_value=_FAKE_PLAN)
-@patch("server.routers.projects.list_projects", return_value=["project_a"])
-def test_get_projects(mock_list, mock_load, client, tmp_path):
+def test_get_projects(client, tmp_path):
     project_dir = tmp_path / "project_a"
     project_dir.mkdir()
-    (project_dir / "plan.json").write_text("{}", encoding="utf-8")
     (project_dir / "render.mp4").write_bytes(b"mp4")
-    mock_load.return_value = {
+    plan = {
         **_FAKE_PLAN,
         "meta": {
             **_FAKE_PLAN["meta"],
@@ -191,6 +188,7 @@ def test_get_projects(mock_list, mock_load, client, tmp_path):
             "rendered_utc": "2026-03-14T12:30:00Z",
         },
     }
+    (project_dir / "plan.json").write_text(json.dumps(plan), encoding="utf-8")
 
     with patch("server.routers.projects.PROJECTS_DIR", tmp_path):
         resp = client.get("/api/projects")
@@ -216,20 +214,15 @@ def test_get_projects_falls_back_to_plan_timestamp_when_meta_dates_missing(clien
     project_dir = tmp_path / "project_a"
     project_dir.mkdir()
     plan_path = project_dir / "plan.json"
-    plan_path.write_text("{}", encoding="utf-8")
-    fallback_time = datetime(2026, 3, 9, 15, 45, tzinfo=timezone.utc).timestamp()
-    os.utime(plan_path, (fallback_time, fallback_time))
-
     fake_plan = {
         "meta": {"video_path": None, "image_profile": None, "tts_profile": None},
         "scenes": [],
     }
+    plan_path.write_text(json.dumps(fake_plan), encoding="utf-8")
+    fallback_time = datetime(2026, 3, 9, 15, 45, tzinfo=timezone.utc).timestamp()
+    os.utime(plan_path, (fallback_time, fallback_time))
 
-    with (
-        patch("server.routers.projects.PROJECTS_DIR", tmp_path),
-        patch("server.routers.projects.list_projects", return_value=["project_a"]),
-        patch("server.routers.projects.load_plan", return_value=fake_plan),
-    ):
+    with patch("server.routers.projects.PROJECTS_DIR", tmp_path):
         resp = client.get("/api/projects")
 
     assert resp.status_code == 200
@@ -253,12 +246,9 @@ def test_get_projects_ignores_cross_project_thumbnail_paths(client, tmp_path):
             {"image_path": "projects/project_a/images/scene_001.png"},
         ],
     }
+    (project_dir / "plan.json").write_text(json.dumps(fake_plan), encoding="utf-8")
 
-    with (
-        patch("server.routers.projects.PROJECTS_DIR", tmp_path),
-        patch("server.routers.projects.list_projects", return_value=["project_a"]),
-        patch("server.routers.projects.load_plan", return_value=fake_plan),
-    ):
+    with patch("server.routers.projects.PROJECTS_DIR", tmp_path):
         resp = client.get("/api/projects")
 
     assert resp.status_code == 200
@@ -266,12 +256,31 @@ def test_get_projects_ignores_cross_project_thumbnail_paths(client, tmp_path):
     assert resp.json()[0]["has_video"] is False
 
 
-@patch("server.routers.projects.load_plan", return_value=None)
-@patch("server.routers.projects.list_projects", return_value=["broken"])
-def test_get_projects_skips_missing_plans(mock_list, mock_load, client):
-    resp = client.get("/api/projects")
+def test_get_projects_skips_unreadable_summary_plans(client, tmp_path):
+    project_dir = tmp_path / "broken"
+    project_dir.mkdir()
+    (project_dir / "plan.json").write_text("{", encoding="utf-8")
+
+    with patch("server.routers.projects.PROJECTS_DIR", tmp_path):
+        resp = client.get("/api/projects")
+
     assert resp.status_code == 200
     assert resp.json() == []
+
+
+def test_get_projects_does_not_run_plan_normalization(client, tmp_path):
+    project_dir = tmp_path / "project_a"
+    project_dir.mkdir()
+    (project_dir / "plan.json").write_text(json.dumps(_FAKE_PLAN), encoding="utf-8")
+
+    with (
+        patch("server.routers.projects.PROJECTS_DIR", tmp_path),
+        patch("server.routers.projects.load_plan", side_effect=AssertionError("load_plan should not run")),
+    ):
+        resp = client.get("/api/projects")
+
+    assert resp.status_code == 200
+    assert resp.json()[0]["name"] == "project_a"
 
 
 # ---------------------------------------------------------------------------

@@ -15,11 +15,16 @@ import { savePlan } from './plans.ts'
 import { startRender, generateAssets } from './render.ts'
 import { fetchProjectJobs, fetchJobStatus, cancelJob, dispatchAgentDemo } from './jobs.ts'
 import { fetchProjectJobLog } from './jobs.ts'
+import type { Job } from './jobs.ts'
 import type { Plan } from '../schemas/plan.ts'
 
 function invalidateRemotionQueries(qc: ReturnType<typeof useQueryClient>, project: string) {
   void qc.invalidateQueries({ queryKey: ['remotion-manifest', project] })
   void qc.invalidateQueries({ queryKey: ['scene-remotion-manifest', project] })
+}
+
+function hasActiveJob(jobs: Job[] | undefined): boolean {
+  return (jobs ?? []).some((job) => job.status === 'queued' || job.status === 'running')
 }
 
 export function useSavePlan(project: string) {
@@ -200,12 +205,15 @@ export function useRunAgentDemo(project: string) {
   })
 }
 
-export function useProjectJobs(project: string, opts?: { refetchInterval?: number }) {
+export function useProjectJobs(project: string, opts?: { refetchInterval?: number; pollWhileActive?: boolean }) {
+  const requestedInterval = opts?.refetchInterval ?? false
   return useQuery({
     queryKey: ['jobs', project],
     queryFn: () => fetchProjectJobs(project),
     enabled: !!project && project !== 'new',
-    refetchInterval: opts?.refetchInterval ?? false,
+    refetchInterval: opts?.pollWhileActive && requestedInterval
+      ? (query) => (hasActiveJob(query.state.data) ? requestedInterval : false)
+      : requestedInterval,
   })
 }
 

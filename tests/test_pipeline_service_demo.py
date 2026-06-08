@@ -609,3 +609,63 @@ def test_generate_project_assets_service_runs_primary_only_review_and_text_repai
     assert not drifted_image.exists()
     assert not edited_image.exists()
     assert result["scene_review"]["provider"] == "codex"
+
+
+def test_generate_project_assets_service_skips_automatic_scene_review_when_brief_bans_model_lanes(
+    monkeypatch,
+    tmp_path,
+):
+    project_dir = tmp_path / "demo_project"
+    project_dir.mkdir()
+    image_path = project_dir / "images" / "scene_001.png"
+    image_path.parent.mkdir(parents=True, exist_ok=True)
+    image_path.write_bytes(b"png")
+    audio_path = project_dir / "audio" / "scene_001.wav"
+    audio_path.parent.mkdir(parents=True, exist_ok=True)
+    audio_path.write_bytes(b"wav")
+
+    plan = {
+        "meta": {
+            "brief": {
+                "must_avoid": "No Anthropic. No GPT 5.5. No Qwen.",
+            },
+            "image_profile": {"provider": "codex", "generation_model": "gpt-image-2"},
+            "video_profile": {"provider": "manual"},
+            "tts_profile": {"provider": "kokoro", "voice": "af", "speed": 1.1},
+        },
+        "scenes": [
+            {
+                "id": 1,
+                "uid": "scene_001",
+                "title": "Patient-facing slide",
+                "scene_type": "image",
+                "visual_prompt": "Readable patient-facing slide.",
+                "narration": "Keep this encouraging.",
+                "composition": {"manifestation": "authored_image"},
+                "image_path": str(image_path),
+                "audio_path": str(audio_path),
+            }
+        ],
+    }
+
+    monkeypatch.setattr("core.pipeline_service.load_plan", lambda _project_dir: copy.deepcopy(plan))
+    monkeypatch.setattr("core.pipeline_service.save_plan", lambda _project_dir, saved_plan: saved_plan)
+    monkeypatch.setattr("core.pipeline_service.resolve_image_profile", lambda profile=None: profile or {})
+    monkeypatch.setattr("core.pipeline_service.resolve_video_profile", lambda profile=None: profile or {})
+    monkeypatch.setattr("core.pipeline_service.resolve_tts_profile", lambda profile=None: profile or {})
+
+    def fail_review(*_args, **_kwargs):
+        raise AssertionError("automatic scene review should be skipped for restricted qEEG briefs")
+
+    monkeypatch.setattr("core.pipeline_service.review_project_scenes", fail_review)
+
+    result = generate_project_assets_service(
+        project_dir,
+        generate_images=False,
+        generate_audio=False,
+        generate_videos=False,
+    )
+
+    assert result["scene_review_skipped"] == "automatic scene review skipped because the brief restricts model/provider lanes"
+    assert "scene_review" not in result
+    assert "scene_review_error" not in result

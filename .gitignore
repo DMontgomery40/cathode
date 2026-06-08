@@ -1,4 +1,6 @@
 # Project outputs (contains generated assets)
+.gitnexus/
+.agent*
 projects/*
 !projects/.gitkeep
 output/*
