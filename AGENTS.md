@@ -16,7 +16,7 @@ This file is for AI agents working in this repo.
 betTube Studio has two main surfaces:
 
 - `app.py`: the local Streamlit app
-- `cathode_mcp_server.py`: the MCP server for agent/client integrations
+- `bettube_studio_mcp_server.py`: the MCP server for agent/client integrations
 
 Both rely on the same underlying pipeline services and project store.
 
@@ -37,7 +37,7 @@ Both rely on the same underlying pipeline services and project store.
 ## Important Files
 
 - `projects/<project>/plan.json`: normalized storyboard, metadata, and asset paths
-- `projects/<project>/.cathode/jobs/*.json`: persisted background job state
+- `projects/<project>/.bettube-studio/jobs/*.json`: persisted background job state
 - `core/director.py`: storyboard generation logic and source-mode behavior
 - `prompts/`: director and refiner prompts
 - `core/pipeline_service.py`: shared app/batch/MCP execution helpers
@@ -94,15 +94,15 @@ Both rely on the same underlying pipeline services and project store.
 ## Memory Rules
 
 - Update project-local Codex memory as material repo truths are discovered.
-- For this repo, use `/Users/davidmontgomery/.codex/projects/-Users-davidmontgomery-cathode/MEMORY.md` and its sibling `memory/` directory.
+- For this repo, use `/Users/davidmontgomery/.codex/projects/-Users-davidmontgomery-bettube-studio/MEMORY.md` and its sibling `memory/` directory.
 - Do not write repo-specific memory into global cross-project memory locations.
 
 ## Live Demo Skill
 
 betTube Studio now ships a packaged live-demo skill:
 
-- canonical path: `skills/cathode-project-demo/`
-- Claude mirror: `.claude/skills/cathode-project-demo/`
+- canonical path: `skills/bettube-studio-project-demo/`
+- Claude mirror: `.claude/skills/bettube-studio-project-demo/`
 
 Treat this as a generic product-demo workflow, not a repo-specific shortcut. It is for:
 
@@ -120,8 +120,8 @@ Use the packaged `capture_live_demo.py` script for deterministic browser capture
 
 betTube Studio now ships a packaged Remotion-development skill:
 
-- canonical path: `skills/cathode-remotion-development/`
-- Claude mirror: `.claude/skills/cathode-remotion-development/`
+- canonical path: `skills/bettube-studio-remotion-development/`
+- Claude mirror: `.claude/skills/bettube-studio-remotion-development/`
 
 Use it when tracing or extending the betTube Studio Remotion path so future agents do not have to rediscover:
 

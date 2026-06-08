@@ -8,7 +8,7 @@ from pathlib import Path
 SCRIPT = (
     Path(__file__).resolve().parent.parent
     / "skills"
-    / "cathode-project-demo"
+    / "bettube-studio-project-demo"
     / "scripts"
     / "build_capture_manifest.py"
 )

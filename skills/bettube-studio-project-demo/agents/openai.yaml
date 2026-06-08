@@ -1,0 +1,4 @@
+interface:
+  display_name: "Live Product Demo"
+  short_description: "Turn a live repo or app into a reviewed demo video"
+  default_prompt: "Use $bettube-studio-project-demo to capture a fresh walkthrough of this repo or app with the packaged capture driver, run a skeptical spawned sub-agent review on extracted frames, and turn the approved clips into a concise demo video."

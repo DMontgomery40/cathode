@@ -95,7 +95,7 @@ def derive_project_name(intent: str, provided_name: str | None = None) -> str:
 
     cleaned_words = [part.strip(" -_") for part in intent.replace("/", " ").split()]
     base = "_".join(word for word in cleaned_words[:6] if word)
-    return sanitize_project_name(base or "cathode_video")
+    return sanitize_project_name(base or "bettube_studio_video")
 
 
 def _is_probably_text_file(path: Path) -> bool:

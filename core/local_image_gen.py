@@ -23,9 +23,9 @@ def _log(message: str) -> None:
 
 
 def _runtime_preference() -> str:
-    value = str(os.getenv("CATHODE_LOCAL_IMAGE_RUNTIME") or "auto").strip().lower() or "auto"
+    value = str(os.getenv("BETTUBE_STUDIO_LOCAL_IMAGE_RUNTIME") or "auto").strip().lower() or "auto"
     if value not in {"auto", "torch", "mlx"}:
-        raise ValueError(f"Unsupported CATHODE_LOCAL_IMAGE_RUNTIME={value!r}.")
+        raise ValueError(f"Unsupported BETTUBE_STUDIO_LOCAL_IMAGE_RUNTIME={value!r}.")
     return value
 
 
@@ -38,7 +38,7 @@ def _mlx_command_available() -> bool:
 
 
 def _preferred_device(torch: Any) -> str:
-    requested = str(os.getenv("CATHODE_LOCAL_IMAGE_DEVICE") or "auto").strip().lower() or "auto"
+    requested = str(os.getenv("BETTUBE_STUDIO_LOCAL_IMAGE_DEVICE") or "auto").strip().lower() or "auto"
     if requested != "auto":
         return requested
     if torch.cuda.is_available():
@@ -49,7 +49,7 @@ def _preferred_device(torch: Any) -> str:
 
 
 def _preferred_dtype(torch: Any, device: str) -> Any:
-    requested = str(os.getenv("CATHODE_LOCAL_IMAGE_DTYPE") or "auto").strip().lower() or "auto"
+    requested = str(os.getenv("BETTUBE_STUDIO_LOCAL_IMAGE_DTYPE") or "auto").strip().lower() or "auto"
     dtype_map = {
         "float16": getattr(torch, "float16"),
         "fp16": getattr(torch, "float16"),
@@ -60,7 +60,7 @@ def _preferred_dtype(torch: Any, device: str) -> Any:
     }
     if requested != "auto":
         if requested not in dtype_map:
-            raise ValueError(f"Unsupported CATHODE_LOCAL_IMAGE_DTYPE={requested!r}.")
+            raise ValueError(f"Unsupported BETTUBE_STUDIO_LOCAL_IMAGE_DTYPE={requested!r}.")
         return dtype_map[requested]
     if device == "cuda":
         return torch.bfloat16
@@ -77,7 +77,7 @@ def _generator_for_seed(torch: Any, *, device: str, seed: int | None) -> Any | N
 
 
 def _inference_steps() -> int:
-    raw = str(os.getenv("CATHODE_LOCAL_IMAGE_STEPS") or "").strip()
+    raw = str(os.getenv("BETTUBE_STUDIO_LOCAL_IMAGE_STEPS") or "").strip()
     if not raw:
         return DEFAULT_LOCAL_IMAGE_STEPS
     try:
@@ -88,7 +88,7 @@ def _inference_steps() -> int:
 
 
 def _guidance_scale() -> float:
-    raw = str(os.getenv("CATHODE_LOCAL_IMAGE_TRUE_CFG_SCALE") or "").strip()
+    raw = str(os.getenv("BETTUBE_STUDIO_LOCAL_IMAGE_TRUE_CFG_SCALE") or "").strip()
     if not raw:
         return DEFAULT_LOCAL_IMAGE_TRUE_CFG_SCALE
     try:
@@ -106,7 +106,7 @@ def resolve_local_image_backend(model_name: str) -> tuple[str, str]:
     if requested_runtime == "torch":
         return "torch", normalized_model
 
-    mlx_model = str(os.getenv("CATHODE_LOCAL_IMAGE_MLX_MODEL") or "").strip() or DEFAULT_LOCAL_IMAGE_MLX_MODEL
+    mlx_model = str(os.getenv("BETTUBE_STUDIO_LOCAL_IMAGE_MLX_MODEL") or "").strip() or DEFAULT_LOCAL_IMAGE_MLX_MODEL
     if requested_runtime == "mlx":
         return "mlx", mlx_model if normalized_model == DEFAULT_LOCAL_IMAGE_MODEL else normalized_model
 
@@ -221,10 +221,10 @@ def _generate_local_image_mlx(
     if seed is not None:
         cmd.extend(["--seed", str(int(seed))])
 
-    cache_limit_gb = str(os.getenv("CATHODE_LOCAL_IMAGE_MLX_CACHE_LIMIT_GB") or "").strip()
+    cache_limit_gb = str(os.getenv("BETTUBE_STUDIO_LOCAL_IMAGE_MLX_CACHE_LIMIT_GB") or "").strip()
     if cache_limit_gb:
         cmd.extend(["--mlx-cache-limit-gb", cache_limit_gb])
-    if str(os.getenv("CATHODE_LOCAL_IMAGE_MLX_LOW_RAM") or "").strip().lower() in {"1", "true", "yes"}:
+    if str(os.getenv("BETTUBE_STUDIO_LOCAL_IMAGE_MLX_LOW_RAM") or "").strip().lower() in {"1", "true", "yes"}:
         cmd.append("--low-ram")
 
     _log(f"Running MLX image command model={model}")

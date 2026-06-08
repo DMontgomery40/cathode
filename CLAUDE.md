@@ -32,10 +32,10 @@ It supports:
 npm run dev --prefix frontend -- --host 127.0.0.1 --port 9322
 
 # Run the MCP server over stdio
-/opt/homebrew/bin/python3.10 cathode_mcp_server.py --transport stdio
+/opt/homebrew/bin/python3.10 bettube_studio_mcp_server.py --transport stdio
 
 # Run the MCP server over Streamable HTTP
-CATHODE_MCP_PORT=8765 /opt/homebrew/bin/python3.10 cathode_mcp_server.py --transport streamable-http
+BETTUBE_STUDIO_MCP_PORT=8765 /opt/homebrew/bin/python3.10 bettube_studio_mcp_server.py --transport streamable-http
 
 # Batch rebuild / regenerate
 python3.10 scripts/batch_regenerate.py
@@ -49,7 +49,7 @@ PYTHONPATH=. /opt/homebrew/bin/python3.10 -m pytest -q
 ### User-facing entrypoints
 
 - `app.py`: Streamlit UI
-- `cathode_mcp_server.py`: MCP server
+- `bettube_studio_mcp_server.py`: MCP server
 - `scripts/batch_regenerate.py`: simple batch rebuild/regenerate CLI
 
 ### Shared pipeline and storage
@@ -97,8 +97,8 @@ The product is intentionally env-driven.
 
 - LLM providers appear when `OPENAI_API_KEY` and/or `ANTHROPIC_API_KEY` are present
 - image generation uses Replicate when `REPLICATE_API_TOKEN` is present
-- local image generation appears when `CATHODE_LOCAL_IMAGE_MODEL` is set
-  - local image runtime can use torch/diffusers or Apple Silicon MLX, selected via `CATHODE_LOCAL_IMAGE_RUNTIME`
+- local image generation appears when `BETTUBE_STUDIO_LOCAL_IMAGE_MODEL` is set
+  - local image runtime can use torch/diffusers or Apple Silicon MLX, selected via `BETTUBE_STUDIO_LOCAL_IMAGE_RUNTIME`
 - image editing defaults to Replicate-backed `qwen/qwen-image-edit-2511`
 - DashScope edit options appear only when `DASHSCOPE_API_KEY` or `ALIBABA_API_KEY` are present
 - Kokoro is the always-available local voice path

@@ -528,7 +528,7 @@ def test_render_project_service_applies_pre_render_native_candidate_winner(monke
     image_path = project_dir / "images" / "scene_000.png"
     image_path.parent.mkdir(parents=True, exist_ok=True)
     image_path.write_bytes(b"png")
-    native_preview = project_dir / ".cathode" / "scene_review" / "candidate.mp4"
+    native_preview = project_dir / ".bettube-studio" / "scene_review" / "candidate.mp4"
     native_preview.parent.mkdir(parents=True, exist_ok=True)
     native_preview.write_bytes(b"mp4")
     rendered_video_path = project_dir / "rendered.mp4"

@@ -14,7 +14,7 @@ It turns rough notes, source text, or a finished script into a local project fol
 
 ## Watch The Demo
 
-[Watch the betTube Studio demo on YouTube](https://youtu.be/HHHbcHobg-A).
+[Watch the betTube Studio demo](https://innovation.gcp/bettube/video/785f8ef6-6e14-4b60-b03f-70442b170e8d).
 
 betTube Studio now has four practical lanes:
 
@@ -83,7 +83,7 @@ This is still supported, but the React/FastAPI control room is the more current 
 Use this when an agent or client should drive betTube Studio programmatically.
 
 ```bash
-/opt/homebrew/bin/python3.10 cathode_mcp_server.py --transport stdio
+/opt/homebrew/bin/python3.10 bettube_studio_mcp_server.py --transport stdio
 ```
 
 The core tool is `make_video`. It can inspect a bounded workspace, accept explicit source files, persist demo-target metadata, and accept reviewed `footage_paths` / `footage_manifest` inputs for mixed-media demos.
@@ -97,8 +97,8 @@ Use this when the video should prove a real running product.
 
 The packaged skill now lives in:
 
-- `skills/cathode-project-demo/`
-- `.claude/skills/cathode-project-demo/`
+- `skills/bettube-studio-project-demo/`
+- `.claude/skills/bettube-studio-project-demo/`
 
 Its flow is:
 
@@ -168,11 +168,11 @@ betTube Studio is env-driven on purpose.
 - `OPENAI_API_KEY`: OpenAI storyboard and optional OpenAI TTS
 - `ANTHROPIC_API_KEY`: Anthropic storyboard
 - `REPLICATE_API_TOKEN`: Qwen image generation, Replicate-backed image edit, and Chatterbox voice
-- `CATHODE_LOCAL_IMAGE_MODEL`: optional local Hugging Face image generation for image scenes
+- `BETTUBE_STUDIO_LOCAL_IMAGE_MODEL`: optional local Hugging Face image generation for image scenes
 - `ELEVENLABS_API_KEY`: ElevenLabs narration
 - `DASHSCOPE_API_KEY` or `ALIBABA_API_KEY`: optional DashScope image edit
-- `CATHODE_LOCAL_VIDEO_COMMAND` and/or `CATHODE_LOCAL_VIDEO_ENDPOINT`: optional local video generation for video scenes
-- `CATHODE_LOCAL_VIDEO_MODEL`: optional local model label or path passed through to that backend
+- `BETTUBE_STUDIO_LOCAL_VIDEO_COMMAND` and/or `BETTUBE_STUDIO_LOCAL_VIDEO_ENDPOINT`: optional local video generation for video scenes
+- `BETTUBE_STUDIO_LOCAL_VIDEO_MODEL`: optional local model label or path passed through to that backend
 - Node + the installed frontend workspace: local Remotion motion/hybrid rendering
 - Kokoro remains the always-available local voice option
 
@@ -189,7 +189,7 @@ betTube Studio is local-first, not cloud-hosted.
 - Kokoro is local TTS
 - video scenes can use a local generation backend when configured
 - motion and hybrid renders happen locally through Remotion when available
-- persisted job state and logs live under `projects/<project>/.cathode/jobs/`
+- persisted job state and logs live under `projects/<project>/.bettube-studio/jobs/`
 
 For visuals, the built-in AI image path can run either through Replicate or through a configured local Hugging Face Qwen model. If neither is configured, you can still upload stills yourself. Video scenes can come from reviewed footage, the live-demo agent path, or a configured local video backend. Motion scenes render through the local Remotion layer when the frontend toolchain is installed.
 
@@ -204,17 +204,17 @@ Typical CUDA / generic torch setup:
 
 ```bash
 /opt/homebrew/bin/python3.10 -m pip install -r requirements-local-image.txt
-export CATHODE_LOCAL_IMAGE_RUNTIME=torch
-export CATHODE_LOCAL_IMAGE_MODEL=Qwen/Qwen-Image-2512
+export BETTUBE_STUDIO_LOCAL_IMAGE_RUNTIME=torch
+export BETTUBE_STUDIO_LOCAL_IMAGE_MODEL=Qwen/Qwen-Image-2512
 ```
 
 Typical Apple Silicon MLX setup:
 
 ```bash
 uv tool install --upgrade mflux
-export CATHODE_LOCAL_IMAGE_RUNTIME=mlx
-export CATHODE_LOCAL_IMAGE_MODEL=Qwen/Qwen-Image-2512
-export CATHODE_LOCAL_IMAGE_MLX_MODEL=mlx-community/Qwen-Image-2512-8bit
+export BETTUBE_STUDIO_LOCAL_IMAGE_RUNTIME=mlx
+export BETTUBE_STUDIO_LOCAL_IMAGE_MODEL=Qwen/Qwen-Image-2512
+export BETTUBE_STUDIO_LOCAL_IMAGE_MLX_MODEL=mlx-community/Qwen-Image-2512-8bit
 ```
 
 Auto mode keeps the single product-facing provider in the UI and picks MLX on Apple Silicon when `mflux` is installed; otherwise it falls back to the torch path.
@@ -222,13 +222,13 @@ Auto mode keeps the single product-facing provider in the UI and picks MLX on Ap
 Optional tuning:
 
 ```bash
-export CATHODE_LOCAL_IMAGE_RUNTIME=auto
-export CATHODE_LOCAL_IMAGE_DEVICE=auto
-export CATHODE_LOCAL_IMAGE_DTYPE=auto
-export CATHODE_LOCAL_IMAGE_STEPS=50
-export CATHODE_LOCAL_IMAGE_TRUE_CFG_SCALE=4.0
-export CATHODE_LOCAL_IMAGE_MLX_CACHE_LIMIT_GB=
-export CATHODE_LOCAL_IMAGE_MLX_LOW_RAM=0
+export BETTUBE_STUDIO_LOCAL_IMAGE_RUNTIME=auto
+export BETTUBE_STUDIO_LOCAL_IMAGE_DEVICE=auto
+export BETTUBE_STUDIO_LOCAL_IMAGE_DTYPE=auto
+export BETTUBE_STUDIO_LOCAL_IMAGE_STEPS=50
+export BETTUBE_STUDIO_LOCAL_IMAGE_TRUE_CFG_SCALE=4.0
+export BETTUBE_STUDIO_LOCAL_IMAGE_MLX_CACHE_LIMIT_GB=
+export BETTUBE_STUDIO_LOCAL_IMAGE_MLX_LOW_RAM=0
 ```
 
 ## Local Video Backend
@@ -237,12 +237,12 @@ betTube Studio keeps local video generation generic and env-driven rather than b
 
 Configure one of these:
 
-- `CATHODE_LOCAL_VIDEO_COMMAND`: betTube Studio runs a local command and passes scene data through env vars such as `CATHODE_VIDEO_PROMPT`, `CATHODE_VIDEO_OUTPUT_PATH`, `CATHODE_VIDEO_DURATION_SECONDS`, `CATHODE_VIDEO_MODEL`, and `CATHODE_VIDEO_REQUEST_JSON`.
-- `CATHODE_LOCAL_VIDEO_ENDPOINT`: betTube Studio sends a JSON POST request with `prompt`, `output_path`, `duration_seconds`, `width`, `height`, `fps`, `scene`, and `brief`.
+- `BETTUBE_STUDIO_LOCAL_VIDEO_COMMAND`: betTube Studio runs a local command and passes scene data through env vars such as `BETTUBE_STUDIO_VIDEO_PROMPT`, `BETTUBE_STUDIO_VIDEO_OUTPUT_PATH`, `BETTUBE_STUDIO_VIDEO_DURATION_SECONDS`, `BETTUBE_STUDIO_VIDEO_MODEL`, and `BETTUBE_STUDIO_VIDEO_REQUEST_JSON`.
+- `BETTUBE_STUDIO_LOCAL_VIDEO_ENDPOINT`: betTube Studio sends a JSON POST request with `prompt`, `output_path`, `duration_seconds`, `width`, `height`, `fps`, `scene`, and `brief`.
 
 Your local backend can satisfy the request in any of these ways:
 
-- write the clip directly to `CATHODE_VIDEO_OUTPUT_PATH` / the request `output_path`
+- write the clip directly to `BETTUBE_STUDIO_VIDEO_OUTPUT_PATH` / the request `output_path`
 - return JSON with `output_path`
 - return JSON with `url`
 - return JSON with `b64_json`
@@ -250,15 +250,15 @@ Your local backend can satisfy the request in any of these ways:
 Typical setup looks like this:
 
 ```bash
-CATHODE_LOCAL_VIDEO_COMMAND='python /path/to/local_video_wrapper.py'
-CATHODE_LOCAL_VIDEO_MODEL=/models/wan
+BETTUBE_STUDIO_LOCAL_VIDEO_COMMAND='python /path/to/local_video_wrapper.py'
+BETTUBE_STUDIO_LOCAL_VIDEO_MODEL=/models/wan
 ```
 
 Or:
 
 ```bash
-CATHODE_LOCAL_VIDEO_ENDPOINT=http://127.0.0.1:8787/generate
-CATHODE_LOCAL_VIDEO_MODEL=wan2.1
+BETTUBE_STUDIO_LOCAL_VIDEO_ENDPOINT=http://127.0.0.1:8787/generate
+BETTUBE_STUDIO_LOCAL_VIDEO_MODEL=wan2.1
 ```
 
 ## Quick Start
@@ -287,10 +287,52 @@ Manual app run:
 ```
 
 Default port is `8517`. Override it with `STREAMLIT_PORT` when using `./start.sh`.
-React mode uses `CATHODE_API_PORT` for FastAPI (default `9321`) and `CATHODE_FRONTEND_PORT` for Vite (default `9322`).
+React mode uses `BETTUBE_STUDIO_API_PORT` for FastAPI (default `9321`) and `BETTUBE_STUDIO_FRONTEND_PORT` for Vite (default `9322`).
 
-Final render now uses direct `ffmpeg` orchestration and auto-prefers hardware H.264 encoders when the local ffmpeg build supports them. Override with `CATHODE_VIDEO_ENCODER` or force CPU fallback with `CATHODE_DISABLE_HW_ENCODER=1`.
+Final render now uses direct `ffmpeg` orchestration and auto-prefers hardware H.264 encoders when the local ffmpeg build supports them. Override with `BETTUBE_STUDIO_VIDEO_ENCODER` or force CPU fallback with `BETTUBE_STUDIO_DISABLE_HW_ENCODER=1`.
 When Remotion is available and the project resolves to `motion_only` or `hybrid`, betTube Studio can switch the final render backend to Remotion automatically.
+
+## Docker
+
+The default container target runs the current React/FastAPI control room from one process: FastAPI serves `/api/*` and the built React app from the same origin.
+
+```bash
+docker compose up --build web
+```
+
+Open `http://localhost:9321`.
+
+The compose file persists local artifacts in `./projects` and `./output`, and forwards only the app/provider environment variables listed in `compose.yaml`. It does not copy the repo-local `.env` file into the image.
+
+Useful variants:
+
+```bash
+# Legacy Streamlit surface
+docker compose --profile streamlit up --build streamlit
+
+# MCP server over Streamable HTTP
+docker compose --profile mcp up --build mcp
+```
+
+Standalone image targets:
+
+```bash
+docker build --target web -t bettube-studio .
+docker run --rm -p 9321:9321 -v "$PWD/projects:/app/projects" -v "$PWD/output:/app/output" bettube-studio
+
+docker build --target mcp -t bettube-studio-mcp .
+docker run --rm -p 8765:8765 -v "$PWD/projects:/app/projects" bettube-studio-mcp
+```
+
+For approved internal package mirrors, pass registry build args instead of editing the Dockerfile:
+
+```bash
+PIP_INDEX_URL=https://binrep-prd.lb.local/artifactory/api/pypi/pypi-local/simple/ \
+NPM_CONFIG_REGISTRY=https://proget/npm/Production-npm/ \
+docker compose build web
+```
+
+For local host services that a container must call, use Docker's host bridge name, for example `BETTUBE_STUDIO_LOCAL_VIDEO_ENDPOINT=http://host.docker.internal:8787/generate`.
 
 ## MCP Server
 
@@ -299,20 +341,19 @@ betTube Studio also ships as an MCP server.
 Run over stdio:
 
 ```bash
-/opt/homebrew/bin/python3.10 cathode_mcp_server.py --transport stdio
+/opt/homebrew/bin/python3.10 bettube_studio_mcp_server.py --transport stdio
 ```
 
 Run over Streamable HTTP:
 
 ```bash
-CATHODE_MCP_PORT=8765 /opt/homebrew/bin/python3.10 cathode_mcp_server.py --transport streamable-http
+BETTUBE_STUDIO_MCP_PORT=8765 /opt/homebrew/bin/python3.10 bettube_studio_mcp_server.py --transport streamable-http
 ```
 
 Docker:
 
 ```bash
-docker build -t bettube-studio-mcp .
-docker run --rm -p 8765:8765 bettube-studio-mcp
+docker compose --profile mcp up --build mcp
 ```
 
 Primary MCP tools:
@@ -365,24 +406,24 @@ DASHSCOPE_API_KEY=
 ALIBABA_API_KEY=
 IMAGE_EDIT_PROVIDER=
 IMAGE_EDIT_MODEL=qwen/qwen-image-edit-2511
-CATHODE_LOCAL_IMAGE_MODEL=
-CATHODE_LOCAL_IMAGE_RUNTIME=auto
-CATHODE_LOCAL_IMAGE_MLX_MODEL=mlx-community/Qwen-Image-2512-8bit
-CATHODE_LOCAL_IMAGE_DEVICE=auto
-CATHODE_LOCAL_IMAGE_DTYPE=auto
-CATHODE_LOCAL_IMAGE_STEPS=50
-CATHODE_LOCAL_IMAGE_TRUE_CFG_SCALE=4.0
-CATHODE_LOCAL_IMAGE_NEGATIVE_PROMPT=
-CATHODE_LOCAL_IMAGE_MLX_CACHE_LIMIT_GB=
-CATHODE_LOCAL_IMAGE_MLX_LOW_RAM=0
+BETTUBE_STUDIO_LOCAL_IMAGE_MODEL=
+BETTUBE_STUDIO_LOCAL_IMAGE_RUNTIME=auto
+BETTUBE_STUDIO_LOCAL_IMAGE_MLX_MODEL=mlx-community/Qwen-Image-2512-8bit
+BETTUBE_STUDIO_LOCAL_IMAGE_DEVICE=auto
+BETTUBE_STUDIO_LOCAL_IMAGE_DTYPE=auto
+BETTUBE_STUDIO_LOCAL_IMAGE_STEPS=50
+BETTUBE_STUDIO_LOCAL_IMAGE_TRUE_CFG_SCALE=4.0
+BETTUBE_STUDIO_LOCAL_IMAGE_NEGATIVE_PROMPT=
+BETTUBE_STUDIO_LOCAL_IMAGE_MLX_CACHE_LIMIT_GB=
+BETTUBE_STUDIO_LOCAL_IMAGE_MLX_LOW_RAM=0
 STREAMLIT_PORT=8517
-CATHODE_VIDEO_ENCODER=auto
-CATHODE_DISABLE_HW_ENCODER=0
-CATHODE_LOCAL_VIDEO_COMMAND=
-CATHODE_LOCAL_VIDEO_ENDPOINT=
-CATHODE_LOCAL_VIDEO_MODEL=
-CATHODE_LOCAL_VIDEO_API_KEY=
-CATHODE_LOCAL_VIDEO_TIMEOUT_SECONDS=900
+BETTUBE_STUDIO_VIDEO_ENCODER=auto
+BETTUBE_STUDIO_DISABLE_HW_ENCODER=0
+BETTUBE_STUDIO_LOCAL_VIDEO_COMMAND=
+BETTUBE_STUDIO_LOCAL_VIDEO_ENDPOINT=
+BETTUBE_STUDIO_LOCAL_VIDEO_MODEL=
+BETTUBE_STUDIO_LOCAL_VIDEO_API_KEY=
+BETTUBE_STUDIO_LOCAL_VIDEO_TIMEOUT_SECONDS=900
 ```
 
 ## Workflow
@@ -399,7 +440,7 @@ Every betTube Studio project stores:
 - demo-target metadata under `meta.agent_demo_profile`
 - optional style references
 - optional reviewed footage manifest
-- persisted background job metadata and logs under `.cathode/jobs/`
+- persisted background job metadata and logs under `.bettube-studio/jobs/`
 
 `projects/<project>/plan.json` is the source of truth.
 
@@ -447,7 +488,7 @@ PYTHONPATH=. /opt/homebrew/bin/python3.10 -m pytest -q
 
 ```text
 app.py
-cathode_mcp_server.py
+bettube_studio_mcp_server.py
 core/
 core/remotion_render.py
 frontend/

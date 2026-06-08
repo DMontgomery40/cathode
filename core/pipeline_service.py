@@ -225,7 +225,7 @@ def create_project_from_brief_service(
     normalized_agent_demo_profile = normalize_agent_demo_profile(agent_demo_profile)
     if normalized_agent_demo_profile:
         plan.setdefault("meta", {})["agent_demo_profile"] = normalized_agent_demo_profile
-    plan.setdefault("meta", {})["created_by"] = "cathode"
+    plan.setdefault("meta", {})["created_by"] = "bettube-studio"
     plan = save_plan(project_dir, plan)
     return project_dir, plan
 
@@ -258,7 +258,7 @@ def rebuild_storyboard_service(
         rebuilt["meta"]["brief"]["available_footage"] = build_footage_summary(footage_manifest)
     elif not str(rebuilt["meta"]["brief"].get("available_footage") or "").strip():
         rebuilt["meta"]["brief"]["available_footage"] = ""
-    rebuilt.setdefault("meta", {})["regenerated_by"] = "cathode"
+    rebuilt.setdefault("meta", {})["regenerated_by"] = "bettube-studio"
     return save_plan(project_dir, rebuilt)
 
 
@@ -985,7 +985,7 @@ def generate_project_assets_service(
                         expected_url=str(agent_demo_profile.get("expected_url") or "").strip() or None,
                         run_until="assets",
                     )
-                    prompt_path = project_dir / ".cathode" / "agent_demo" / "asset_pass" / f"{scene.get('uid') or scene.get('id')}.prompt.txt"
+                    prompt_path = project_dir / ".bettube-studio" / "agent_demo" / "asset_pass" / f"{scene.get('uid') or scene.get('id')}.prompt.txt"
                     run_agent_demo_cli(
                         agent_name=agent_name,
                         prompt=prompt,

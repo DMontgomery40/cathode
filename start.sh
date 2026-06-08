@@ -9,8 +9,8 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PYTHON="/opt/homebrew/bin/python3.10"
 
 STREAMLIT_PORT="${STREAMLIT_PORT:-8517}"
-CATHODE_API_PORT="${CATHODE_API_PORT:-9321}"
-CATHODE_FRONTEND_PORT="${CATHODE_FRONTEND_PORT:-9322}"
+BETTUBE_STUDIO_API_PORT="${BETTUBE_STUDIO_API_PORT:-9321}"
+BETTUBE_STUDIO_FRONTEND_PORT="${BETTUBE_STUDIO_FRONTEND_PORT:-9322}"
 
 MODE="streamlit"
 EXTRA_ARGS=()
@@ -26,8 +26,8 @@ Usage:
 
 Ports:
   STREAMLIT_PORT          Streamlit port (default: 8517)
-  CATHODE_API_PORT        FastAPI port (default: 9321)
-  CATHODE_FRONTEND_PORT   React/Vite port (default: 9322)
+  BETTUBE_STUDIO_API_PORT        FastAPI port (default: 9321)
+  BETTUBE_STUDIO_FRONTEND_PORT   React/Vite port (default: 9322)
 EOF
 }
 
@@ -161,17 +161,17 @@ run_react_stack() {
   trap cleanup EXIT INT TERM
 
   echo "Starting betTube Studio API..."
-  echo "  API:      http://127.0.0.1:${CATHODE_API_PORT}"
-  echo "  Frontend: http://127.0.0.1:${CATHODE_FRONTEND_PORT}"
+  echo "  API:      http://127.0.0.1:${BETTUBE_STUDIO_API_PORT}"
+  echo "  Frontend: http://127.0.0.1:${BETTUBE_STUDIO_FRONTEND_PORT}"
 
   cd "$ROOT_DIR"
-  "$PYTHON" -m uvicorn server.app:app --host 127.0.0.1 --port "${CATHODE_API_PORT}" --reload &
+  "$PYTHON" -m uvicorn server.app:app --host 127.0.0.1 --port "${BETTUBE_STUDIO_API_PORT}" --reload &
   API_PID=$!
 
-  wait_for_http "http://127.0.0.1:${CATHODE_API_PORT}/api/health" "betTube Studio API"
+  wait_for_http "http://127.0.0.1:${BETTUBE_STUDIO_API_PORT}/api/health" "betTube Studio API"
 
   echo "Starting betTube Studio React app..."
-  npm run dev --prefix "$ROOT_DIR/frontend" -- --host 127.0.0.1 --port "${CATHODE_FRONTEND_PORT}"
+  npm run dev --prefix "$ROOT_DIR/frontend" -- --host 127.0.0.1 --port "${BETTUBE_STUDIO_FRONTEND_PORT}"
 }
 
 require_python

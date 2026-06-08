@@ -95,12 +95,12 @@ def _extract_json_object(text: str) -> dict[str, object] | None:
 
 
 def _codex_image_quality() -> str:
-    value = str(os.getenv("CATHODE_CODEX_IMAGE_QUALITY") or DEFAULT_CODEX_IMAGE_QUALITY).strip().lower()
+    value = str(os.getenv("BETTUBE_STUDIO_CODEX_IMAGE_QUALITY") or DEFAULT_CODEX_IMAGE_QUALITY).strip().lower()
     return value if value in {"low", "medium", "high"} else DEFAULT_CODEX_IMAGE_QUALITY
 
 
 def _codex_exec_model() -> str:
-    return str(os.getenv("CATHODE_CODEX_EXEC_MODEL") or "").strip()
+    return str(os.getenv("BETTUBE_STUDIO_CODEX_EXEC_MODEL") or "").strip()
 
 
 def _codex_helper_python_command() -> str:
@@ -661,7 +661,7 @@ def generate_image_codex_exec(
     image_target = image_target_from_brief(brief)
     openai_size = str(image_target["openai_size"])
 
-    with tempfile.TemporaryDirectory(prefix="cathode-codex-image-") as tmp_dir:
+    with tempfile.TemporaryDirectory(prefix="bettube-studio-codex-image-") as tmp_dir:
         temp_root = Path(tmp_dir)
         prompt_path = temp_root / "prompt.txt"
         prompt_path.write_text(str(prompt or ""), encoding="utf-8")
@@ -765,7 +765,7 @@ def edit_image_codex_exec(
     resolved_model = str(model or DEFAULT_OPENAI_IMAGE_EDIT_MODEL).strip() or DEFAULT_OPENAI_IMAGE_EDIT_MODEL
     resolved_quality = _codex_image_quality()
 
-    with tempfile.TemporaryDirectory(prefix="cathode-codex-image-edit-") as tmp_dir:
+    with tempfile.TemporaryDirectory(prefix="bettube-studio-codex-image-edit-") as tmp_dir:
         temp_root = Path(tmp_dir)
         prompt_path = temp_root / "prompt.txt"
         prompt_path.write_text(str(prompt or ""), encoding="utf-8")

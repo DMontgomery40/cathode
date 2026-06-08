@@ -361,8 +361,8 @@ def render_candidate_preview(
     project_name = str(preview_plan["meta"]["project_name"])
 
     with temporary_project_media_server(preview_project_dir, project_name) as base_url:
-        previous_api_base = os.getenv("CATHODE_API_BASE_URL")
-        os.environ["CATHODE_API_BASE_URL"] = base_url
+        previous_api_base = os.getenv("BETTUBE_STUDIO_API_BASE_URL")
+        os.environ["BETTUBE_STUDIO_API_BASE_URL"] = base_url
         try:
             manifest = build_remotion_manifest(
                 project_dir=preview_project_dir,
@@ -377,9 +377,9 @@ def render_candidate_preview(
             )
         finally:
             if previous_api_base is None:
-                os.environ.pop("CATHODE_API_BASE_URL", None)
+                os.environ.pop("BETTUBE_STUDIO_API_BASE_URL", None)
             else:
-                os.environ["CATHODE_API_BASE_URL"] = previous_api_base
+                os.environ["BETTUBE_STUDIO_API_BASE_URL"] = previous_api_base
 
     _write_json(run_dir / "preview_plan.json", preview_plan)
     _write_json(run_dir / "manifest_excerpt.json", manifest)
@@ -423,9 +423,9 @@ def materialize_run(
             regenerate_videos=has_video_scenes,
             regenerate_audio=True,
         )
-        previous_api_base = os.getenv("CATHODE_API_BASE_URL")
+        previous_api_base = os.getenv("BETTUBE_STUDIO_API_BASE_URL")
         with temporary_project_media_server(materialized_dir, str(saved_plan["meta"]["project_name"])) as base_url:
-            os.environ["CATHODE_API_BASE_URL"] = base_url
+            os.environ["BETTUBE_STUDIO_API_BASE_URL"] = base_url
             try:
                 render_result = render_project_service(
                     materialized_dir,
@@ -433,9 +433,9 @@ def materialize_run(
                 )
             finally:
                 if previous_api_base is None:
-                    os.environ.pop("CATHODE_API_BASE_URL", None)
+                    os.environ.pop("BETTUBE_STUDIO_API_BASE_URL", None)
                 else:
-                    os.environ["CATHODE_API_BASE_URL"] = previous_api_base
+                    os.environ["BETTUBE_STUDIO_API_BASE_URL"] = previous_api_base
 
     result = {
         "materialized_project_dir": str(materialized_dir),

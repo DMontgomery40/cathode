@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 
-SCRIPT = Path(__file__).resolve().parent.parent / "skills" / "cathode-project-demo" / "scripts" / "extract_review_frames.py"
+SCRIPT = Path(__file__).resolve().parent.parent / "skills" / "bettube-studio-project-demo" / "scripts" / "extract_review_frames.py"
 
 
 @pytest.mark.skipif(shutil.which("ffmpeg") is None or shutil.which("ffprobe") is None, reason="ffmpeg and ffprobe are required")

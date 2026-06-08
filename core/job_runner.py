@@ -25,7 +25,7 @@ from .project_store import collect_project_artifacts, ensure_project_dir, load_p
 from .project_schema import normalize_agent_demo_profile
 from .runtime import PROJECTS_DIR
 
-JOB_DIR_NAME = ".cathode/jobs"
+JOB_DIR_NAME = ".bettube-studio/jobs"
 JOB_STATUS_QUEUED = "queued"
 JOB_STATUS_RUNNING = "running"
 JOB_STATUS_SUCCEEDED = "succeeded"
@@ -507,7 +507,7 @@ def _run_agent_demo_job(job_file: Path, job: dict[str, Any]) -> dict[str, Any]:
         )
 
     agent_name, agent_path = selected_agent
-    artifacts_dir = project_dir / ".cathode" / "agent_demo" / str(job.get("job_id") or "latest")
+    artifacts_dir = project_dir / ".bettube-studio" / "agent_demo" / str(job.get("job_id") or "latest")
     artifacts_dir.mkdir(parents=True, exist_ok=True)
     prompt_path = artifacts_dir / "prompt.txt"
 

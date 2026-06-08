@@ -93,8 +93,8 @@ _MANIFESTATION_RISK_LEVELS = {"low", "medium", "high"}
 _OPENAI_DIRECTOR_MODEL = "gpt-5.4"
 _OPENAI_DIRECTOR_REASONING_EFFORT = "xhigh"
 _ANTHROPIC_DIRECTOR_MODEL = "claude-sonnet-4-6"
-_CLAUDE_PRINT_DIRECTOR_MODEL = os.getenv("CATHODE_CLAUDE_PRINT_MODEL", "claude-sonnet-4-6")
-_CLAUDE_PRINT_TOOLS = os.getenv("CATHODE_CLAUDE_PRINT_TOOLS", "Read,Grep,Glob")
+_CLAUDE_PRINT_DIRECTOR_MODEL = os.getenv("BETTUBE_STUDIO_CLAUDE_PRINT_MODEL", "claude-sonnet-4-6")
+_CLAUDE_PRINT_TOOLS = os.getenv("BETTUBE_STUDIO_CLAUDE_PRINT_TOOLS", "Read,Grep,Glob")
 _DEFAULT_ANTHROPIC_TIMEOUT_SECONDS = 45.0
 _DEFAULT_ANTHROPIC_MAX_RETRIES = 1
 _DEFAULT_CLAUDE_PRINT_MAX_OUTPUT_TOKENS = 64000
@@ -103,7 +103,7 @@ _DEFAULT_CLAUDE_PRINT_MAX_OUTPUT_TOKENS = 64000
 def _anthropic_timeout_seconds() -> float:
     """Return the configured Anthropic request timeout."""
     raw_value = str(
-        os.getenv("CATHODE_ANTHROPIC_TIMEOUT_SECONDS")
+        os.getenv("BETTUBE_STUDIO_ANTHROPIC_TIMEOUT_SECONDS")
         or os.getenv("ANTHROPIC_TIMEOUT_SECONDS")
         or ""
     ).strip()
@@ -1437,11 +1437,11 @@ def _claude_print_storyboard_schema() -> dict[str, Any]:
 def _claude_print_env() -> dict[str, str]:
     env = os.environ.copy()
     env["CLAUDE_CODE_MAX_OUTPUT_TOKENS"] = str(
-        os.getenv("CATHODE_CLAUDE_PRINT_MAX_OUTPUT_TOKENS")
+        os.getenv("BETTUBE_STUDIO_CLAUDE_PRINT_MAX_OUTPUT_TOKENS")
         or os.getenv("CLAUDE_CODE_MAX_OUTPUT_TOKENS")
         or _DEFAULT_CLAUDE_PRINT_MAX_OUTPUT_TOKENS
     )
-    if str(os.getenv("CATHODE_CLAUDE_PRINT_USE_API_KEY") or "").strip().lower() not in {"1", "true", "yes", "on"}:
+    if str(os.getenv("BETTUBE_STUDIO_CLAUDE_PRINT_USE_API_KEY") or "").strip().lower() not in {"1", "true", "yes", "on"}:
         env.pop("ANTHROPIC_API_KEY", None)
     return env
 

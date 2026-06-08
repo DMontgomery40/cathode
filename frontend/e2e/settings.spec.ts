@@ -73,7 +73,7 @@ test.describe('Settings', () => {
     }
     fs.writeFileSync(planPath, `${JSON.stringify(plan, null, 2)}\n`, 'utf8')
 
-    const jobsDir = path.join(projectDir, '.cathode', 'jobs')
+    const jobsDir = path.join(projectDir, '.bettube-studio', 'jobs')
     fs.mkdirSync(jobsDir, { recursive: true })
     const logPath = path.join(jobsDir, `${JOB_ID}.log`)
     fs.writeFileSync(logPath, 'generated image for scene_000\nedit retry queued\n', 'utf8')

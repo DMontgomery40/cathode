@@ -62,7 +62,7 @@ export const useUIStore = create<UIState>()(
       openSceneInspector: () => set({ sceneInspectorCollapsed: false }),
     }),
     {
-      name: 'cathode-ui',
+      name: 'bettube-studio-ui',
       storage: createJSONStorage(() => window.localStorage),
       partialize: (state) => ({
         railCollapsed: state.railCollapsed,

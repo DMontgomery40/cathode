@@ -152,7 +152,7 @@ def test_auto_scene_review_candidates_builds_native_fallback_for_authored_image_
     monkeypatch.setattr("core.scene_review.build_remotion_manifest", fake_build_manifest)
     monkeypatch.setattr("core.scene_review.render_manifest_with_remotion", fake_render_manifest)
 
-    candidates = auto_scene_review_candidates(project_dir, plan, scene, review_root=project_dir / ".cathode" / "scene_review" / "test-run")
+    candidates = auto_scene_review_candidates(project_dir, plan, scene, review_root=project_dir / ".bettube-studio" / "scene_review" / "test-run")
 
     assert [candidate["candidate_id"] for candidate in candidates] == ["authored_image", "native_remotion"]
     assert candidates[0]["source_path"] == str(image_path.resolve())
@@ -209,7 +209,7 @@ def test_auto_scene_review_candidates_builds_authored_image_fallback_for_native_
 
     monkeypatch.setattr("core.scene_review.generate_scene_image", fake_generate_scene_image)
 
-    candidates = auto_scene_review_candidates(project_dir, plan, scene, review_root=project_dir / ".cathode" / "scene_review" / "test-run")
+    candidates = auto_scene_review_candidates(project_dir, plan, scene, review_root=project_dir / ".bettube-studio" / "scene_review" / "test-run")
 
     assert [candidate["candidate_id"] for candidate in candidates] == ["native_remotion", "authored_image"]
     assert candidates[0]["source_path"].endswith("scene_001.mp4")
@@ -261,7 +261,7 @@ def test_prepare_scene_review_candidates_extracts_first_stable_and_midpoint_vide
                 "first_stable_timestamp_seconds": 0.4,
             }
         ],
-        review_root=project_dir / ".cathode" / "scene_review" / "test-run",
+        review_root=project_dir / ".bettube-studio" / "scene_review" / "test-run",
     )
 
     frame_refs = prepared[0]["frame_refs"]

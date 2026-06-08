@@ -171,7 +171,7 @@ def collect_project_artifacts(project_dir: Path) -> dict[str, Any]:
         return sorted(str(path) for path in folder.iterdir() if path.is_file())
 
     mp4_files = sorted(str(path) for path in root.glob("*.mp4") if path.is_file())
-    jobs_dir = root / ".cathode" / "jobs"
+    jobs_dir = root / ".bettube-studio" / "jobs"
     job_files = sorted(str(path) for path in jobs_dir.glob("*.json")) if jobs_dir.exists() else []
     return {
         "project_dir": str(root),

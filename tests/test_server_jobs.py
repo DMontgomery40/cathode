@@ -38,7 +38,7 @@ _FAKE_JOB_STATUS: dict[str, Any] = {
     "created_utc": "2026-03-12T00:00:00",
     "updated_utc": "2026-03-12T00:01:00",
     "pid": None,
-    "log_path": "/tmp/projects/demo/.cathode/jobs/test-job-123.log",
+    "log_path": "/tmp/projects/demo/.bettube-studio/jobs/test-job-123.log",
     "request": {"kind": "rerun_stage", "stage": "assets"},
     "result": {},
     "error": None,
@@ -246,7 +246,7 @@ def test_cancel_job_with_project(mock_cancel, client):
 def test_get_project_job_log(client, tmp_path):
     project_dir = tmp_path / "demo"
     project_dir.mkdir(parents=True)
-    log_dir = project_dir / ".cathode" / "jobs"
+    log_dir = project_dir / ".bettube-studio" / "jobs"
     log_dir.mkdir(parents=True)
     log_path = log_dir / "test-job-123.log"
     log_path.write_text("line one\nline two\nline three\n")
@@ -257,7 +257,7 @@ def test_get_project_job_log(client, tmp_path):
 
     with (
         patch("server.routers.jobs.PROJECTS_DIR", tmp_path),
-        patch("server.routers.jobs.find_job", return_value=(project_dir / ".cathode" / "jobs" / "test-job-123.json", job)),
+        patch("server.routers.jobs.find_job", return_value=(project_dir / ".bettube-studio" / "jobs" / "test-job-123.json", job)),
     ):
         resp = client.get("/api/projects/demo/jobs/test-job-123/log?tail_lines=2")
 

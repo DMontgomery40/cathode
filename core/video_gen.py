@@ -64,19 +64,19 @@ def _requests_module():
 
 
 def _local_video_command() -> str:
-    return str(os.getenv("CATHODE_LOCAL_VIDEO_COMMAND") or "").strip()
+    return str(os.getenv("BETTUBE_STUDIO_LOCAL_VIDEO_COMMAND") or "").strip()
 
 
 def _local_video_endpoint() -> str:
-    return str(os.getenv("CATHODE_LOCAL_VIDEO_ENDPOINT") or "").strip()
+    return str(os.getenv("BETTUBE_STUDIO_LOCAL_VIDEO_ENDPOINT") or "").strip()
 
 
 def _local_video_api_key() -> str:
-    return str(os.getenv("CATHODE_LOCAL_VIDEO_API_KEY") or "").strip()
+    return str(os.getenv("BETTUBE_STUDIO_LOCAL_VIDEO_API_KEY") or "").strip()
 
 
 def _local_video_timeout_seconds() -> int:
-    raw = str(os.getenv("CATHODE_LOCAL_VIDEO_TIMEOUT_SECONDS") or "").strip()
+    raw = str(os.getenv("BETTUBE_STUDIO_LOCAL_VIDEO_TIMEOUT_SECONDS") or "").strip()
     if not raw:
         return DEFAULT_VIDEO_TIMEOUT_SECONDS
     try:
@@ -222,7 +222,7 @@ def _materialize_response(payload: Any, output_path: Path, *, timeout_seconds: i
 
     raise ValueError(
         "Local video backend did not produce a usable clip. "
-        "Write the file to CATHODE_VIDEO_OUTPUT_PATH or return JSON with output_path, url, or b64_json."
+        "Write the file to BETTUBE_STUDIO_VIDEO_OUTPUT_PATH or return JSON with output_path, url, or b64_json."
     )
 
 
@@ -378,17 +378,17 @@ def _command_env(payload: dict[str, Any]) -> dict[str, str]:
     env = os.environ.copy()
     env.update(
         {
-            "CATHODE_VIDEO_PROMPT": str(payload["prompt"]),
-            "CATHODE_VIDEO_OUTPUT_PATH": str(payload["output_path"]),
-            "CATHODE_VIDEO_DURATION_SECONDS": str(payload["duration_seconds"]),
-            "CATHODE_VIDEO_WIDTH": str(payload["width"]),
-            "CATHODE_VIDEO_HEIGHT": str(payload["height"]),
-            "CATHODE_VIDEO_FPS": str(payload["fps"]),
-            "CATHODE_VIDEO_MODEL": str(payload.get("model") or ""),
-            "CATHODE_VIDEO_SCENE_ID": str(payload["scene"].get("id", "")),
-            "CATHODE_VIDEO_SCENE_TITLE": str(payload["scene"].get("title") or ""),
-            "CATHODE_VIDEO_NARRATION": str(payload["scene"].get("narration") or ""),
-            "CATHODE_VIDEO_REQUEST_JSON": json.dumps(payload),
+            "BETTUBE_STUDIO_VIDEO_PROMPT": str(payload["prompt"]),
+            "BETTUBE_STUDIO_VIDEO_OUTPUT_PATH": str(payload["output_path"]),
+            "BETTUBE_STUDIO_VIDEO_DURATION_SECONDS": str(payload["duration_seconds"]),
+            "BETTUBE_STUDIO_VIDEO_WIDTH": str(payload["width"]),
+            "BETTUBE_STUDIO_VIDEO_HEIGHT": str(payload["height"]),
+            "BETTUBE_STUDIO_VIDEO_FPS": str(payload["fps"]),
+            "BETTUBE_STUDIO_VIDEO_MODEL": str(payload.get("model") or ""),
+            "BETTUBE_STUDIO_VIDEO_SCENE_ID": str(payload["scene"].get("id", "")),
+            "BETTUBE_STUDIO_VIDEO_SCENE_TITLE": str(payload["scene"].get("title") or ""),
+            "BETTUBE_STUDIO_VIDEO_NARRATION": str(payload["scene"].get("narration") or ""),
+            "BETTUBE_STUDIO_VIDEO_REQUEST_JSON": json.dumps(payload),
         }
     )
     return env
@@ -397,7 +397,7 @@ def _command_env(payload: dict[str, Any]) -> dict[str, str]:
 def _run_local_video_command(payload: dict[str, Any], output_path: Path, *, timeout_seconds: int) -> Path:
     command = _local_video_command()
     if not command:
-        raise ValueError("CATHODE_LOCAL_VIDEO_COMMAND is not configured.")
+        raise ValueError("BETTUBE_STUDIO_LOCAL_VIDEO_COMMAND is not configured.")
 
     _log(f"Running local video command for scene {payload['scene'].get('id', '?')}")
     completed = subprocess.run(
@@ -420,14 +420,14 @@ def _run_local_video_command(payload: dict[str, Any], output_path: Path, *, time
 
     raise ValueError(
         "Local video command completed without writing a clip. "
-        "Write to CATHODE_VIDEO_OUTPUT_PATH or print JSON with output_path, url, or b64_json."
+        "Write to BETTUBE_STUDIO_VIDEO_OUTPUT_PATH or print JSON with output_path, url, or b64_json."
     )
 
 
 def _request_local_video_endpoint(payload: dict[str, Any], output_path: Path, *, timeout_seconds: int) -> Path:
     endpoint = _local_video_endpoint()
     if not endpoint:
-        raise ValueError("CATHODE_LOCAL_VIDEO_ENDPOINT is not configured.")
+        raise ValueError("BETTUBE_STUDIO_LOCAL_VIDEO_ENDPOINT is not configured.")
 
     headers = {"Content-Type": "application/json"}
     api_key = _local_video_api_key()
@@ -663,7 +663,7 @@ def generate_scene_video_result(
         if not local_video_generation_available():
             raise ValueError(
                 "Local video generation is not configured. "
-                "Set CATHODE_LOCAL_VIDEO_COMMAND or CATHODE_LOCAL_VIDEO_ENDPOINT."
+                "Set BETTUBE_STUDIO_LOCAL_VIDEO_COMMAND or BETTUBE_STUDIO_LOCAL_VIDEO_ENDPOINT."
             )
         payload["model"] = str(payload["model"] or default_local_video_generation_model() or "").strip()
         result["model"] = str(payload["model"] or "")

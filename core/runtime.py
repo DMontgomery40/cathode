@@ -126,7 +126,7 @@ def _module_available(module_name: str) -> bool:
 
 def _local_image_runtime_preference() -> str | None:
     """Return the configured local image runtime, or None when invalid."""
-    value = str(os.getenv("CATHODE_LOCAL_IMAGE_RUNTIME") or "auto").strip().lower() or "auto"
+    value = str(os.getenv("BETTUBE_STUDIO_LOCAL_IMAGE_RUNTIME") or "auto").strip().lower() or "auto"
     if value not in {"auto", "torch", "mlx"}:
         return None
     return value
@@ -171,20 +171,20 @@ def local_image_generation_available() -> bool:
 
 def default_local_image_generation_model() -> str:
     """Return the configured local image model label or repo id, if any."""
-    return str(os.getenv("CATHODE_LOCAL_IMAGE_MODEL") or "").strip()
+    return str(os.getenv("BETTUBE_STUDIO_LOCAL_IMAGE_MODEL") or "").strip()
 
 
 def local_video_generation_available() -> bool:
     """Return whether a local video backend is configured."""
     return bool(
-        str(os.getenv("CATHODE_LOCAL_VIDEO_COMMAND") or "").strip()
-        or str(os.getenv("CATHODE_LOCAL_VIDEO_ENDPOINT") or "").strip()
+        str(os.getenv("BETTUBE_STUDIO_LOCAL_VIDEO_COMMAND") or "").strip()
+        or str(os.getenv("BETTUBE_STUDIO_LOCAL_VIDEO_ENDPOINT") or "").strip()
     )
 
 
 def default_local_video_generation_model() -> str:
     """Return the configured local video model label or path, if any."""
-    return str(os.getenv("CATHODE_LOCAL_VIDEO_MODEL") or "").strip()
+    return str(os.getenv("BETTUBE_STUDIO_LOCAL_VIDEO_MODEL") or "").strip()
 
 
 def remotion_available() -> bool:

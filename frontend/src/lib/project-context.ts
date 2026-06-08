@@ -1,4 +1,4 @@
-const LAST_PROJECT_KEY = 'cathode:last-project-id'
+const LAST_PROJECT_KEY = 'bettube-studio:last-project-id'
 
 export function readLastProjectId(): string {
   if (typeof window === 'undefined') {

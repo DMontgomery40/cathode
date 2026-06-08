@@ -102,7 +102,7 @@ Then add a second, optional Remotion treatment-planner stage that is informed by
   - Rebuilt `surreal_tableau_3d` into a semantic deterministic scene family in `frontend/src/remotion/index.tsx`.
   - Unified motion-scene editing on canonical `scene.composition` in `frontend/src/features/scenes/SceneInspector.tsx`.
   - Added workflow role split so the product path uses Claude/Anthropic for scene writing and OpenAI for deterministic treatment/machinery when available.
-  - Added repo skill pack at `skills/cathode-remotion-development/` plus Claude mirror.
+  - Added repo skill pack at `skills/bettube-studio-remotion-development/` plus Claude mirror.
 - 2026-03-14: live validation surfaced two real classifier false positives that unit tests had missed.
   - Software-demo hints were matching raw substrings (`screen` in `widescreen`, `form` in `performs`).
   - Bullet-stack hints were matching the generic word `sequence`.
@@ -114,7 +114,7 @@ Then add a second, optional Remotion treatment-planner stage that is informed by
   - Project: `projects/moth_observatory_ui_1773542716609`
   - Hero scene now persists as `surreal_tableau_3d` and exposes semantic 3D controls in the browser.
   - Audio generation completed for all scenes and final render completed at `projects/moth_observatory_ui_1773542716609/final_video.mp4`.
-  - Captured validation artifacts live under `/tmp/cathode-remotion-validation/`.
+  - Captured validation artifacts live under `/tmp/bettube-studio-remotion-validation/`.
 - 2026-03-15: Projects library sorting no longer relies on alphabetical order alone.
   - `/api/projects` now exposes `created_utc` and `updated_utc`.
   - `updated_utc` prefers real plan lifecycle timestamps (`updated_utc`, `rendered_utc`, `created_utc`) and only falls back to `plan.json` mtime when a project has no stored dates, to avoid git-checkout noise masquerading as activity.

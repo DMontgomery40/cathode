@@ -365,8 +365,8 @@ def _available_encoders() -> set[str]:
 
 def _select_video_encoder(profile: dict[str, Any]) -> str:
     available = _available_encoders()
-    explicit = str(os.getenv("CATHODE_VIDEO_ENCODER") or profile.get("video_encoder") or "auto").strip().lower()
-    disable_hw = str(os.getenv("CATHODE_DISABLE_HW_ENCODER") or "").strip().lower() in {"1", "true", "yes", "on"}
+    explicit = str(os.getenv("BETTUBE_STUDIO_VIDEO_ENCODER") or profile.get("video_encoder") or "auto").strip().lower()
+    disable_hw = str(os.getenv("BETTUBE_STUDIO_DISABLE_HW_ENCODER") or "").strip().lower() in {"1", "true", "yes", "on"}
     prefer_gpu = bool(profile.get("prefer_gpu", True)) and not disable_hw
 
     if explicit and explicit != "auto":

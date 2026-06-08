@@ -644,7 +644,7 @@ def test_get_anthropic_client_sets_timeout_and_low_retry(monkeypatch):
 
     monkeypatch.setattr("core.director._anthropic_client", None)
     monkeypatch.setattr("core.director.anthropic.Anthropic", FakeAnthropicClient)
-    monkeypatch.setenv("CATHODE_ANTHROPIC_TIMEOUT_SECONDS", "45")
+    monkeypatch.setenv("BETTUBE_STUDIO_ANTHROPIC_TIMEOUT_SECONDS", "45")
 
     client = _get_anthropic_client()
 

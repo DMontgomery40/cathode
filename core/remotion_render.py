@@ -48,7 +48,7 @@ def _trim_overlay_copy(value: Any) -> str:
 
 
 def _api_base_url() -> str:
-    return str(os.getenv("CATHODE_API_BASE_URL") or _DEFAULT_API_BASE_URL).rstrip("/")
+    return str(os.getenv("BETTUBE_STUDIO_API_BASE_URL") or _DEFAULT_API_BASE_URL).rstrip("/")
 
 
 def _resolve_image_url_for_scene(composition: dict[str, Any], scene: dict[str, Any]) -> str | None:

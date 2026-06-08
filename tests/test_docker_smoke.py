@@ -18,12 +18,12 @@ def test_docker_image_starts_http_server(tmp_path):
     if not docker:
         pytest.skip("docker is not installed")
 
-    image_tag = "cathode-mcp:test"
+    image_tag = "bettube-studio-mcp:test"
     repo_root = Path(__file__).resolve().parent.parent
 
-    subprocess.run([docker, "build", "-t", image_tag, "."], cwd=repo_root, check=True)
+    subprocess.run([docker, "build", "--target", "mcp", "-t", image_tag, "."], cwd=repo_root, check=True)
 
-    container_name = "cathode-mcp-smoke"
+    container_name = "bettube-studio-mcp-smoke"
     process = None
     try:
         process = subprocess.Popen(

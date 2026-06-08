@@ -1,6 +1,6 @@
 """Shared product-branding constants."""
 
 PRODUCT_NAME = "betTube Studio"
-PRODUCT_SLUG = "cathode"
+PRODUCT_SLUG = "bettube-studio"
 PRODUCT_DESCRIPTION = "Turn intent into video."
 

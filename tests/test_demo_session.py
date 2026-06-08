@@ -11,7 +11,7 @@ from core.demo_session import build_live_demo_session
 PREPARE_SCRIPT = (
     Path(__file__).resolve().parent.parent
     / "skills"
-    / "cathode-project-demo"
+    / "bettube-studio-project-demo"
     / "scripts"
     / "prepare_live_demo_session.py"
 )

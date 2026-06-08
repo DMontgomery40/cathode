@@ -86,7 +86,7 @@ def test_available_image_edit_models_orders_public_default_first():
 def test_available_image_generation_providers_includes_local_when_configured(monkeypatch):
     monkeypatch.delenv("REPLICATE_API_TOKEN", raising=False)
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
-    monkeypatch.setenv("CATHODE_LOCAL_IMAGE_MODEL", "Qwen/Qwen-Image-2512")
+    monkeypatch.setenv("BETTUBE_STUDIO_LOCAL_IMAGE_MODEL", "Qwen/Qwen-Image-2512")
     monkeypatch.setattr(runtime, "_local_image_backend_runnable", lambda: True)
     monkeypatch.setattr(runtime.shutil, "which", lambda value: None)
 
@@ -96,7 +96,7 @@ def test_available_image_generation_providers_includes_local_when_configured(mon
 def test_available_image_generation_providers_hides_local_when_backend_not_runnable(monkeypatch):
     monkeypatch.delenv("REPLICATE_API_TOKEN", raising=False)
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
-    monkeypatch.setenv("CATHODE_LOCAL_IMAGE_MODEL", "Qwen/Qwen-Image-2512")
+    monkeypatch.setenv("BETTUBE_STUDIO_LOCAL_IMAGE_MODEL", "Qwen/Qwen-Image-2512")
     monkeypatch.setattr(runtime, "_local_image_backend_runnable", lambda: False)
     monkeypatch.setattr(runtime.shutil, "which", lambda value: None)
 
@@ -106,7 +106,7 @@ def test_available_image_generation_providers_hides_local_when_backend_not_runna
 def test_available_image_generation_providers_prefers_codex_when_openai_and_cli_are_available(monkeypatch):
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")
     monkeypatch.delenv("REPLICATE_API_TOKEN", raising=False)
-    monkeypatch.delenv("CATHODE_LOCAL_IMAGE_MODEL", raising=False)
+    monkeypatch.delenv("BETTUBE_STUDIO_LOCAL_IMAGE_MODEL", raising=False)
     monkeypatch.setattr(runtime, "_local_image_backend_runnable", lambda: False)
     monkeypatch.setattr(runtime.shutil, "which", lambda value: "/usr/local/bin/codex" if value == "codex" else None)
 
@@ -116,7 +116,7 @@ def test_available_image_generation_providers_prefers_codex_when_openai_and_cli_
 def test_resolve_image_profile_keeps_explicit_local_model_when_backend_is_runnable(monkeypatch):
     monkeypatch.delenv("REPLICATE_API_TOKEN", raising=False)
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
-    monkeypatch.delenv("CATHODE_LOCAL_IMAGE_MODEL", raising=False)
+    monkeypatch.delenv("BETTUBE_STUDIO_LOCAL_IMAGE_MODEL", raising=False)
     monkeypatch.setattr(runtime, "_local_image_backend_runnable", lambda: True)
     monkeypatch.setattr(runtime.shutil, "which", lambda value: None)
 
@@ -131,7 +131,7 @@ def test_resolve_image_profile_keeps_explicit_local_model_when_backend_is_runnab
 def test_resolve_image_profile_falls_back_when_local_backend_is_not_runnable(monkeypatch):
     monkeypatch.delenv("REPLICATE_API_TOKEN", raising=False)
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
-    monkeypatch.delenv("CATHODE_LOCAL_IMAGE_MODEL", raising=False)
+    monkeypatch.delenv("BETTUBE_STUDIO_LOCAL_IMAGE_MODEL", raising=False)
     monkeypatch.setattr(runtime, "_local_image_backend_runnable", lambda: False)
     monkeypatch.setattr(runtime.shutil, "which", lambda value: None)
 
@@ -145,7 +145,7 @@ def test_resolve_image_profile_falls_back_when_local_backend_is_not_runnable(mon
 def test_resolve_image_profile_prefers_codex_defaults_when_available(monkeypatch):
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")
     monkeypatch.delenv("REPLICATE_API_TOKEN", raising=False)
-    monkeypatch.delenv("CATHODE_LOCAL_IMAGE_MODEL", raising=False)
+    monkeypatch.delenv("BETTUBE_STUDIO_LOCAL_IMAGE_MODEL", raising=False)
     monkeypatch.setattr(runtime, "_local_image_backend_runnable", lambda: False)
     monkeypatch.setattr(runtime.shutil, "which", lambda value: "/usr/local/bin/codex" if value == "codex" else None)
 
@@ -158,7 +158,7 @@ def test_resolve_image_profile_prefers_codex_defaults_when_available(monkeypatch
 def test_resolve_image_profile_falls_back_from_codex_to_replicate(monkeypatch):
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     monkeypatch.setenv("REPLICATE_API_TOKEN", "rep-token")
-    monkeypatch.delenv("CATHODE_LOCAL_IMAGE_MODEL", raising=False)
+    monkeypatch.delenv("BETTUBE_STUDIO_LOCAL_IMAGE_MODEL", raising=False)
     monkeypatch.setattr(runtime, "_local_image_backend_runnable", lambda: False)
     monkeypatch.setattr(runtime.shutil, "which", lambda value: None)
 
@@ -219,7 +219,7 @@ def test_generate_scene_image_uses_codex_backend(monkeypatch, tmp_path):
 def test_generate_image_codex_exec_runs_helper_through_local_codex(monkeypatch, tmp_path):
     output_path = tmp_path / "scene.png"
     seen: dict[str, object] = {}
-    helper_python = "/opt/cathode python/bin/python3"
+    helper_python = "/opt/bettube-studio python/bin/python3"
 
     def fake_run(command, *, input, text, capture_output, check):
         seen["command"] = command
@@ -259,7 +259,7 @@ def test_edit_image_codex_exec_runs_helper_through_local_codex(monkeypatch, tmp_
     output_path = tmp_path / "scene.png"
     input_path.write_bytes(b"\x89PNG\r\n\x1a\n" + b"\x00" * 32)
     seen: dict[str, object] = {}
-    helper_python = "/opt/cathode python/bin/python3"
+    helper_python = "/opt/bettube-studio python/bin/python3"
 
     def fake_run(command, *, input, text, capture_output, check):
         seen["command"] = command

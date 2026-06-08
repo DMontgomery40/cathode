@@ -102,7 +102,7 @@ def build_live_demo_session(
         "capture_manifest_path": str((bundle_root / "capture_manifest.json").resolve()),
         "review_observations_path": str((bundle_root / "reports" / "review_observations.json").resolve()),
         "review_report_path": str((bundle_root / "reports" / "review_report.json").resolve()),
-        "handoff_payload_path": str((bundle_root / "reports" / "cathode_make_video_payload.json").resolve()),
+        "handoff_payload_path": str((bundle_root / "reports" / "bettube_studio_make_video_payload.json").resolve()),
         "launch_state_path": str((bundle_root / "launch_state.json").resolve()),
     }
     for path in artifacts.values():

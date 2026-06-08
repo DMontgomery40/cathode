@@ -232,7 +232,7 @@ _ENTRY_DEFS: list[dict[str, Any]] = [
 
 
 def _cny_to_usd_rate() -> float:
-    raw = str(os.getenv("CATHODE_CNY_TO_USD") or "").strip()
+    raw = str(os.getenv("BETTUBE_STUDIO_CNY_TO_USD") or "").strip()
     try:
         value = float(raw)
     except (TypeError, ValueError):

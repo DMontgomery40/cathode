@@ -10,8 +10,8 @@ reference_frames/
 !.claude/
 !.claude/launch.json
 !.claude/skills/
-!.claude/skills/cathode-project-demo/
-!.claude/skills/cathode-project-demo/**
+!.claude/skills/bettube-studio-project-demo/
+!.claude/skills/bettube-studio-project-demo/**
 .claude/worktrees/
 .playwright-mcp/
 frontend/test-results/

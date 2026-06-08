@@ -44,14 +44,14 @@ def _job_payload(project_dir: Path) -> dict:
         "result": {},
         "error": None,
         "suggestion": "",
-        "log_path": str(project_dir / ".cathode" / "jobs" / "job-123.log"),
+        "log_path": str(project_dir / ".bettube-studio" / "jobs" / "job-123.log"),
     }
 
 
 def test_run_job_file_persists_success(monkeypatch, tmp_path):
     project_dir = tmp_path / "demo_project"
     project_dir.mkdir(parents=True)
-    job_file = project_dir / ".cathode" / "jobs" / "job-123.json"
+    job_file = project_dir / ".bettube-studio" / "jobs" / "job-123.json"
     job_file.parent.mkdir(parents=True, exist_ok=True)
     write_job_file(job_file, _job_payload(project_dir))
 
@@ -98,7 +98,7 @@ def test_run_job_file_persists_success(monkeypatch, tmp_path):
 def test_run_job_file_records_failure(monkeypatch, tmp_path):
     project_dir = tmp_path / "broken_project"
     project_dir.mkdir(parents=True)
-    job_file = project_dir / ".cathode" / "jobs" / "job-123.json"
+    job_file = project_dir / ".bettube-studio" / "jobs" / "job-123.json"
     job_file.parent.mkdir(parents=True, exist_ok=True)
     write_job_file(job_file, _job_payload(project_dir))
 
@@ -118,7 +118,7 @@ def test_run_job_file_records_failure(monkeypatch, tmp_path):
 def test_run_job_file_stops_after_storyboard_when_cost_estimate_is_over_budget(monkeypatch, tmp_path):
     project_dir = tmp_path / "budget_project"
     project_dir.mkdir(parents=True)
-    job_file = project_dir / ".cathode" / "jobs" / "job-123.json"
+    job_file = project_dir / ".bettube-studio" / "jobs" / "job-123.json"
     job_file.parent.mkdir(parents=True, exist_ok=True)
     write_job_file(job_file, _job_payload(project_dir))
 
@@ -204,7 +204,7 @@ def test_create_make_video_job_keeps_demo_context_image_first_without_explicit_m
         },
     )
 
-    job_file = project_dir / ".cathode" / "jobs" / f"{result['job_id']}.json"
+    job_file = project_dir / ".bettube-studio" / "jobs" / f"{result['job_id']}.json"
     saved = read_job_file(job_file)
 
     assert saved["request"]["brief"]["composition_mode"] == "classic"

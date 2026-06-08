@@ -56,19 +56,19 @@ _MISSING_CLAUDE_VISUAL_RUNNER_NOTE = (
 
 
 def _configured_codex_model() -> str:
-    return str(os.getenv("CATHODE_SCENE_JUDGE_CODEX_MODEL") or "").strip() or "local-default"
+    return str(os.getenv("BETTUBE_STUDIO_SCENE_JUDGE_CODEX_MODEL") or "").strip() or "local-default"
 
 
 def _configured_claude_model() -> str:
-    return str(os.getenv("CATHODE_SCENE_JUDGE_CLAUDE_MODEL") or "").strip() or "local-default"
+    return str(os.getenv("BETTUBE_STUDIO_SCENE_JUDGE_CLAUDE_MODEL") or "").strip() or "local-default"
 
 
 def _configured_openai_model() -> str:
-    return str(os.getenv("CATHODE_SCENE_JUDGE_OPENAI_MODEL") or "gpt-5.4").strip() or "gpt-5.4"
+    return str(os.getenv("BETTUBE_STUDIO_SCENE_JUDGE_OPENAI_MODEL") or "gpt-5.4").strip() or "gpt-5.4"
 
 
 def _configured_openai_reasoning_effort() -> str:
-    return str(os.getenv("CATHODE_SCENE_JUDGE_OPENAI_REASONING_EFFORT") or "xhigh").strip().lower() or "xhigh"
+    return str(os.getenv("BETTUBE_STUDIO_SCENE_JUDGE_OPENAI_REASONING_EFFORT") or "xhigh").strip().lower() or "xhigh"
 
 
 def scene_judge_providers() -> list[dict[str, Any]]:
@@ -467,7 +467,7 @@ def auto_scene_review_candidates(
     review_root: str | Path | None = None,
 ) -> list[dict[str, Any]] | None:
     project_dir = Path(project_dir).expanduser().resolve()
-    review_root_path = Path(review_root).expanduser().resolve() if review_root else project_dir / ".cathode" / "scene_review" / "adhoc"
+    review_root_path = Path(review_root).expanduser().resolve() if review_root else project_dir / ".bettube-studio" / "scene_review" / "adhoc"
     fallback = _fallback_path(scene)
     if not fallback:
         return None
@@ -503,7 +503,7 @@ def prepare_scene_review_candidates(
     project_dir = Path(project_dir).expanduser().resolve()
     scene_uid = _slugify_token(scene.get("uid") or scene.get("id"), fallback="scene")
     resolved_candidates = candidates if isinstance(candidates, list) and candidates else default_scene_review_candidates(scene)
-    frames_root = Path(review_root).expanduser().resolve() if review_root else project_dir / ".cathode" / "scene_review" / "adhoc"
+    frames_root = Path(review_root).expanduser().resolve() if review_root else project_dir / ".bettube-studio" / "scene_review" / "adhoc"
 
     prepared: list[dict[str, Any]] = []
     for index, candidate in enumerate(resolved_candidates, start=1):
@@ -967,7 +967,7 @@ def _parse_scene_judge_json_output(raw_output: str) -> dict[str, Any]:
 
 
 def _run_codex_scene_judge(provider: dict[str, Any], request: dict[str, Any]) -> dict[str, Any]:
-    with tempfile.TemporaryDirectory(prefix="cathode-scene-review-") as tmp_dir:
+    with tempfile.TemporaryDirectory(prefix="bettube-studio-scene-review-") as tmp_dir:
         tmp_root = Path(tmp_dir)
         output_path = tmp_root / "scene_review_output.json"
         codex_binary = str(provider.get("binary_path") or "codex").strip() or "codex"
@@ -1081,7 +1081,7 @@ def review_project_scenes(
     run_dir = (
         Path(review_root).expanduser().resolve()
         if review_root
-        else project_dir / ".cathode" / "scene_review" / run_id
+        else project_dir / ".bettube-studio" / "scene_review" / run_id
     )
     frames_root = run_dir / "frames"
     prepared_by_uid: dict[str, list[dict[str, Any]]] = {}

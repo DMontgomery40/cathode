@@ -12,7 +12,7 @@ from typing import Any
 from .project_store import load_plan
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-SKILL_PATH = REPO_ROOT / "skills" / "cathode-project-demo" / "SKILL.md"
+SKILL_PATH = REPO_ROOT / "skills" / "bettube-studio-project-demo" / "SKILL.md"
 
 
 def available_agent_clis() -> dict[str, str]:
@@ -118,7 +118,7 @@ def build_agent_demo_prompt(
         f"Launch command override: {str(launch_command or '').strip() or '(infer if possible)'}\n"
         f"Expected URL override: {str(expected_url or '').strip() or '(infer if possible)'}\n\n"
         "Goals:\n"
-        "1. Use the cathode-project-demo workflow to capture fresh proof for the target video scenes.\n"
+        "1. Use the bettube-studio-project-demo workflow to capture fresh proof for the target video scenes.\n"
         "2. Work scene-by-scene through the listed video scenes.\n"
         "3. For each target scene, ensure narration audio exists or generate it first so audio length becomes the timing source of truth.\n"
         "4. Capture/review/select footage, then trim or speed-adjust the chosen clip so it fits the narration intent.\n"

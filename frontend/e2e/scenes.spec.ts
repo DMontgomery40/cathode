@@ -12,7 +12,7 @@ const SWITCH_PROJECT = `e2e_scene_switch_${Date.now()}`
 
 test.describe('Scene Timeline', () => {
   function setNarrowInspectorLayout() {
-    window.localStorage.setItem('cathode-ui', JSON.stringify({
+    window.localStorage.setItem('bettube-studio-ui', JSON.stringify({
       state: {
         railCollapsed: false,
         railWidth: 240,
@@ -274,7 +274,7 @@ test.describe('Scene Timeline', () => {
     test('small viewport compacts navigation and keeps scenes scrollable', async ({ page }) => {
       await page.setViewportSize({ width: 603, height: 720 })
       await page.evaluate(() => {
-        window.localStorage.setItem('cathode-ui', JSON.stringify({
+        window.localStorage.setItem('bettube-studio-ui', JSON.stringify({
           state: {
             railCollapsed: false,
             railWidth: 240,

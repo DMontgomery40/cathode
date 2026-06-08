@@ -1,0 +1,97 @@
+name: bettube-studio
+
+x-bettube-build: &bettube-build
+  context: .
+  args:
+    PIP_INDEX_URL: ${PIP_INDEX_URL:-}
+    PIP_EXTRA_INDEX_URL: ${PIP_EXTRA_INDEX_URL:-}
+    NPM_CONFIG_REGISTRY: ${NPM_CONFIG_REGISTRY:-}
+    VITE_API_BASE_URL: ${VITE_API_BASE_URL:-}
+
+x-bettube-environment: &bettube-environment
+  OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+  ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+  REPLICATE_API_TOKEN: ${REPLICATE_API_TOKEN:-}
+  ELEVENLABS_API_KEY: ${ELEVENLABS_API_KEY:-}
+  DASHSCOPE_API_KEY: ${DASHSCOPE_API_KEY:-}
+  ALIBABA_API_KEY: ${ALIBABA_API_KEY:-}
+  DASHSCOPE_REGION: ${DASHSCOPE_REGION:-}
+  IMAGE_EDIT_PROVIDER: ${IMAGE_EDIT_PROVIDER:-}
+  IMAGE_EDIT_MODEL: ${IMAGE_EDIT_MODEL:-qwen/qwen-image-edit-2511}
+  BETTUBE_STUDIO_API_BASE_URL: http://127.0.0.1:9321
+  BETTUBE_STUDIO_LOCAL_IMAGE_MODEL: ${BETTUBE_STUDIO_LOCAL_IMAGE_MODEL:-}
+  BETTUBE_STUDIO_LOCAL_IMAGE_RUNTIME: ${BETTUBE_STUDIO_LOCAL_IMAGE_RUNTIME:-auto}
+  BETTUBE_STUDIO_LOCAL_IMAGE_DEVICE: ${BETTUBE_STUDIO_LOCAL_IMAGE_DEVICE:-auto}
+  BETTUBE_STUDIO_LOCAL_IMAGE_DTYPE: ${BETTUBE_STUDIO_LOCAL_IMAGE_DTYPE:-auto}
+  BETTUBE_STUDIO_LOCAL_IMAGE_STEPS: ${BETTUBE_STUDIO_LOCAL_IMAGE_STEPS:-50}
+  BETTUBE_STUDIO_LOCAL_IMAGE_TRUE_CFG_SCALE: ${BETTUBE_STUDIO_LOCAL_IMAGE_TRUE_CFG_SCALE:-4.0}
+  BETTUBE_STUDIO_LOCAL_IMAGE_NEGATIVE_PROMPT: ${BETTUBE_STUDIO_LOCAL_IMAGE_NEGATIVE_PROMPT:-}
+  BETTUBE_STUDIO_LOCAL_IMAGE_MLX_MODEL: ${BETTUBE_STUDIO_LOCAL_IMAGE_MLX_MODEL:-mlx-community/Qwen-Image-2512-8bit}
+  BETTUBE_STUDIO_LOCAL_IMAGE_MLX_CACHE_LIMIT_GB: ${BETTUBE_STUDIO_LOCAL_IMAGE_MLX_CACHE_LIMIT_GB:-}
+  BETTUBE_STUDIO_LOCAL_IMAGE_MLX_LOW_RAM: ${BETTUBE_STUDIO_LOCAL_IMAGE_MLX_LOW_RAM:-0}
+  BETTUBE_STUDIO_LOCAL_VIDEO_COMMAND: ${BETTUBE_STUDIO_LOCAL_VIDEO_COMMAND:-}
+  BETTUBE_STUDIO_LOCAL_VIDEO_ENDPOINT: ${BETTUBE_STUDIO_LOCAL_VIDEO_ENDPOINT:-}
+  BETTUBE_STUDIO_LOCAL_VIDEO_MODEL: ${BETTUBE_STUDIO_LOCAL_VIDEO_MODEL:-}
+  BETTUBE_STUDIO_LOCAL_VIDEO_API_KEY: ${BETTUBE_STUDIO_LOCAL_VIDEO_API_KEY:-}
+  BETTUBE_STUDIO_LOCAL_VIDEO_TIMEOUT_SECONDS: ${BETTUBE_STUDIO_LOCAL_VIDEO_TIMEOUT_SECONDS:-900}
+  BETTUBE_STUDIO_VIDEO_ENCODER: ${BETTUBE_STUDIO_VIDEO_ENCODER:-auto}
+  BETTUBE_STUDIO_DISABLE_HW_ENCODER: ${BETTUBE_STUDIO_DISABLE_HW_ENCODER:-0}
+
+x-bettube-volumes: &bettube-volumes
+  - ./projects:/app/projects
+  - ./output:/app/output
+
+services:
+  web:
+    image: bettube-studio:local
+    build:
+      <<: *bettube-build
+      target: web
+    init: true
+    ports:
+      - "${BETTUBE_STUDIO_API_PORT:-9321}:9321"
+    environment:
+      <<: *bettube-environment
+    volumes: *bettube-volumes
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:9321/api/health', timeout=5).read()",
+        ]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+
+  streamlit:
+    image: bettube-studio-streamlit:local
+    profiles: ["streamlit"]
+    build:
+      <<: *bettube-build
+      target: streamlit
+    init: true
+    ports:
+      - "${STREAMLIT_PORT:-8517}:8517"
+    environment:
+      <<: *bettube-environment
+    volumes: *bettube-volumes
+
+  mcp:
+    image: bettube-studio-mcp:local
+    profiles: ["mcp"]
+    build:
+      <<: *bettube-build
+      target: mcp
+    init: true
+    ports:
+      - "${BETTUBE_STUDIO_MCP_PORT:-8765}:8765"
+    environment:
+      <<: *bettube-environment
+      BETTUBE_STUDIO_MCP_TRANSPORT: streamable-http
+      BETTUBE_STUDIO_MCP_HOST: 0.0.0.0
+      BETTUBE_STUDIO_MCP_PORT: 8765
+      BETTUBE_STUDIO_MCP_HTTP_PATH: /mcp
+    volumes: *bettube-volumes

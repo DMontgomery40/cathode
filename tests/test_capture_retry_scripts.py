@@ -19,7 +19,7 @@ import pytest
 
 
 FIXTURE_DIR = Path(__file__).resolve().parent / "fixtures" / "live_demo_app"
-SKILL_SCRIPTS = Path(__file__).resolve().parent.parent / "skills" / "cathode-project-demo" / "scripts"
+SKILL_SCRIPTS = Path(__file__).resolve().parent.parent / "skills" / "bettube-studio-project-demo" / "scripts"
 
 
 def _wait_for_file(file_path: Path, timeout_seconds: float = 3.0) -> None:

@@ -14,8 +14,8 @@ from core.video_gen import (
 
 
 def test_resolve_video_profile_falls_back_without_local_backend(monkeypatch):
-    monkeypatch.delenv("CATHODE_LOCAL_VIDEO_COMMAND", raising=False)
-    monkeypatch.delenv("CATHODE_LOCAL_VIDEO_ENDPOINT", raising=False)
+    monkeypatch.delenv("BETTUBE_STUDIO_LOCAL_VIDEO_COMMAND", raising=False)
+    monkeypatch.delenv("BETTUBE_STUDIO_LOCAL_VIDEO_ENDPOINT", raising=False)
     monkeypatch.delenv("REPLICATE_API_TOKEN", raising=False)
 
     resolved = resolve_video_profile({"provider": "local", "generation_model": "/models/demo"})
@@ -57,11 +57,11 @@ def test_generate_scene_video_uses_local_command_backend(monkeypatch, tmp_path):
     script = (
         "import os; "
         "from pathlib import Path; "
-        "Path(os.environ['CATHODE_VIDEO_OUTPUT_PATH']).write_bytes(b'fake-mp4-bytes')"
+        "Path(os.environ['BETTUBE_STUDIO_VIDEO_OUTPUT_PATH']).write_bytes(b'fake-mp4-bytes')"
     )
-    monkeypatch.setenv("CATHODE_LOCAL_VIDEO_COMMAND", shlex.join([sys.executable, "-c", script]))
-    monkeypatch.delenv("CATHODE_LOCAL_VIDEO_ENDPOINT", raising=False)
-    monkeypatch.setenv("CATHODE_LOCAL_VIDEO_MODEL", "/models/local-video")
+    monkeypatch.setenv("BETTUBE_STUDIO_LOCAL_VIDEO_COMMAND", shlex.join([sys.executable, "-c", script]))
+    monkeypatch.delenv("BETTUBE_STUDIO_LOCAL_VIDEO_ENDPOINT", raising=False)
+    monkeypatch.setenv("BETTUBE_STUDIO_LOCAL_VIDEO_MODEL", "/models/local-video")
 
     path = generate_scene_video(
         {
