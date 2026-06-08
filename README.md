@@ -290,6 +290,7 @@ Default port is `8517`. Override it with `STREAMLIT_PORT` when using `./start.sh
 React mode uses `BETTUBE_STUDIO_API_PORT` for FastAPI (default `9321`) and `BETTUBE_STUDIO_FRONTEND_PORT` for Vite (default `9322`).
 
 Final render now uses direct `ffmpeg` orchestration and auto-prefers hardware H.264 encoders when the local ffmpeg build supports them. Override with `BETTUBE_STUDIO_VIDEO_ENCODER` or force CPU fallback with `BETTUBE_STUDIO_DISABLE_HW_ENCODER=1`.
+After a standard explainer render, betTube Studio runs a non-blocking in-place web MP4 optimization with `libx264`, AAC audio, yuv420p pixels, `+faststart`, and max 1920px width. If that final optimization fails, the render still succeeds and the failure is recorded in `plan.json` under `meta.web_optimization`. Vertical shorts skip this extra pass.
 When Remotion is available and the project resolves to `motion_only` or `hybrid`, betTube Studio can switch the final render backend to Remotion automatically.
 
 ## Docker
@@ -469,6 +470,7 @@ For live demos, add reviewed `footage_paths` or `footage_manifest` instead of on
 - motion scenes render from normalized template props through Remotion
 - reviewed footage clips can be copied into `clips/` and auto-assigned to `video` scenes
 - final render uses `ffmpeg` or Remotion based on the resolved render backend
+- standard explainers get a final non-blocking in-place ffmpeg web MP4 optimization; vertical shorts do not
 
 ## Batch Rebuild
 

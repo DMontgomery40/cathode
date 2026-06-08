@@ -917,6 +917,108 @@ def compress_video_if_oversized(
     return result
 
 
+def optimize_video_for_web_in_place(
+    output_path: str | Path,
+    *,
+    progress_callback: Callable[[dict[str, Any]], None] | None = None,
+) -> dict[str, Any]:
+    """Transcode a finished explainer MP4 in place into a browser-safe H.264/AAC file."""
+    path = Path(output_path)
+    result: dict[str, Any] = {
+        "path": str(path),
+        "optimized": False,
+        "reason": "",
+        "original_size_bytes": 0,
+        "final_size_bytes": 0,
+        "duration_seconds": None,
+        "original_average_bitrate_mbps": None,
+        "final_average_bitrate_mbps": None,
+    }
+    if not path.exists():
+        result["reason"] = "missing_output"
+        return result
+
+    original_size_bytes = path.stat().st_size
+    duration_seconds = get_media_duration(path)
+    original_average_bitrate = _average_bitrate_mbps(original_size_bytes, duration_seconds)
+    result.update(
+        {
+            "original_size_bytes": int(original_size_bytes),
+            "final_size_bytes": int(original_size_bytes),
+            "duration_seconds": duration_seconds,
+            "original_average_bitrate_mbps": original_average_bitrate,
+            "final_average_bitrate_mbps": original_average_bitrate,
+        }
+    )
+
+    if progress_callback is not None:
+        progress_callback(
+            {
+                "progress": 0.99,
+                "progress_kind": "render",
+                "progress_label": "Optimizing web MP4",
+                "progress_detail": path.name,
+                "progress_status": "running",
+            }
+        )
+
+    try:
+        with tempfile.TemporaryDirectory(prefix="web_optimize_", dir=path.parent) as tmp_dir:
+            optimized_path = Path(tmp_dir) / path.name
+            cmd = [
+                "ffmpeg",
+                "-hide_banner",
+                "-y",
+                "-i",
+                str(path),
+                "-map",
+                "0:v:0",
+                "-map",
+                "0:a?",
+                "-vf",
+                "scale='min(1920,iw)':-2",
+                "-c:v",
+                "libx264",
+                "-preset",
+                "veryfast",
+                "-crf",
+                "23",
+                "-pix_fmt",
+                "yuv420p",
+                "-c:a",
+                "aac",
+                "-b:a",
+                "128k",
+                "-movflags",
+                "+faststart",
+                str(optimized_path),
+            ]
+            _run_command(cmd, capture=True)
+            if not optimized_path.exists() or optimized_path.stat().st_size <= 0:
+                result["reason"] = "optimization_failed"
+                return result
+            optimized_path.replace(path)
+    except (FileNotFoundError, OSError, subprocess.CalledProcessError) as exc:
+        result["reason"] = "optimization_failed"
+        result["error"] = str(exc)
+        print(f"Web MP4 optimization skipped after ffmpeg failure: {exc}")
+        return result
+
+    final_size_bytes = path.stat().st_size
+    final_duration_seconds = get_media_duration(path) or duration_seconds
+    final_average_bitrate = _average_bitrate_mbps(final_size_bytes, final_duration_seconds)
+    result.update(
+        {
+            "optimized": True,
+            "reason": "optimized",
+            "final_size_bytes": int(final_size_bytes),
+            "duration_seconds": final_duration_seconds,
+            "final_average_bitrate_mbps": final_average_bitrate,
+        }
+    )
+    return result
+
+
 def assemble_video(
     scenes: list[dict],
     project_dir: Path,

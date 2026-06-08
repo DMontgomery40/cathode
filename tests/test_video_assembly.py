@@ -10,6 +10,7 @@ from core.video_assembly import (
     get_media_duration,
     get_video_scene_timing,
     normalize_render_profile,
+    optimize_video_for_web_in_place,
 )
 
 
@@ -283,3 +284,35 @@ def test_compress_video_if_oversized_skips_reasonable_outputs(tmp_path):
     assert compression["reason"] == "below_size_threshold"
     assert output_path.exists()
     assert output_path.stat().st_size == original_size
+
+
+def test_optimize_video_for_web_in_place_reencodes_final_output(tmp_path):
+    output_path = tmp_path / "final.mp4"
+    _write_color_video_with_audio(output_path, duration_seconds=1.0, size=(640, 360))
+
+    result = optimize_video_for_web_in_place(output_path)
+
+    assert result["optimized"] is True
+    assert result["reason"] == "optimized"
+    assert result["path"] == str(output_path)
+    assert output_path.exists()
+    assert result["final_size_bytes"] == output_path.stat().st_size
+    output_duration = get_media_duration(output_path)
+    assert output_duration is not None
+    assert 0.8 <= output_duration <= 1.2
+
+
+def test_optimize_video_for_web_in_place_reports_failure_without_replacing(monkeypatch, tmp_path):
+    output_path = tmp_path / "final.mp4"
+    output_path.write_bytes(b"not-video")
+
+    def fail_run_command(*_args, **_kwargs):
+        raise subprocess.CalledProcessError(1, ["ffmpeg"])
+
+    monkeypatch.setattr("core.video_assembly._run_command", fail_run_command)
+
+    result = optimize_video_for_web_in_place(output_path)
+
+    assert result["optimized"] is False
+    assert result["reason"] == "optimization_failed"
+    assert output_path.read_bytes() == b"not-video"

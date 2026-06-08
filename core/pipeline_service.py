@@ -39,7 +39,12 @@ from .project_store import copy_external_files, ensure_project_dir, load_plan, s
 from .remotion_render import build_remotion_manifest, render_manifest_with_remotion, scene_has_renderable_visual
 from .scene_review import default_scene_review_candidates, review_project_scenes
 from .runtime import resolve_workflow_llm_roles, resolve_image_profile, resolve_tts_profile, resolve_video_profile
-from .video_assembly import assemble_video, compress_video_if_oversized, scene_uses_clip_audio
+from .video_assembly import (
+    assemble_video,
+    compress_video_if_oversized,
+    optimize_video_for_web_in_place,
+    scene_uses_clip_audio,
+)
 from .video_gen import generate_scene_video_result
 from .voice_gen import generate_scene_audio_result
 from .workflow import create_plan_from_brief, rebuild_plan_from_meta
@@ -1317,7 +1322,7 @@ def render_project_service(
         image_profile.get("generation_model") or default_image_profile()["generation_model"]
     )
 
-    def _render_video(current_plan: dict[str, Any]) -> tuple[Path, dict[str, Any]]:
+    def _render_video(current_plan: dict[str, Any]) -> tuple[Path, dict[str, Any], dict[str, Any] | None]:
         if render_backend == "remotion":
             output_path = Path(project_dir) / resolved_name
             manifest = build_remotion_manifest(
@@ -1339,11 +1344,43 @@ def render_project_service(
                 fps=int(render_profile.get("fps") or 24),
                 render_profile=render_profile,
             )
-        return rendered_path, compress_video_if_oversized(
+        compression_result = compress_video_if_oversized(
             rendered_path,
             render_profile=render_profile,
             progress_callback=progress_callback,
         )
+        web_optimization = None
+        if not is_short_form:
+            try:
+                web_optimization = optimize_video_for_web_in_place(
+                    rendered_path,
+                    progress_callback=progress_callback,
+                )
+            except Exception as exc:
+                web_optimization = {
+                    "path": str(rendered_path),
+                    "optimized": False,
+                    "reason": "optimization_failed",
+                    "error": str(exc),
+                }
+                print(f"Web MP4 optimization skipped after unexpected failure: {exc}")
+        return rendered_path, compression_result, web_optimization
+
+    def _persist_render_result(
+        current_plan: dict[str, Any],
+        video_path: Path,
+        compression_result: dict[str, Any],
+        web_optimization: dict[str, Any] | None,
+    ) -> dict[str, Any]:
+        current_meta = current_plan.setdefault("meta", {})
+        current_meta["video_path"] = str(video_path)
+        current_meta["rendered_utc"] = utc_now_iso()
+        current_meta["video_compression"] = compression_result
+        if web_optimization is not None:
+            current_meta["web_optimization"] = web_optimization
+        else:
+            current_meta.pop("web_optimization", None)
+        return save_plan(project_dir, current_plan)
 
     def _run_review(trigger: str, scene_uids: list[str] | None = None) -> dict[str, Any]:
         refreshed_plan = load_plan(project_dir) or plan
@@ -1475,11 +1512,8 @@ def render_project_service(
             save_plan(project_dir, plan)
             plan = load_plan(project_dir) or plan
 
-    video_path, compression_result = _render_video(plan)
-    plan.setdefault("meta", {})["video_path"] = str(video_path)
-    plan.setdefault("meta", {})["rendered_utc"] = utc_now_iso()
-    plan.setdefault("meta", {})["video_compression"] = compression_result
-    save_plan(project_dir, plan)
+    video_path, compression_result, web_optimization = _render_video(plan)
+    plan = _persist_render_result(plan, video_path, compression_result, web_optimization)
     try:
         scene_review = _run_review("post_render_review")
     except Exception as exc:
@@ -1501,6 +1535,7 @@ def render_project_service(
             "missing_audio_scenes": [],
             "video_path": str(video_path),
             "compression": compression_result,
+            "web_optimization": web_optimization,
             "scene_review_error": str(exc),
         }
     plan = load_plan(project_dir) or plan
@@ -1515,11 +1550,8 @@ def render_project_service(
         synonym_review_trigger="post_synonym_regenerate_review",
     )
     if repairs_applied:
-        video_path, compression_result = _render_video(plan)
-        plan.setdefault("meta", {})["video_path"] = str(video_path)
-        plan.setdefault("meta", {})["rendered_utc"] = utc_now_iso()
-        plan.setdefault("meta", {})["video_compression"] = compression_result
-        save_plan(project_dir, plan)
+        video_path, compression_result, web_optimization = _render_video(plan)
+        plan = _persist_render_result(plan, video_path, compression_result, web_optimization)
         scene_review = _run_review("post_render_review_after_repairs")
     if progress_callback is not None:
         progress_callback(
@@ -1546,6 +1578,7 @@ def render_project_service(
             "missing_audio_scenes": [],
             "video_path": str(video_path),
             "compression": compression_result,
+            "web_optimization": web_optimization,
             "scene_review": scene_review,
             "text_review_failures": unresolved_text_repairs,
         }
@@ -1557,6 +1590,7 @@ def render_project_service(
         "missing_audio_scenes": [],
         "video_path": str(video_path),
         "compression": compression_result,
+        "web_optimization": web_optimization,
         "scene_review": scene_review,
     }
 

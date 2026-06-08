@@ -49,6 +49,17 @@ def test_render_project_service_persists_video_compression_metadata(monkeypatch,
         "core.pipeline_service.compress_video_if_oversized",
         lambda *args, **kwargs: compression_payload,
     )
+    web_payload = {
+        "path": str(rendered_video_path),
+        "optimized": True,
+        "reason": "optimized",
+        "original_size_bytes": 321000,
+        "final_size_bytes": 210000,
+    }
+    monkeypatch.setattr(
+        "core.pipeline_service.optimize_video_for_web_in_place",
+        lambda *args, **kwargs: web_payload,
+    )
     monkeypatch.setattr(
         "core.pipeline_service.save_plan",
         lambda _project_dir, updated_plan: saved_plans.append(updated_plan) or updated_plan,
@@ -63,10 +74,12 @@ def test_render_project_service_persists_video_compression_metadata(monkeypatch,
     assert result["status"] == "succeeded"
     assert result["video_path"] == str(rendered_video_path)
     assert result["compression"] == compression_payload
+    assert result["web_optimization"] == web_payload
     assert result["scene_review"]["provider"] == "codex"
     assert saved_plans
     assert saved_plans[-1]["meta"]["video_path"] == str(rendered_video_path)
     assert saved_plans[-1]["meta"]["video_compression"] == compression_payload
+    assert saved_plans[-1]["meta"]["web_optimization"] == web_payload
 
 
 def test_render_project_service_allows_clip_audio_video_without_audio_path(monkeypatch, tmp_path):
@@ -105,6 +118,10 @@ def test_render_project_service_allows_clip_audio_video_without_audio_path(monke
         lambda *args, **kwargs: {"path": str(rendered_video_path), "compressed": False},
     )
     monkeypatch.setattr(
+        "core.pipeline_service.optimize_video_for_web_in_place",
+        lambda *args, **kwargs: {"path": str(rendered_video_path), "optimized": True},
+    )
+    monkeypatch.setattr(
         "core.pipeline_service.save_plan",
         lambda _project_dir, updated_plan: saved_plans.append(updated_plan) or updated_plan,
     )
@@ -117,6 +134,62 @@ def test_render_project_service_allows_clip_audio_video_without_audio_path(monke
 
     assert result["status"] == "succeeded"
     assert result["video_path"] == str(rendered_video_path)
+
+
+def test_render_project_service_web_optimization_failure_is_nonblocking(monkeypatch, tmp_path):
+    project_dir = tmp_path / "render_project"
+    project_dir.mkdir(parents=True, exist_ok=True)
+    audio_path = project_dir / "audio" / "scene_000.wav"
+    audio_path.parent.mkdir(parents=True, exist_ok=True)
+    audio_path.write_bytes(b"wav")
+
+    plan = {
+        "meta": {
+            "render_profile": {
+                "render_backend": "ffmpeg",
+                "fps": 24,
+            }
+        },
+        "scenes": [
+            {
+                "id": 1,
+                "scene_type": "image",
+                "audio_path": str(audio_path),
+            }
+        ],
+    }
+    rendered_video_path = project_dir / "rendered.mp4"
+    rendered_video_path.write_bytes(b"mp4")
+    saved_plans: list[dict] = []
+
+    def fail_web_optimization(*_args, **_kwargs):
+        raise RuntimeError("ffmpeg web pass failed")
+
+    monkeypatch.setattr("core.pipeline_service.load_plan", lambda _: plan)
+    monkeypatch.setattr("core.pipeline_service._scene_has_primary_visual", lambda *args, **kwargs: True)
+    monkeypatch.setattr("core.pipeline_service.assemble_video", lambda *args, **kwargs: rendered_video_path)
+    monkeypatch.setattr(
+        "core.pipeline_service.compress_video_if_oversized",
+        lambda *args, **kwargs: {"path": str(rendered_video_path), "compressed": False},
+    )
+    monkeypatch.setattr("core.pipeline_service.optimize_video_for_web_in_place", fail_web_optimization)
+    monkeypatch.setattr(
+        "core.pipeline_service.save_plan",
+        lambda _project_dir, updated_plan: saved_plans.append(copy.deepcopy(updated_plan)) or updated_plan,
+    )
+    monkeypatch.setattr(
+        "core.pipeline_service.review_project_scenes",
+        lambda *_args, **_kwargs: {"provider": "codex", "scene_count": 1, "review_dir": "/tmp/review"},
+    )
+
+    result = render_project_service(project_dir)
+
+    assert result["status"] == "succeeded"
+    assert result["video_path"] == str(rendered_video_path)
+    assert result["web_optimization"]["optimized"] is False
+    assert result["web_optimization"]["reason"] == "optimization_failed"
+    assert "ffmpeg web pass failed" in result["web_optimization"]["error"]
+    assert saved_plans[-1]["meta"]["web_optimization"] == result["web_optimization"]
 
 
 def test_render_project_service_reasserts_short_form_render_profile(monkeypatch, tmp_path):
@@ -174,6 +247,10 @@ def test_render_project_service_reasserts_short_form_render_profile(monkeypatch,
         lambda *args, **kwargs: {"path": str(rendered_video_path), "compressed": False},
     )
     monkeypatch.setattr(
+        "core.pipeline_service.optimize_video_for_web_in_place",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("shorts must skip web optimization")),
+    )
+    monkeypatch.setattr(
         "core.pipeline_service.review_project_scenes",
         lambda *_args, **_kwargs: {"provider": "codex", "scene_count": 1, "review_dir": "/tmp/review"},
     )
@@ -190,6 +267,7 @@ def test_render_project_service_reasserts_short_form_render_profile(monkeypatch,
     assert render_kwargs["render_profile"]["render_strategy"] == "force_ffmpeg"
     assert saved_plans[0]["meta"]["render_profile"]["fps"] == 30
     assert saved_plans[0]["meta"]["render_profile"]["render_backend"] == "ffmpeg"
+    assert "web_optimization" not in saved_plans[-1]["meta"]
 
 
 def test_normalize_authored_image_scene_identities_preserves_existing_mixed_timeline_paths(tmp_path):
@@ -361,6 +439,10 @@ def test_render_project_service_scopes_exact_repairs_and_preserves_canonical_sli
     monkeypatch.setattr("core.pipeline_service._scene_has_primary_visual", lambda *args, **kwargs: True)
     monkeypatch.setattr("core.pipeline_service.assemble_video", lambda *args, **kwargs: rendered_video_path)
     monkeypatch.setattr("core.pipeline_service.compress_video_if_oversized", lambda *args, **kwargs: compression_payload)
+    monkeypatch.setattr(
+        "core.pipeline_service.optimize_video_for_web_in_place",
+        lambda *args, **kwargs: {"path": str(rendered_video_path), "optimized": True},
+    )
     monkeypatch.setattr("core.pipeline_service.review_project_scenes", fake_review)
     monkeypatch.setattr("core.pipeline_service.edit_image", fake_edit_image)
     monkeypatch.setattr(
@@ -497,6 +579,10 @@ def test_render_project_service_reports_unresolved_text_repairs_honestly(monkeyp
     monkeypatch.setattr("core.pipeline_service._scene_has_primary_visual", lambda *args, **kwargs: True)
     monkeypatch.setattr("core.pipeline_service.assemble_video", lambda *args, **kwargs: rendered_video_path)
     monkeypatch.setattr("core.pipeline_service.compress_video_if_oversized", lambda *args, **kwargs: compression_payload)
+    monkeypatch.setattr(
+        "core.pipeline_service.optimize_video_for_web_in_place",
+        lambda *args, **kwargs: {"path": str(rendered_video_path), "optimized": True},
+    )
     monkeypatch.setattr("core.pipeline_service.review_project_scenes", fake_review)
     monkeypatch.setattr("core.pipeline_service.edit_image", lambda *_args, **_kwargs: edited_path)
     monkeypatch.setattr(
@@ -631,6 +717,10 @@ def test_render_project_service_applies_pre_render_native_candidate_winner(monke
     monkeypatch.setattr("core.pipeline_service._scene_has_primary_visual", lambda *args, **kwargs: True)
     monkeypatch.setattr("core.pipeline_service.assemble_video", fake_assemble)
     monkeypatch.setattr("core.pipeline_service.compress_video_if_oversized", lambda *args, **kwargs: {"path": str(rendered_video_path), "compressed": False})
+    monkeypatch.setattr(
+        "core.pipeline_service.optimize_video_for_web_in_place",
+        lambda *args, **kwargs: {"path": str(rendered_video_path), "optimized": True},
+    )
     monkeypatch.setattr("core.pipeline_service.review_project_scenes", fake_review)
 
     result = render_project_service(project_dir)
