@@ -4,6 +4,7 @@ from core.runtime import (
     available_tts_providers,
     available_video_generation_providers,
     check_api_keys,
+    choose_llm_provider,
     load_repo_env,
     remotion_capabilities,
     resolve_workflow_llm_roles,
@@ -195,6 +196,59 @@ def test_resolve_workflow_llm_roles_keeps_product_pipeline_on_anthropic(monkeypa
 
     assert creative_provider == "anthropic"
     assert treatment_provider == "anthropic"
+
+
+def test_choose_llm_provider_fallback_stays_on_generic_supported_providers(monkeypatch):
+    monkeypatch.setattr(
+        "core.runtime.check_api_keys",
+        lambda: {
+            "openai": True,
+            "anthropic": True,
+            "openrouter": True,
+            "deepseek": True,
+            "replicate": False,
+            "dashscope": False,
+            "elevenlabs": False,
+        },
+    )
+
+    assert choose_llm_provider() == "anthropic"
+
+
+def test_choose_llm_provider_ignores_storyboard_only_env_default_for_generic_fallback(monkeypatch):
+    monkeypatch.setenv("CATHODE_PREFERRED_LLM_PROVIDER", "openrouter_glm")
+    monkeypatch.setattr(
+        "core.runtime.check_api_keys",
+        lambda: {
+            "openai": True,
+            "anthropic": False,
+            "openrouter": True,
+            "deepseek": True,
+            "replicate": False,
+            "dashscope": False,
+            "elevenlabs": False,
+        },
+    )
+
+    assert choose_llm_provider() == "openai"
+
+
+def test_choose_llm_provider_allows_explicit_storyboard_provider_request(monkeypatch):
+    monkeypatch.setattr(
+        "core.runtime.check_api_keys",
+        lambda: {
+            "openai": True,
+            "anthropic": True,
+            "openrouter": True,
+            "deepseek": True,
+            "replicate": False,
+            "dashscope": False,
+            "elevenlabs": False,
+        },
+    )
+
+    assert choose_llm_provider("glm") == "openrouter_glm"
+    assert choose_llm_provider("deepseek") == "deepseek"
 
 
 def test_resolve_workflow_llm_roles_allows_claude_print_story_writer(monkeypatch):

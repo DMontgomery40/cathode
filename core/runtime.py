@@ -288,27 +288,33 @@ def available_render_backends() -> list[str]:
 
 
 def choose_llm_provider(preferred: str | None = None) -> str:
-    """Choose the best available storyboard LLM provider for the current environment."""
+    """Choose an LLM provider that generic LLM endpoints can safely call.
+
+    OpenRouter GLM and DeepSeek are supported by the brief/storyboard workflow,
+    but not by every scene-refinement or image-analysis route that uses this
+    generic chooser. Only an explicit caller preference may select those lanes.
+    """
     keys = check_api_keys()
-    candidate = str(
-        preferred
-        or os.getenv("CATHODE_PREFERRED_LLM_PROVIDER")
+    explicit_candidate = str(preferred or "").strip().lower()
+    env_candidate = str(
+        os.getenv("CATHODE_PREFERRED_LLM_PROVIDER")
         or os.getenv("CATHODE_LLM_PROVIDER")
         or ""
     ).strip().lower()
-    if candidate in {"glm", "openrouter", OPENROUTER_PROVIDER} and keys.get("openrouter"):
+    candidate = explicit_candidate or env_candidate
+    if explicit_candidate in {"glm", "openrouter", OPENROUTER_PROVIDER} and keys.get("openrouter"):
         return OPENROUTER_PROVIDER
-    if candidate in {"deepseek", "deepseek_v4", "deepseek-v4", DEEPSEEK_PROVIDER} and keys.get("deepseek"):
+    if explicit_candidate in {"deepseek", "deepseek_v4", "deepseek-v4", DEEPSEEK_PROVIDER} and keys.get("deepseek"):
         return DEEPSEEK_PROVIDER
     if candidate == "claude_print" and shutil.which(os.getenv("CLAUDE_CODE_BINARY") or "claude"):
         return candidate
-    if candidate and _llm_key_present(keys, candidate):
+    if candidate in {"anthropic", "openai"} and _llm_key_present(keys, candidate):
         return candidate
 
-    for provider in ("deepseek", "openrouter", "anthropic", "openai"):
+    for provider in ("anthropic", "openai"):
         if keys.get(provider):
-            return OPENROUTER_PROVIDER if provider == "openrouter" else provider
-    raise ValueError("No LLM API keys configured. Set DEEPSEEK_API_KEY, OPENROUTER_API_KEY, ANTHROPIC_API_KEY, or OPENAI_API_KEY.")
+            return provider
+    raise ValueError("No generic LLM API keys configured. Set ANTHROPIC_API_KEY or OPENAI_API_KEY.")
 
 
 def resolve_workflow_llm_roles(preferred: str | None = None) -> tuple[str, str]:
