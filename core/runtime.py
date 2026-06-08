@@ -311,15 +311,13 @@ def choose_llm_provider(preferred: str | None = None, *, allow_storyboard_provid
     if candidate in {"anthropic", "openai"} and _llm_key_present(keys, candidate):
         return candidate
 
-    provider_order = (
-        ("deepseek", "openrouter", "anthropic", "openai")
-        if allow_storyboard_providers
-        else ("anthropic", "openai")
-    )
-    for provider in provider_order:
+    for provider in ("anthropic", "openai"):
         if keys.get(provider):
-            return OPENROUTER_PROVIDER if provider == "openrouter" else provider
+            return provider
     if allow_storyboard_providers:
+        for provider in ("deepseek", "openrouter"):
+            if keys.get(provider):
+                return OPENROUTER_PROVIDER if provider == "openrouter" else provider
         raise ValueError("No LLM API keys configured. Set DEEPSEEK_API_KEY, OPENROUTER_API_KEY, ANTHROPIC_API_KEY, or OPENAI_API_KEY.")
     raise ValueError("No generic LLM API keys configured. Set ANTHROPIC_API_KEY or OPENAI_API_KEY.")
 

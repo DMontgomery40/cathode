@@ -269,6 +269,23 @@ def test_choose_llm_provider_storyboard_opt_in_uses_env_storyboard_provider(monk
     assert choose_llm_provider(allow_storyboard_providers=True) == "openrouter_glm"
 
 
+def test_choose_llm_provider_storyboard_opt_in_defaults_to_generic_provider_without_override(monkeypatch):
+    monkeypatch.setattr(
+        "core.runtime.check_api_keys",
+        lambda: {
+            "openai": True,
+            "anthropic": True,
+            "openrouter": True,
+            "deepseek": True,
+            "replicate": False,
+            "dashscope": False,
+            "elevenlabs": False,
+        },
+    )
+
+    assert choose_llm_provider(allow_storyboard_providers=True) == "anthropic"
+
+
 def test_choose_llm_provider_storyboard_opt_in_can_fall_back_to_extended_provider(monkeypatch):
     monkeypatch.setattr(
         "core.runtime.check_api_keys",
