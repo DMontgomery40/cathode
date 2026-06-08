@@ -1,0 +1,62 @@
+{
+  "request_date": "2026-06-08",
+  "minimum_target_date": "2026-06-11",
+  "repository": "betTube Studio",
+  "repo_path": "/Users/davidmontgomery/bettube-studio",
+  "source_release": "https://github.com/HandBrake/HandBrake/releases/tag/1.11.2",
+  "release_published_at": "2026-06-07T19:08:25Z",
+  "authorising_manager": {
+    "display_name": "Alan Reed",
+    "search_key": "alanreed"
+  },
+  "service_hub_route": "Download File / Software Download Request",
+  "type_of_download": "Application",
+  "application_file_type": "Other",
+  "is_update_to_existing_application": {
+    "value": "No",
+    "reason": "User corrected the prior update answer as intended for something else. This is a new approval/download request for an external CLI tool needed by the repo.",
+    "live_form_status": "All required fields filled; awaiting explicit submit confirmation."
+  },
+  "business_justification": "Need approval to use HandBrakeCLI 1.11.2 for betTube Studio.\n\nbetTube Studio renders and manages local MP4 video projects. HandBrakeCLI is needed as a cross-platform command-line video transcode/compression tool for repo workflows where we need consistent MP4 optimisation across Windows, macOS, and Linux.\n\nThis is for approved project use only. We will use the upstream GitHub release files and signature files, and will not commit downloaded binaries into the repo.",
+  "expected_files": {
+    "windows_cli": [
+      "HandBrakeCLI-1.11.2-win-x86_64.zip",
+      "HandBrakeCLI-1.11.2-win-x86_64.zip.sig",
+      "HandBrakeCLI-1.11.2-win-aarch64.zip",
+      "HandBrakeCLI-1.11.2-win-aarch64.zip.sig"
+    ],
+    "macos_cli": [
+      "HandBrakeCLI-1.11.2.dmg",
+      "HandBrakeCLI-1.11.2.dmg.sig"
+    ],
+    "linux": [
+      "HandBrake-1.11.2-source.tar.bz2",
+      "HandBrake-1.11.2-source.tar.bz2.sig",
+      "HandBrake-1.11.2-x86_64.flatpak",
+      "HandBrake-1.11.2-x86_64.flatpak.sig",
+      "HandBrake.Plugin.IntelMediaSDK-1.11.2-x86_64.flatpak",
+      "HandBrake.Plugin.IntelMediaSDK-1.11.2-x86_64.flatpak.sig"
+    ]
+  },
+  "source_urls": [
+    "https://github.com/HandBrake/HandBrake/releases/tag/1.11.2",
+    "https://github.com/HandBrake/HandBrake/releases/download/1.11.2/HandBrakeCLI-1.11.2-win-x86_64.zip",
+    "https://github.com/HandBrake/HandBrake/releases/download/1.11.2/HandBrakeCLI-1.11.2-win-x86_64.zip.sig",
+    "https://github.com/HandBrake/HandBrake/releases/download/1.11.2/HandBrakeCLI-1.11.2-win-aarch64.zip",
+    "https://github.com/HandBrake/HandBrake/releases/download/1.11.2/HandBrakeCLI-1.11.2-win-aarch64.zip.sig",
+    "https://github.com/HandBrake/HandBrake/releases/download/1.11.2/HandBrakeCLI-1.11.2.dmg",
+    "https://github.com/HandBrake/HandBrake/releases/download/1.11.2/HandBrakeCLI-1.11.2.dmg.sig",
+    "https://github.com/HandBrake/HandBrake/releases/download/1.11.2/HandBrake-1.11.2-source.tar.bz2",
+    "https://github.com/HandBrake/HandBrake/releases/download/1.11.2/HandBrake-1.11.2-source.tar.bz2.sig",
+    "https://github.com/HandBrake/HandBrake/releases/download/1.11.2/HandBrake-1.11.2-x86_64.flatpak",
+    "https://github.com/HandBrake/HandBrake/releases/download/1.11.2/HandBrake-1.11.2-x86_64.flatpak.sig",
+    "https://github.com/HandBrake/HandBrake/releases/download/1.11.2/HandBrake.Plugin.IntelMediaSDK-1.11.2-x86_64.flatpak",
+    "https://github.com/HandBrake/HandBrake/releases/download/1.11.2/HandBrake.Plugin.IntelMediaSDK-1.11.2-x86_64.flatpak.sig"
+  ],
+  "warnings": [
+    "Pre-approved/blacklisted confirmation should only be ticked after the user confirms those lists have been checked.",
+    "Do not submit until the user confirms submission in the browser workflow.",
+    "User confirmed the pre-approved/blacklisted check on 2026-06-08.",
+    "Live form currently has authorising manager alanreed, target date Jun 11, 2026, login required No, and package type Other."
+  ]
+}
