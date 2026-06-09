@@ -10,7 +10,7 @@ betTube Studio is a local-first explainer-video pipeline with three main surface
 - a legacy Streamlit app for the older manual step-by-step path
 - an MCP server for agent/client-driven runs
 
-It turns rough notes, source text, or a finished script into a local project folder plus a rendered MP4, and it now supports classic, hybrid, and motion-first composition modes.
+It turns rough notes, source text, or a finished script into a local project folder plus a rendered MP4, and it supports classic, mixed-media, and Remotion composition modes.
 
 ## Watch The Demo
 
@@ -36,7 +36,7 @@ If you only remember one thing, remember this:
 ## What It Does
 
 - brief-driven storyboard generation with `source_mode` and `composition_mode`
-- image scenes, video scenes, and Remotion-backed motion scenes
+- image scenes, video scenes, and Remotion scenes
 - a one-button GUI background job path plus storyboard-only/manual editing when you want it
 - scene-by-scene narration, prompt, media, preview, and operator-log editing
 - persisted demo-target metadata and reviewed footage manifests for live-demo runs
@@ -101,14 +101,16 @@ This path is capture-first and review-first. It does not assume existing README 
 
 betTube Studio no longer stops at still-image and clip-only storyboards.
 
+Remotion is the optional React-based renderer for advanced animated/template scenes. It is not installed in the normal build, so Remotion scenes are disabled by default. The default and fallback final render path is always `ffmpeg`; advanced Remotion scenes and previews require the optional Remotion toolchain in `frontend/` to be installed and runnable on this machine.
+
 - `classic`
   image + video scenes, with `ffmpeg` as the default final render backend
 - `hybrid`
-  mix image, video, and motion scenes in one project; Remotion is the default render backend when the local toolchain is available
+  mix image, video, and Remotion scenes in one project; Remotion is the default render backend when the optional local toolchain is available, otherwise the render falls back to `ffmpeg`
 - `motion_only`
-  build the project around motion scenes plus narration
+  build the project around Remotion scenes plus narration
 
-Motion scenes are template-first in the current product and render through the local Remotion toolchain bundled in `frontend/`. The React app only exposes motion and hybrid options when the Remotion toolchain is actually runnable on this machine.
+Remotion scenes are template-first in the current product and render through the optional local Remotion toolchain bundled in `frontend/`. The React app only exposes the Remotion-backed composition options when that toolchain is actually runnable on this machine.
 
 Important timing rule: narration audio is still the source of truth. betTube Studio computes scene durations, video trim/speed/hold behavior, and the Remotion manifest from the same timing contract, so hybrid renders stay in sync instead of drifting.
 
@@ -118,14 +120,14 @@ Important timing rule: narration audio is still the source of truth. betTube Stu
 - LocalLLaMA short demo: `docs/assets/localllama-demo.mp4`
 - Mixed-media workflow clip: `docs/assets/ui-workflow-clip.mp4`
 - Brief Studio screenshot: `docs/assets/brief-studio-focus.png`
-- Motion scene workspace screenshot: `docs/assets/motion-scene-focus.png`
+- Remotion scene workspace screenshot: `docs/assets/motion-scene-focus.png`
 - Render workspace screenshot: `docs/assets/render-finished-focus.png`
 - Sample prompt brief: `docs/demo-brief.md`
 
 ### Current UI
 
 <p align="center">
-  <img src="docs/assets/motion-scene-focus.png" alt="betTube Studio Scenes workspace showing a motion scene with Remotion preview controls" width="100%">
+  <img src="docs/assets/motion-scene-focus.png" alt="betTube Studio Scenes workspace showing a Remotion scene with Remotion preview controls" width="100%">
 </p>
 
 <p align="center">
@@ -145,10 +147,18 @@ betTube Studio is env-driven on purpose.
 - `DASHSCOPE_API_KEY` or `ALIBABA_API_KEY`: optional DashScope image edit
 - `BETTUBE_STUDIO_LOCAL_VIDEO_COMMAND` and/or `BETTUBE_STUDIO_LOCAL_VIDEO_ENDPOINT`: optional local video generation for video scenes
 - `BETTUBE_STUDIO_LOCAL_VIDEO_MODEL`: optional local model label or path passed through to that backend
-- Node + the installed frontend workspace: local Remotion motion/hybrid rendering
+- Node + the installed optional frontend workspace: local Remotion scene/hybrid rendering
 - Kokoro remains the always-available local voice option
 
 Only configured providers appear in the UI. If you leave a key out, the UI stays quieter.
+
+## Cost Estimates vs Real Spend
+
+betTube Studio displays cost estimates and budget guardrails computed in-process from public provider list prices (`core/costs.py`). These figures are **not** bet365 accounting-grade spend data.
+
+Authoritative spend for traffic routed through the bet365 AIProxy / LiteLLM proxy is captured centrally and visible in the bet365 AIProxy usage dashboard (Kibana). The app does not query that source today.
+
+Integrating a real per-request spend source — for example the LiteLLM `/spend` endpoints on the innovation proxy, or the AIProxy ELK ledger — is a documented future step that requires owner confirmation of endpoint availability and auth before implementation.
 
 ## Local Vs Cloud
 
@@ -160,10 +170,10 @@ betTube Studio is local-first, not cloud-hosted.
 - uploaded stills and clips stay local
 - Kokoro is local TTS
 - video scenes can use a local generation backend when configured
-- motion and hybrid renders happen locally through Remotion when available
+- Remotion and hybrid renders happen locally through the optional Remotion toolchain when available, otherwise the final render falls back to `ffmpeg`
 - persisted job state and logs live under `projects/<project>/.bettube-studio/jobs/`
 
-For visuals, the built-in AI image path can run either through Replicate or through a configured local Hugging Face Qwen model. If neither is configured, you can still upload stills yourself. Video scenes can come from reviewed footage, the live-demo agent path, or a configured local video backend. Motion scenes render through the local Remotion layer when the frontend toolchain is installed.
+For visuals, the built-in AI image path can run either through Replicate or through a configured local Hugging Face Qwen model. If neither is configured, you can still upload stills yourself. Video scenes can come from reviewed footage, the live-demo agent path, or a configured local video backend. Remotion scenes render through the optional local Remotion layer when the frontend toolchain is installed; without it, the render falls back to `ffmpeg`.
 
 ## Local Image Backend
 
@@ -263,7 +273,7 @@ React mode uses `BETTUBE_STUDIO_API_PORT` for FastAPI (default `9321`) and `BETT
 
 Final render now uses direct `ffmpeg` orchestration and auto-prefers hardware H.264 encoders when the local ffmpeg build supports them. Override with `BETTUBE_STUDIO_VIDEO_ENCODER` or force CPU fallback with `BETTUBE_STUDIO_DISABLE_HW_ENCODER=1`.
 After a standard explainer render, betTube Studio runs a non-blocking in-place web MP4 optimization with `libx264`, AAC audio, yuv420p pixels, `+faststart`, and max 1920px width. If that final optimization fails, the render still succeeds and the failure is recorded in `plan.json` under `meta.web_optimization`. Vertical shorts skip this extra pass.
-When Remotion is available and the project resolves to `motion_only` or `hybrid`, betTube Studio can switch the final render backend to Remotion automatically.
+When the optional Remotion toolchain is available and the project resolves to `motion_only` or `hybrid`, betTube Studio can switch the final render backend to Remotion automatically. When Remotion is not installed, the final render stays on the default `ffmpeg` path.
 
 ## Docker
 
@@ -360,12 +370,19 @@ sudo apt-get install python3.10 ffmpeg espeak-ng
 
 ### Python Dependencies
 
+betTube Studio uses a `pyproject.toml` install flow and targets Python 3.10 (`requires-python >=3.10`). The intended local runtime is `.venv/bin/python3.10`; create the virtualenv first, then install the project in editable mode:
+
 ```bash
+python3.10 -m venv .venv
 # Streamlit app only:
-/opt/homebrew/bin/python3.10 -m pip install -e .
+.venv/bin/python3.10 -m pip install -e .
 # React/FastAPI stack (adds fastapi/uvicorn/httpx):
-/opt/homebrew/bin/python3.10 -m pip install -e '.[server]'
+.venv/bin/python3.10 -m pip install -e '.[server]'
 ```
+
+`uv` works the same way if you prefer it (`uv pip install -e .` / `uv pip install -e '.[server]'`).
+
+Package installs should come from approved internal mirrors, configured via environment variables rather than baked-in URLs. For Python, set `UV_INDEX_URL`, `PIP_INDEX_URL`, and/or `PIP_EXTRA_INDEX_URL`; for npm, set `NPM_CONFIG_REGISTRY`. No registry URLs are hardcoded in this repo.
 
 ### Environment
 
@@ -442,7 +459,7 @@ For live demos, add reviewed `footage_paths` or `footage_manifest` instead of on
 - image scenes hold for narration duration
 - video scenes trim to narration duration
 - short clips can freeze on the last frame to stay in sync
-- motion scenes render from normalized template props through Remotion
+- Remotion scenes render from normalized template props through the optional Remotion toolchain
 - reviewed footage clips can be copied into `clips/` and auto-assigned to `video` scenes
 - final render uses `ffmpeg` or Remotion based on the resolved render backend
 - standard explainers get a final non-blocking in-place ffmpeg web MP4 optimization; vertical shorts do not

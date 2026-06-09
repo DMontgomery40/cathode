@@ -2,6 +2,7 @@ import { useNavigate } from 'react-router-dom'
 import { GlassPanel } from '../../components/primitives/GlassPanel.tsx'
 import { Badge } from '../../components/primitives/Badge.tsx'
 import type { ProjectSummary } from '../../lib/api/projects.ts'
+import type { JobStatus } from '../../lib/api/jobs.ts'
 import { projectMediaUrl } from '../../lib/media-url.ts'
 import { projectModeFromSummary } from '../../lib/project-mode.ts'
 
@@ -20,18 +21,53 @@ function formatProjectDate(iso?: string | null): string | null {
   })
 }
 
+function statusVariant(status: string): 'default' | 'success' | 'active' | 'warning' | 'danger' {
+  switch (status) {
+    case 'Queued':
+    case 'Running':
+      return 'active'
+    case 'Rendered':
+    case 'Completed':
+      return 'success'
+    case 'Partial':
+    case 'Cancelled':
+      return 'warning'
+    case 'Failed':
+    case 'Error':
+      return 'danger'
+    default:
+      return 'default'
+  }
+}
+
+function projectStatus(project: ProjectSummary): { label: string; variant: ReturnType<typeof statusVariant> } {
+  const latest = project.jobs?.latest_status as JobStatus | null | undefined
+  if (latest === 'queued') return { label: 'Queued', variant: statusVariant('Queued') }
+  if (latest === 'running') return { label: 'Running', variant: statusVariant('Running') }
+  if (latest === 'failed') return { label: 'Failed', variant: statusVariant('Failed') }
+  if (latest === 'partial_success') return { label: 'Partial', variant: statusVariant('Partial') }
+  if (latest === 'cancelled') return { label: 'Cancelled', variant: statusVariant('Cancelled') }
+  if (project.has_video) return { label: 'Rendered', variant: statusVariant('Rendered') }
+  if (latest === 'succeeded') return { label: 'Completed', variant: statusVariant('Completed') }
+  if (latest === 'error') return { label: 'Error', variant: statusVariant('Error') }
+  if (project.scene_count > 0) return { label: 'Draft', variant: statusVariant('Draft') }
+  return { label: 'Empty', variant: statusVariant('Empty') }
+}
+
 export function ProjectCard({ project }: ProjectCardProps) {
   const navigate = useNavigate()
 
-  const statusVariant = project.has_video ? 'success' : project.scene_count > 0 ? 'active' : 'default'
-  const statusLabel = project.has_video ? 'Rendered' : project.scene_count > 0 ? 'In Progress' : 'Empty'
+  const status = projectStatus(project)
   const projectMode = projectModeFromSummary(project)
   const createdLabel = formatProjectDate(project.created_utc || project.updated_utc)
 
   const target = project.scene_count > 0
     ? `/projects/${encodeURIComponent(project.name)}/scenes`
+    : (project.jobs?.counts?.total ?? 0) > 0
+      ? `/projects/${encodeURIComponent(project.name)}/queue`
     : `/projects/${encodeURIComponent(project.name)}/brief`
   const thumbnailUrl = projectMediaUrl(project.name, project.thumbnail_path)
+  const jobCount = project.jobs?.counts?.total ?? 0
 
   return (
     <GlassPanel
@@ -87,8 +123,8 @@ export function ProjectCard({ project }: ProjectCardProps) {
           >
             {project.name}
           </h3>
-          <Badge variant={statusVariant} size="sm">
-            {statusLabel}
+          <Badge variant={status.variant} size="sm">
+            {status.label}
           </Badge>
         </div>
         {projectMode.id === 'vertical_short' ? (
@@ -106,7 +142,11 @@ export function ProjectCard({ project }: ProjectCardProps) {
             fontFamily: 'var(--font-mono)',
           }}
         >
-          {project.scene_count} {project.scene_count === 1 ? 'scene' : 'scenes'}
+          {project.scene_count > 0
+            ? `${project.scene_count} ${project.scene_count === 1 ? 'scene' : 'scenes'}`
+            : jobCount > 0
+              ? `${jobCount} ${jobCount === 1 ? 'job' : 'jobs'}`
+              : 'No scenes yet'}
         </p>
         {createdLabel ? (
           <p

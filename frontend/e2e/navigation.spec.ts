@@ -229,8 +229,6 @@ test.describe('Cross-route navigation', () => {
     await page.goto('/projects/nonexistent_project_xyz/scenes')
     // Should show empty state rather than crash
     await page.waitForTimeout(2000)
-    const noScenes = page.locator('text=No scenes yet')
-    const loading = page.locator('text=Loading')
     const scenes = page.getByRole('heading', { name: 'Scenes' })
     // At minimum, page should render something
     await expect(scenes).toBeVisible()

@@ -1,7 +1,10 @@
 import type { ImageActionHistoryEntry } from './schemas/plan'
 
 export function formatImageActionLabel(action: string): string {
-  const value = String(action || '').replace(/_/g, ' ')
+  const value = String(action || '').replace(/_/g, ' ').trim().toLowerCase()
+  if (value === 'edit') return 'Image edit'
+  if (value === 'generate') return 'Image generate'
+  if (value === 'upload') return 'Image upload'
   return value ? value.replace(/\b\w/g, (char) => char.toUpperCase()) : 'Image action'
 }
 

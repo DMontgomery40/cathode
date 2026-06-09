@@ -4,13 +4,34 @@ from __future__ import annotations
 
 from typing import Any
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+
+
+class ProjectJobCounts(BaseModel):
+    total: int = 0
+    queued: int = 0
+    running: int = 0
+    succeeded: int = 0
+    partial_success: int = 0
+    failed: int = 0
+    cancelled: int = 0
+    error: int = 0
+    active: int = 0
+
+
+class ProjectJobSummary(BaseModel):
+    counts: ProjectJobCounts = Field(default_factory=ProjectJobCounts)
+    latest_status: str | None = None
+    latest_job_id: str | None = None
+    latest_requested_stage: str | None = None
+    latest_updated_utc: str | None = None
 
 
 class ProjectSummary(BaseModel):
     name: str
     scene_count: int = 0
     has_video: bool = False
+    jobs: ProjectJobSummary = Field(default_factory=ProjectJobSummary)
     video_path: str | None = None
     thumbnail_path: str | None = None
     created_utc: str | None = None

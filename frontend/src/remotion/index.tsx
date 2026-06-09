@@ -21,6 +21,7 @@ import { fitText, fitTextOnNLines } from '@remotion/layout-utils'
 import { ThreeCanvas } from '@remotion/three'
 import { Float } from '@react-three/drei'
 import { AdditiveBlending, BackSide } from 'three'
+import { FALLBACK_PROPS } from './constants.ts'
 
 // ─── Typographic System ───
 // Shared font stacks and roles used across all template compositions.
@@ -206,34 +207,6 @@ export type BetTubeStudioRenderProps = {
   textRenderMode?: 'visual_authored' | 'deterministic_overlay' | string
   totalDurationInFrames?: number
   scenes?: RemotionScene[]
-}
-
-export const FALLBACK_PROPS: Required<BetTubeStudioRenderProps> = {
-  width: 1664,
-  height: 928,
-  fps: 24,
-  textRenderMode: 'visual_authored',
-  totalDurationInFrames: 120,
-  scenes: [
-    {
-      uid: 'fallback',
-      sceneType: 'motion',
-      title: 'betTube Studio Motion',
-      narration: 'Fallback motion scene',
-      onScreenText: ['Fallback motion scene'],
-      durationInFrames: 120,
-      motion: {
-        templateId: 'kinetic_title',
-        props: {
-          headline: 'betTube Studio Motion',
-          body: 'Fallback motion scene',
-          kicker: 'Remotion',
-          bullets: ['Prompts', 'Agents', 'Render'],
-          accent: '',
-        },
-      },
-    },
-  ],
 }
 
 const BUILTIN_TEXT_LAYER_FAMILIES = new Set(['software_demo_focus'])
@@ -4298,7 +4271,7 @@ function SceneLayer({
   )
 }
 
-function resolveTransitionPresentation(kind: string): any {
+function resolveTransitionPresentation(kind: string): ReturnType<typeof fade> | ReturnType<typeof wipe> {
   const normalized = String(kind || '').trim().toLowerCase()
   if (normalized === 'wipe') {
     return wipe()

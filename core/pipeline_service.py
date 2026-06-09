@@ -979,7 +979,7 @@ def generate_project_assets_service(
                 try:
                     selected_agent = choose_agent_cli(str(agent_demo_profile.get("preferred_agent") or "").strip() or None)
                     if not selected_agent:
-                        raise ValueError("Agent demo requested, but neither `codex` nor `claude` is installed.")
+                        raise ValueError("Demo capture requested, but neither `codex` nor `claude` is installed.")
                     agent_name, _ = selected_agent
                     prompt = build_agent_demo_prompt(
                         project_dir=project_dir,
@@ -1000,13 +1000,13 @@ def generate_project_assets_service(
                     )
                     refreshed = load_plan(project_dir)
                     if not refreshed:
-                        raise ValueError("Agent demo finished without leaving a readable plan.json behind.")
+                        raise ValueError("Demo capture finished without leaving a readable plan.json behind.")
                     refreshed_scene = next(
                         (candidate for candidate in refreshed.get("scenes", []) if str(candidate.get("uid") or "") == str(scene.get("uid") or "")),
                         None,
                     )
                     if not refreshed_scene or not _scene_has_video(refreshed_scene):
-                        raise ValueError("Agent demo finished, but the target scene still has no video clip.")
+                        raise ValueError("Demo capture finished, but the target scene still has no video clip.")
                     plan = refreshed
                     scenes = list(plan.get("scenes", []))
                     result["videos_generated"] += 1
@@ -1284,12 +1284,47 @@ def render_project_service(
         meta["render_profile"] = render_profile
 
     render_backend = str(render_profile.get("render_backend") or "ffmpeg").strip().lower() or "ffmpeg"
+    requested_backend = render_backend
     if render_backend == "remotion" and not remotion_available():
         print(
             "Remotion backend requested but the toolchain is unavailable; "
             "falling back to ffmpeg assembly so the render still completes."
         )
         render_backend = "ffmpeg"
+    backend_used = render_backend
+    fallback_warning = (
+        "Remotion was requested but the Remotion toolchain is unavailable; "
+        "the final video was assembled with ffmpeg, which may not match "
+        "Remotion-rendered composition scenes."
+        if requested_backend == "remotion" and backend_used == "ffmpeg"
+        else None
+    )
+    # The structured fallback warning travels via the return dict, plan.meta,
+    # and the progress event below (the print above remains as a plain log line).
+    meta["render"] = {
+        "requested_backend": requested_backend,
+        "backend_used": backend_used,
+        "fallback_warning": fallback_warning,
+    }
+    if progress_callback is not None:
+        progress_callback(
+            {
+                "progress": 0.0,
+                "progress_kind": "render_backend",
+                "progress_label": f"Render engine: {backend_used}",
+                "progress_detail": fallback_warning,
+                "progress_status": "running",
+            }
+        )
+        progress_callback(
+            {
+                "progress": 0.0,
+                "progress_kind": "render_backend",
+                "progress_label": f"Render engine: {backend_used}",
+                "progress_detail": fallback_warning,
+                "progress_status": "done",
+            }
+        )
     missing_visuals = [
         int(scene.get("id", 0))
         for scene in scenes
@@ -1302,6 +1337,16 @@ def render_project_service(
         and not (scene.get("audio_path") and Path(str(scene["audio_path"])).exists())
     ]
     if missing_visuals or missing_audio:
+        if progress_callback is not None:
+            progress_callback(
+                {
+                    "progress": 0.0,
+                    "progress_kind": "render",
+                    "progress_label": "Pre-render validation",
+                    "progress_detail": "Missing required visuals or audio before rendering.",
+                    "progress_status": "error",
+                }
+            )
         return {
             "status": "partial_success",
             "retryable": True,
@@ -1309,7 +1354,19 @@ def render_project_service(
             "missing_visual_scenes": missing_visuals,
             "missing_audio_scenes": missing_audio,
             "video_path": None,
+            "render_backend_used": backend_used,
+            "render_backend_warning": fallback_warning,
         }
+    if progress_callback is not None:
+        progress_callback(
+            {
+                "progress": 0.0,
+                "progress_kind": "render",
+                "progress_label": "Pre-render validation",
+                "progress_detail": "All required visuals and audio are present.",
+                "progress_status": "done",
+            }
+        )
 
     resolved_name = output_filename or f"{Path(project_dir).name}.mp4"
     if progress_callback is not None:
@@ -1381,6 +1438,11 @@ def render_project_service(
         current_meta = current_plan.setdefault("meta", {})
         current_meta["video_path"] = str(video_path)
         current_meta["rendered_utc"] = utc_now_iso()
+        current_meta["render"] = {
+            "requested_backend": requested_backend,
+            "backend_used": backend_used,
+            "fallback_warning": fallback_warning,
+        }
         current_meta["video_compression"] = compression_result
         if web_optimization is not None:
             current_meta["web_optimization"] = web_optimization
@@ -1510,6 +1572,8 @@ def render_project_service(
                 "missing_visual_scenes": [],
                 "missing_audio_scenes": [],
                 "video_path": None,
+                "render_backend_used": backend_used,
+                "render_backend_warning": fallback_warning,
                 "scene_review_error": str(exc),
             }
         plan = load_plan(project_dir) or plan
@@ -1542,6 +1606,8 @@ def render_project_service(
             "video_path": str(video_path),
             "compression": compression_result,
             "web_optimization": web_optimization,
+            "render_backend_used": backend_used,
+            "render_backend_warning": fallback_warning,
             "scene_review_error": str(exc),
         }
     plan = load_plan(project_dir) or plan
@@ -1585,6 +1651,8 @@ def render_project_service(
             "video_path": str(video_path),
             "compression": compression_result,
             "web_optimization": web_optimization,
+            "render_backend_used": backend_used,
+            "render_backend_warning": fallback_warning,
             "scene_review": scene_review,
             "text_review_failures": unresolved_text_repairs,
         }
@@ -1597,6 +1665,8 @@ def render_project_service(
         "video_path": str(video_path),
         "compression": compression_result,
         "web_optimization": web_optimization,
+        "render_backend_used": backend_used,
+        "render_backend_warning": fallback_warning,
         "scene_review": scene_review,
     }
 

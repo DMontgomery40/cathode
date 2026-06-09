@@ -106,25 +106,26 @@ test.describe('Settings', () => {
 
   test('target project is selected from a top-level context panel', async ({ page }) => {
     await expect(page.getByText('Target project')).toBeVisible()
-    await expect(page.getByLabel('Project')).toBeVisible()
+    await expect(page.getByLabel('Project', { exact: true })).toBeVisible()
     await expect(page.getByText('Editing context')).toBeVisible()
   })
 
   test('voice settings no longer hide the project selector inside the voice card', async ({ page }) => {
     await expect(page.getByRole('heading', { name: 'Voice settings' })).toBeVisible()
     await expect(page.getByLabel('TTS Provider')).toBeVisible()
-    await expect(page.getByLabel('Project')).toHaveCount(1)
+    await expect(page.getByLabel('Project', { exact: true })).toHaveCount(1)
     await expect(page.getByRole('heading', { name: 'Target project' })).toBeVisible()
   })
 
   test('image settings expose effective edit params and recent project image activity', async ({ page }) => {
-    await page.getByLabel('Project').selectOption(DISPOSABLE_PROJECT)
+    await page.getByLabel('Project', { exact: true }).selectOption(DISPOSABLE_PROJECT)
 
     await expect(page.getByRole('heading', { name: 'Image profile' })).toBeVisible()
-    await expect(page.getByText('Effective edit request')).toBeVisible()
-    const effectiveEditRequest = page.locator('pre').filter({ hasText: '"backend": "DashScope-backed"' })
-    await expect(effectiveEditRequest).toBeVisible()
-    await expect(effectiveEditRequest).toContainText('"dashscope_edit_n": 3')
+    await expect(page.getByText('Edit path')).toBeVisible()
+    expect(await page.getByText('DashScope-backed', { exact: true }).count()).toBeGreaterThan(0)
+    await expect(page.getByText('Variants', { exact: true })).toBeVisible()
+    expect(await page.getByText('3', { exact: true }).count()).toBeGreaterThan(0)
+    await expect(page.locator('pre')).toHaveCount(0)
     await expect(page.getByRole('heading', { name: 'Image activity' })).toBeVisible()
     await expect(page.getByText('Recent scene image actions', { exact: true })).toBeVisible()
     await expect(page.getByText('Background image jobs', { exact: true })).toBeVisible()
@@ -132,11 +133,13 @@ test.describe('Settings', () => {
 
     const activityEntry = page.locator('details').filter({ hasText: 'Image edit' }).first()
     await activityEntry.click()
-    await expect(activityEntry.getByText('DashScope quota exceeded during retry window.')).toBeVisible()
+    await expect(activityEntry.getByText('Model')).toBeVisible()
+    await expect(activityEntry.getByText('qwen-image-edit-plus')).toBeVisible()
+    await expect(activityEntry.getByRole('alert')).toHaveText('DashScope quota exceeded during retry window.')
   })
 
   test('background image job logs are expandable directly from settings', async ({ page }) => {
-    await page.getByLabel('Project').selectOption(DISPOSABLE_PROJECT)
+    await page.getByLabel('Project', { exact: true }).selectOption(DISPOSABLE_PROJECT)
 
     await page.getByText(JOB_ID).click()
     await expect(page.getByText('generated image for scene_000')).toBeVisible()
@@ -144,16 +147,16 @@ test.describe('Settings', () => {
   })
 
   test('selected project persists after leaving settings and coming back', async ({ page }) => {
-    await page.getByLabel('Project').selectOption(CONTEXT_PROJECT)
+    await page.getByLabel('Project', { exact: true }).selectOption(CONTEXT_PROJECT)
 
     await page.getByRole('menuitem', { name: 'Home' }).click()
     await expect(page).toHaveURL('http://127.0.0.1:9322/')
 
     await page.getByRole('menuitem', { name: 'Settings' }).click()
-    await expect(page.getByLabel('Project')).toHaveValue(CONTEXT_PROJECT)
+    await expect(page.getByLabel('Project', { exact: true })).toHaveValue(CONTEXT_PROJECT)
 
     await page.reload()
-    await expect(page.getByLabel('Project')).toHaveValue(CONTEXT_PROJECT)
+    await expect(page.getByLabel('Project', { exact: true })).toHaveValue(CONTEXT_PROJECT)
   })
 
   test('settings picks up the current project context from project routes', async ({ page }) => {
@@ -162,6 +165,7 @@ test.describe('Settings', () => {
 
     await page.getByRole('menuitem', { name: 'Settings' }).click()
     await expect(page).toHaveURL(/\/settings$/)
-    await expect(page.getByLabel('Project')).toHaveValue(CONTEXT_PROJECT)
+    await expect(page.getByRole('heading', { name: 'Settings', exact: true })).toBeVisible()
+    await expect(page.getByLabel('Project', { exact: true })).toHaveValue(CONTEXT_PROJECT)
   })
 })

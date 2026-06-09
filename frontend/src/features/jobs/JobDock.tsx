@@ -22,7 +22,7 @@ export function JobDock() {
 
   return (
     <div
-      className="fixed bottom-0 left-0 right-0 border-t border-[var(--border-subtle)] bg-[var(--surface-shell)]/95 backdrop-blur-[var(--glass-blur)]"
+      className="shrink-0 border-t border-[var(--border-subtle)] bg-[var(--surface-shell)]/95 backdrop-blur-[var(--glass-blur)]"
       style={{ zIndex: 'var(--z-floating)' }}
       role="region"
       aria-label="Project job history"

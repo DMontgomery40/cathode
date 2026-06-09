@@ -85,9 +85,10 @@ export function SceneTimeline() {
   const savePromiseRef = useRef<Promise<Plan> | null>(null)
   const pendingSaveRef = useRef<Plan | null>(null)
   const latestPlanRef = useRef<Plan | null>(null)
+  const [localPlanDraft, setLocalPlanDraft] = useState<{ projectId: string; plan: Plan } | null>(null)
   const [saving, setSaving] = useState(false)
   const [actionTrace, setActionTrace] = useState<SceneActionTrace | null>(null)
-  const currentPlan = latestPlanRef.current ?? plan ?? null
+  const currentPlan = localPlanDraft?.projectId === projectId ? localPlanDraft.plan : plan ?? null
   const scenes = currentPlan?.scenes ?? EMPTY_SCENES
   const selectedScene = scenes.find((s) => s.uid === selectedSceneId) ?? null
   const selectedIndex = scenes.findIndex((s) => s.uid === selectedSceneId)
@@ -112,6 +113,7 @@ export function SceneTimeline() {
 
   const persistPlan = useCallback(async (nextPlan: Plan) => {
     latestPlanRef.current = nextPlan
+    setLocalPlanDraft({ projectId, plan: nextPlan })
     pendingSaveRef.current = null
     setSaving(true)
     const priorSave = savePromiseRef.current
@@ -128,7 +130,7 @@ export function SceneTimeline() {
     })
     savePromiseRef.current = pendingSave
     return pendingSave
-  }, [savePlan])
+  }, [projectId, savePlan])
 
   const flushPendingSave = useCallback(async () => {
     if (saveTimer.current) {
@@ -168,6 +170,7 @@ export function SceneTimeline() {
   const debouncedSave = useCallback(
     (updatedPlan: Plan) => {
       latestPlanRef.current = updatedPlan
+      setLocalPlanDraft({ projectId, plan: updatedPlan })
       pendingSaveRef.current = updatedPlan
       if (saveTimer.current) clearTimeout(saveTimer.current)
       setSaving(true)
@@ -181,7 +184,7 @@ export function SceneTimeline() {
         void persistPlan(nextPlan).catch(() => undefined)
       }, 500)
     },
-    [persistPlan],
+    [persistPlan, projectId],
   )
 
   const handleReorder = useCallback(
@@ -430,7 +433,7 @@ export function SceneTimeline() {
     )
   )
   const selectedSceneRemotionManifest = useSceneRemotionManifest(projectId, selectedSceneId, {
-    enabled: remotionExplicitlyEnabled && Boolean(bootstrap?.providers?.remotion_capabilities?.player_available),
+    enabled: remotionExplicitlyEnabled,
   })
   const imageEditModels = bootstrap?.providers?.image_edit_models ?? []
   const imageEditError = editImage.error
@@ -1112,7 +1115,7 @@ export function SceneTimeline() {
                   onRunAgentDemo={() => {
                     if (!selectedScene) return
                     const trace: SceneActionTrace = {
-                      title: 'Run agent demo for scene',
+                      title: 'Run demo capture for scene',
                       endpoint: `/api/projects/${projectId}/agent-demo`,
                       request: {
                         scene_uids: [selectedScene.uid],
@@ -1127,11 +1130,11 @@ export function SceneTimeline() {
                         { scene_uids: [selectedScene.uid], run_until: 'assets' },
                         {
                           onSuccess: () => {
-                            setLiveMsg('Agent demo job started')
+                            setLiveMsg('Demo capture job started')
                             setActionTrace((current) => current ? { ...current, status: 'succeeded', error: null } : current)
                           },
                           onError: (mutationError) => {
-                            const message = getApiErrorMessage(mutationError, 'Agent demo failed to start.')
+                            const message = getApiErrorMessage(mutationError, 'Demo capture failed to start.')
                             setActionTrace((current) => current ? { ...current, status: 'error', error: message } : current)
                           },
                         },
@@ -1140,7 +1143,7 @@ export function SceneTimeline() {
                   }}
                   onRunAgentDemoPass={videoSceneUids.length > 0 ? () => {
                     const trace: SceneActionTrace = {
-                      title: 'Run agent demo pass',
+                      title: 'Run demo capture pass',
                       endpoint: `/api/projects/${projectId}/agent-demo`,
                       request: {
                         scene_uids: videoSceneUids,
@@ -1155,11 +1158,11 @@ export function SceneTimeline() {
                         { scene_uids: videoSceneUids, run_until: 'assets' },
                         {
                           onSuccess: () => {
-                            setLiveMsg('Agent demo pass started')
+                            setLiveMsg('Demo capture pass started')
                             setActionTrace((current) => current ? { ...current, status: 'succeeded', error: null } : current)
                           },
                           onError: (mutationError) => {
-                            const message = getApiErrorMessage(mutationError, 'Agent demo pass failed to start.')
+                            const message = getApiErrorMessage(mutationError, 'Demo capture pass failed to start.')
                             setActionTrace((current) => current ? { ...current, status: 'error', error: message } : current)
                           },
                         },
@@ -1172,7 +1175,7 @@ export function SceneTimeline() {
                   onRefinePrompt={(feedback) => {
                     if (!selectedScene) return
                     const trace: SceneActionTrace = {
-                      title: 'Refine prompt',
+                      title: 'Improve direction',
                       endpoint: `/api/projects/${projectId}/scenes/${selectedScene.uid}/prompt-refine`,
                       request: { feedback },
                       status: 'running',
@@ -1184,11 +1187,11 @@ export function SceneTimeline() {
                         { sceneUid: selectedScene.uid, feedback },
                         {
                           onSuccess: () => {
-                            setLiveMsg('Prompt refined')
+                            setLiveMsg('Direction updated')
                             setActionTrace((current) => current ? { ...current, status: 'succeeded', error: null } : current)
                           },
                           onError: (mutationError) => {
-                            const message = getApiErrorMessage(mutationError, 'Prompt refinement failed.')
+                            const message = getApiErrorMessage(mutationError, 'Direction update failed.')
                             setActionTrace((current) => current ? { ...current, status: 'error', error: message } : current)
                           },
                         },

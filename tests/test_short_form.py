@@ -4,7 +4,7 @@ from core.pipeline_service import prepare_project_execution_profiles
 from core.project_schema import backfill_plan
 
 
-def test_short_form_options_expose_backend_owned_modes():
+def test_short_form_options_expose_strategy_options():
     options = short_form_options()
 
     assert options["defaults"]["approach"] == "public-reframe"
@@ -42,6 +42,7 @@ def test_short_form_payload_encodes_vertical_pipeline_contract():
     assert brief["short_form_format"] == "vertical_short"
     assert brief["short_form_tier"] == "dev-native-credible"
     assert brief["short_form_approach"] == "mixed-media-proof"
+    assert "Platform targets: TikTok, Instagram Reels, YouTube Shorts." in brief["video_goal"]
     assert brief["target_length_minutes"] == 0.8
     assert "Subject: betTube Studio" in brief["source_anchor_card"]
     assert "Prototype workflow evidence" in brief["source_context_lock"]
@@ -54,6 +55,32 @@ def test_short_form_payload_encodes_vertical_pipeline_contract():
     assert payload["tts_profile"]["speed"] == 1.0
     assert payload["preview"]["frame"] == "9:16 928x1664 @ 30fps"
     assert payload["preview"]["source_role"].startswith("Source footage supplies proof moments")
+
+
+def test_short_form_payload_uses_openai_voice_when_available(monkeypatch):
+    monkeypatch.setattr(
+        "core.short_form.available_tts_providers",
+        lambda: {
+            "kokoro": "Kokoro (Local)",
+            "openai": "OpenAI TTS (Cloud)",
+        },
+    )
+    monkeypatch.setenv("BETTUBE_STUDIO_OPENAI_TTS_VOICE", "nova")
+    monkeypatch.setenv("BETTUBE_STUDIO_OPENAI_TTS_MODEL", "gpt-4o-mini-tts")
+
+    payload = build_short_form_payload(
+        {
+            "project_name": "openai_voice_short",
+            "source_material": "Source notes.",
+        }
+    )
+
+    assert payload["tts_profile"] == {
+        "provider": "openai",
+        "voice": "nova",
+        "model_id": "gpt-4o-mini-tts",
+        "speed": 1.0,
+    }
 
 
 def test_short_form_payload_clamps_runtime_and_defaults_platforms():

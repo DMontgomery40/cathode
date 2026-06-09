@@ -5,7 +5,7 @@ import { useBootstrap } from '../../lib/api/hooks.ts'
 function displayProviderName(name: string): string {
   switch (name) {
     case 'codex':
-      return 'codex exec'
+      return 'GPT Image'
     default:
       return name
   }
@@ -107,10 +107,10 @@ export function ProviderMatrix() {
           <p className="workspace-eyebrow">Capability matrix</p>
           <h3 className="workspace-panel-title">Providers</h3>
           <p className="workspace-panel-copy m-0 mt-[var(--space-1)]">
-            betTube Studio only surfaces configured or always-available capabilities, so this page mirrors the real machine instead of pretending every backend exists. For stills, the intended default lane is local Codex execution when it is available.
+            Only configured services are enabled for generation, narration, and render actions.
           </p>
           <p className="workspace-panel-copy m-0 mt-[var(--space-1)]">
-            Exact costs are model- and route-specific. Provider badges stay generic; the precise pricing belongs on the model or route choice itself.
+            Pricing depends on the selected model and route.
           </p>
         </div>
       </div>

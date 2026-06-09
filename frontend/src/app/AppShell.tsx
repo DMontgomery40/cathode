@@ -26,14 +26,16 @@ export function AppShell() {
         <ReactErrorBoundary fallbackTitle="Navigation failed">
           <CommandRail />
         </ReactErrorBoundary>
-        <main id="main-content" className="flex-1 overflow-y-auto">
-          <ReactErrorBoundary fallbackTitle="Page error">
-            <Outlet />
-          </ReactErrorBoundary>
-        </main>
+        <div className="flex min-w-0 flex-1 flex-col">
+          <main id="main-content" className="min-h-0 flex-1 overflow-y-auto">
+            <ReactErrorBoundary fallbackTitle="Page error">
+              <Outlet />
+            </ReactErrorBoundary>
+          </main>
+          <JobDock />
+        </div>
       </div>
       <NotificationCenter />
-      <JobDock />
     </div>
   )
 }

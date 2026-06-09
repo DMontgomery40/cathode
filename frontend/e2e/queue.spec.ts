@@ -20,11 +20,14 @@ test.describe('Queue Monitor', () => {
   })
 
   // ── Filter Buttons ─────────────────────────────────────────────
-  test('filter buttons render all 4 options', async ({ page }) => {
+  test('filter buttons render all status options', async ({ page }) => {
     await expect(page.locator('button:has-text("All")')).toBeVisible()
+    await expect(page.locator('button:has-text("Queued")')).toBeVisible()
     await expect(page.locator('button:has-text("Running")')).toBeVisible()
     await expect(page.locator('button:has-text("Completed")')).toBeVisible()
+    await expect(page.locator('button:has-text("Partial")')).toBeVisible()
     await expect(page.locator('button:has-text("Failed")')).toBeVisible()
+    await expect(page.locator('button:has-text("Cancelled")')).toBeVisible()
   })
 
   test('All filter is active by default', async ({ page }) => {
@@ -79,14 +82,14 @@ test.describe('Queue Monitor', () => {
     await runningBtn.click()
     await page.waitForTimeout(500)
 
-    // Either shows jobs or "No running jobs" message
-    const emptyMsg = page.locator('text=/No .* jobs/')
+    // Either shows running jobs or the precise empty state for the selected filter.
+    const emptyMsg = page.getByText('No running jobs', { exact: true })
     const jobCards = page.locator('[aria-expanded]')
-    const hasEmpty = await emptyMsg.isVisible().catch(() => false)
-    const hasJobs = (await jobCards.count()) > 0
-
-    // One of these should be true
-    expect(hasEmpty || hasJobs).toBeTruthy()
+    await expect.poll(async () => {
+      const hasEmpty = (await emptyMsg.count()) > 0
+      const hasJobs = (await jobCards.count()) > 0
+      return hasEmpty || hasJobs
+    }).toBeTruthy()
   })
 
   // ── Job Card interaction ───────────────────────────────────────
@@ -136,11 +139,65 @@ test.describe('Queue Monitor', () => {
     }
   })
 
+  test('expanded job card does not expose raw request or result JSON', async ({ page }) => {
+    await page.route(`**/api/projects/${PROJECT}/jobs`, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([
+          {
+            status: 'failed',
+            job_id: 'raw-json-regression-job',
+            project_name: PROJECT,
+            project_dir: `/tmp/${PROJECT}`,
+            kind: 'rerun_stage',
+            current_stage: 'render',
+            retryable: true,
+            suggestion: 'Review the failed step and retry when ready.',
+            requested_stage: 'render',
+            created_utc: '2026-06-09T12:00:00Z',
+            updated_utc: '2026-06-09T12:05:00Z',
+            pid: null,
+            log_path: '',
+            request: {
+              kind: 'rerun_stage',
+              endpoint: '/api/projects/bet365_feature_act_01/agent-demo',
+              internal_payload_marker: 'should-not-render',
+            },
+            result: {
+              normalized_plan: 'should-not-render',
+              operatorHint: 'Visible operator hint',
+            },
+            error: { message: 'Visible operator hint' },
+            steps: [],
+          },
+        ]),
+      })
+    })
+
+    await page.reload()
+    const jobCard = page.locator('[aria-expanded]').filter({ hasText: 'raw-json-reg' })
+    await expect(jobCard).toHaveCount(1)
+    await jobCard.click()
+    await expect(jobCard).toHaveAttribute('aria-expanded', 'true')
+
+    await expect(page.getByText('Visible operator hint')).toBeVisible()
+    await expect(page.getByText('Stage')).toBeVisible()
+    await expect(page.getByText('Reference')).toBeVisible()
+    await expect(page.getByText('internal_payload_marker')).toHaveCount(0)
+    await expect(page.getByText('normalized_plan')).toHaveCount(0)
+    await expect(page.getByText('agent-demo')).toHaveCount(0)
+  })
+
   // ── Filter keyboard focus ──────────────────────────────────────
   test('filter buttons are keyboard focusable', async ({ page }) => {
     const allBtn = page.locator('button:has-text("All")')
     await allBtn.focus()
     await expect(allBtn).toBeFocused()
+
+    await page.keyboard.press('Tab')
+    const queuedBtn = page.locator('button:has-text("Queued")')
+    await expect(queuedBtn).toBeFocused()
 
     await page.keyboard.press('Tab')
     const runningBtn = page.locator('button:has-text("Running")')
@@ -151,6 +208,6 @@ test.describe('Queue Monitor', () => {
   test('breadcrumb Projects link works', async ({ page }) => {
     const link = page.getByRole('banner').getByRole('navigation', { name: 'Breadcrumb' }).getByRole('link', { name: 'Projects' })
     await link.click()
-    await page.waitForURL('/')
+    await page.waitForURL('**/projects')
   })
 })

@@ -210,6 +210,59 @@ def test_get_projects(mock_list, mock_load, client, tmp_path):
     assert proj["updated_utc"] == "2026-03-14T12:30:00Z"
     assert proj["image_profile"] == {"provider": "replicate"}
     assert proj["tts_profile"] == {"provider": "kokoro"}
+    assert proj["jobs"]["counts"]["total"] == 0
+    assert proj["jobs"]["counts"]["active"] == 0
+    assert proj["jobs"]["latest_status"] is None
+
+
+@patch("server.routers.projects.load_plan")
+@patch("server.routers.projects.list_projects", return_value=["project_a"])
+def test_get_projects_exposes_real_job_summary(mock_list, mock_load, client, tmp_path):
+    project_dir = tmp_path / "project_a"
+    jobs_dir = project_dir / ".bettube-studio" / "jobs"
+    jobs_dir.mkdir(parents=True)
+    (project_dir / "plan.json").write_text("{}", encoding="utf-8")
+    (jobs_dir / "old.json").write_text(
+        json.dumps(
+            {
+                "job_id": "old",
+                "status": "succeeded",
+                "requested_stage": "assets",
+                "created_utc": "2026-03-14T10:00:00",
+                "updated_utc": "2026-03-14T10:05:00",
+            },
+        ),
+        encoding="utf-8",
+    )
+    (jobs_dir / "new.json").write_text(
+        json.dumps(
+            {
+                "job_id": "new",
+                "status": "failed",
+                "requested_stage": "render",
+                "created_utc": "2026-03-14T11:00:00",
+                "updated_utc": "2026-03-14T11:05:00",
+            },
+        ),
+        encoding="utf-8",
+    )
+    mock_load.return_value = {
+        "meta": {"video_path": None, "image_profile": None, "tts_profile": None},
+        "scenes": [{"id": 0}],
+    }
+
+    with patch("server.routers.projects.PROJECTS_DIR", tmp_path):
+        resp = client.get("/api/projects")
+
+    assert resp.status_code == 200
+    jobs = resp.json()[0]["jobs"]
+    assert jobs["counts"]["total"] == 2
+    assert jobs["counts"]["succeeded"] == 1
+    assert jobs["counts"]["failed"] == 1
+    assert jobs["counts"]["active"] == 0
+    assert jobs["latest_status"] == "failed"
+    assert jobs["latest_job_id"] == "new"
+    assert jobs["latest_requested_stage"] == "render"
 
 
 @patch("server.routers.projects.load_plan")
@@ -291,12 +344,51 @@ def test_get_projects_ignores_cross_project_thumbnail_paths(client, tmp_path):
     assert resp.json()[0]["has_video"] is False
 
 
+def test_get_projects_includes_job_only_directories(client, tmp_path):
+    project_dir = tmp_path / "job_only_project"
+    jobs_dir = project_dir / ".bettube-studio" / "jobs"
+    jobs_dir.mkdir(parents=True)
+    (jobs_dir / "active.json").write_text(
+        json.dumps(
+            {
+                "job_id": "active",
+                "project_name": "job_only_project",
+                "status": "running",
+                "requested_stage": "render",
+                "created_utc": "2026-06-09T20:00:00",
+                "updated_utc": "2026-06-09T20:01:00",
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    with (
+        patch("server.routers.projects.PROJECTS_DIR", tmp_path),
+        patch("server.routers.projects.list_projects", return_value=[]),
+    ):
+        resp = client.get("/api/projects")
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert len(body) == 1
+    project = body[0]
+    assert project["name"] == "job_only_project"
+    assert project["scene_count"] == 0
+    assert project["jobs"]["counts"]["running"] == 1
+    assert project["jobs"]["counts"]["active"] == 1
+    assert project["jobs"]["latest_status"] == "running"
+    assert project["created_utc"] == "2026-06-09T20:01:00Z"
+
+
 @patch("server.routers.projects.load_plan", return_value=None)
 @patch("server.routers.projects.list_projects", return_value=["broken"])
-def test_get_projects_skips_missing_plans(mock_list, mock_load, client):
-    resp = client.get("/api/projects")
+def test_get_projects_keeps_missing_plan_project_as_empty(mock_list, mock_load, client, tmp_path):
+    (tmp_path / "broken").mkdir()
+    with patch("server.routers.projects.PROJECTS_DIR", tmp_path):
+        resp = client.get("/api/projects")
     assert resp.status_code == 200
-    assert resp.json() == []
+    assert resp.json()[0]["name"] == "broken"
+    assert resp.json()[0]["jobs"]["counts"]["total"] == 0
 
 
 # ---------------------------------------------------------------------------

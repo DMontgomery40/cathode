@@ -1,49 +1,79 @@
 :root {
+  /* betTube source tokens */
+  --bet365-green: #126e51;
+  --bet365-green-hover: #12523d;
+  --yt-bg-primary: #121212;
+  --yt-bg-secondary: #2d2d2d;
+  --yt-bg-solid-dark: #1c1c1c;
+  --yt-bg-solid-light: #373737;
+  --yt-bg-tertiary: rgba(18, 18, 18, 0.5);
+  --yt-border: rgba(55, 55, 55, 0.6);
+  --yt-dropdown-bg: #1a1a1a;
+  --yt-accent: var(--bet365-green);
+  --yt-accent-hover: var(--bet365-green-hover);
+  --yt-accent-yellow: #fede1c;
+  --yt-accent-yellow-hover: #e6c619;
+  --yt-focus: #28ffbb;
+  --yt-hover: rgba(55, 55, 55, 0.8);
+  --yt-hover-bg: rgba(255, 255, 255, 0.05);
+  --yt-pill-bg: rgba(255, 255, 255, 0.1);
+  --yt-pill-bg-hover: rgba(255, 255, 255, 0.2);
+  --yt-shadow: rgba(0, 0, 0, 0.4);
+  --yt-text-primary: #ffffff;
+  --yt-text-secondary: #e0e0e0;
+  --yt-text-tertiary: #717171;
+
+  --accent-primary-rgb: 18, 110, 81;
+  --accent-primary-hover-rgb: 18, 82, 61;
+  --accent-secondary-rgb: 254, 222, 28;
+  --focus-rgb: 40, 255, 187;
+  --text-primary-rgb: 255, 255, 255;
+
   /* Surfaces */
-  --surface-void: #0a0a0c;
-  --surface-shell: #111114;
-  --surface-panel-glass: rgba(22, 22, 28, 0.72);
-  --surface-panel-glass-hover: rgba(28, 28, 36, 0.78);
-  --surface-stage: #18181c;
-  --surface-elevated: rgba(30, 30, 38, 0.85);
-  --surface-overlay: rgba(6, 6, 8, 0.88);
+  --surface-void: var(--yt-bg-primary);
+  --surface-shell: var(--yt-bg-solid-dark);
+  --surface-panel-glass: rgba(45, 45, 45, 0.72);
+  --surface-panel-glass-hover: var(--yt-hover);
+  --surface-stage: var(--yt-bg-secondary);
+  --surface-elevated: rgba(55, 55, 55, 0.88);
+  --surface-overlay: rgba(18, 18, 18, 0.9);
 
   /* Text */
-  --text-primary: #f0ece4;
-  --text-secondary: #a8a29e;
-  --text-tertiary: #6b6560;
-  --text-inverse: #0a0a0c;
+  --text-primary: var(--yt-text-primary);
+  --text-secondary: var(--yt-text-secondary);
+  --text-tertiary: var(--yt-text-tertiary);
+  --text-inverse: var(--yt-bg-primary);
 
   /* Accents */
-  --accent-primary: #c8a96e;
-  --accent-primary-hover: #d4b87a;
-  --accent-primary-muted: rgba(200, 169, 110, 0.18);
-  --accent-secondary: #5b8a82;
-  --accent-secondary-hover: #6b9a92;
-  --accent-secondary-muted: rgba(91, 138, 130, 0.18);
+  --accent-primary: var(--yt-accent);
+  --accent-primary-hover: var(--yt-accent-hover);
+  --accent-primary-muted: rgba(var(--accent-primary-rgb), 0.2);
+  --accent-secondary: var(--yt-accent-yellow);
+  --accent-secondary-hover: var(--yt-accent-yellow-hover);
+  --accent-secondary-muted: rgba(var(--accent-secondary-rgb), 0.14);
 
   /* Signals */
-  --signal-active: #5b8a82;
-  --signal-success: #6b9a72;
-  --signal-warning: #c87a4e;
+  --signal-active: var(--yt-focus);
+  --signal-success: var(--yt-accent);
+  --signal-warning: var(--yt-accent-yellow);
   --signal-danger: #c85a5a;
-  --signal-info: #7a8ac8;
+  --signal-info: #6aa8ff;
 
   /* Borders */
-  --border-subtle: rgba(240, 236, 228, 0.08);
-  --border-default: rgba(240, 236, 228, 0.12);
-  --border-strong: rgba(240, 236, 228, 0.20);
-  --border-accent: rgba(200, 169, 110, 0.30);
-  --border-glow: rgba(91, 138, 130, 0.25);
+  --border-subtle: rgba(var(--text-primary-rgb), 0.08);
+  --border-default: var(--yt-border);
+  --border-strong: rgba(var(--text-primary-rgb), 0.2);
+  --border-accent: rgba(var(--accent-primary-rgb), 0.45);
+  --border-glow: rgba(var(--focus-rgb), 0.28);
 
   /* Glass */
   --glass-blur: 24px;
   --glass-blur-heavy: 40px;
-  --glass-border: 1px solid rgba(240, 236, 228, 0.06);
-  --glass-highlight: inset 0 1px 0 0 rgba(240, 236, 228, 0.04);
-  --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), 0 2px 8px rgba(0, 0, 0, 0.2);
+  --glass-border: 1px solid rgba(var(--text-primary-rgb), 0.06);
+  --glass-highlight: inset 0 1px 0 0 rgba(var(--text-primary-rgb), 0.04);
+  --glass-shadow: 0 8px 32px var(--yt-shadow), 0 2px 8px rgba(0, 0, 0, 0.2);
 
   /* Focus */
-  --focus-ring: 0 0 0 2px var(--accent-secondary), 0 0 0 4px rgba(91, 138, 130, 0.25);
-  --focus-ring-inset: inset 0 0 0 2px var(--accent-secondary);
+  --focus-ring: 0 0 0 2px var(--yt-focus), 0 0 0 4px rgba(var(--focus-rgb), 0.22);
+  --focus-ring-inset: inset 0 0 0 2px var(--yt-focus);
 }

@@ -251,7 +251,7 @@ export function TimelineStrip({
                 'focus-visible:shadow-[var(--focus-ring)]',
                 'hover:bg-[var(--surface-elevated)]',
                 isSelected
-                  ? 'border-[var(--border-accent)] shadow-[0_0_8px_rgba(200,169,110,0.2)]'
+                  ? 'border-[var(--border-accent)] shadow-[0_0_8px_rgba(var(--accent-primary-rgb),0.24)]'
                   : 'border-[var(--border-subtle)]',
                 isDragging && 'opacity-40',
                 isDropTarget && 'border-[var(--accent-secondary)] border-dashed',
@@ -297,6 +297,7 @@ export function TimelineStrip({
                     padding: '1px 4px',
                     fontFamily: 'var(--font-mono)',
                   }}
+                  title={scene.scene_type === 'motion' && !remotionEnabled ? 'Remotion scene — shown as still image (Remotion unavailable)' : undefined}
                 >
                   {displaySceneType}
                 </span>

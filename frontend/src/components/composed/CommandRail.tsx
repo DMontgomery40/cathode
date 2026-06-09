@@ -120,13 +120,17 @@ export function CommandRail() {
       {/* Brand mark */}
       <div
         className="flex items-center shrink-0 border-b border-[var(--border-subtle)]"
-        style={{ height: 56, padding: `0 var(--space-4)` }}
+        style={{
+          height: 56,
+          justifyContent: effectiveCollapsed ? 'center' : 'flex-start',
+          padding: effectiveCollapsed ? 0 : `0 var(--space-4)`,
+        }}
       >
         <span
           className="font-[family-name:var(--font-display)] text-[var(--text-primary)] select-none whitespace-nowrap overflow-hidden"
           style={{ fontWeight: 'var(--weight-bold)', fontSize: 'var(--text-lg)' }}
         >
-          {effectiveCollapsed ? 'C' : 'betTube Studio'}
+          {effectiveCollapsed ? 'bT' : 'betTube Studio'}
         </span>
       </div>
 

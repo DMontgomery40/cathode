@@ -70,6 +70,21 @@ def load_repo_env(*, override: bool = False, env_path: Path | None = None) -> Pa
 load_repo_env()
 
 
+def configure_system_certificate_trust() -> None:
+    """Use the OS trust store when available so internal provider TLS works locally."""
+    if str(os.getenv("BETTUBE_STUDIO_DISABLE_SYSTEM_TRUSTSTORE") or "").strip().lower() in {"1", "true", "yes"}:
+        return
+    try:
+        import truststore
+
+        truststore.inject_into_ssl()
+    except Exception:
+        return
+
+
+configure_system_certificate_trust()
+
+
 # --- Env-driven provider credentials (corp LiteLLM/AIProxy drop-in, leak-safe) ---
 #
 # Only env var NAMES and safe public defaults live here; no endpoint URL, key, or

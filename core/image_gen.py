@@ -76,7 +76,7 @@ CODEX_IMAGE_EDIT_SCRIPT = REPO_ROOT / "scripts" / "edit_openai_image.py"
 
 
 def _log(msg):
-    """Debug logging to stderr (visible in Streamlit terminal)."""
+    """Debug logging to stderr."""
     print(f"[IMAGE_GEN] {msg}", file=sys.stderr, flush=True)
 
 
@@ -1013,7 +1013,7 @@ def generate_scene_image(
     scene: dict,
     project_dir: Path,
     brief: dict | None = None,
-    provider: str = "replicate",
+    provider: str = "codex",  # project default; callers should always pass an explicit resolved provider
     model: str = DEFAULT_IMAGE_MODEL,
 ) -> Path:
     """
@@ -1048,7 +1048,7 @@ def generate_scene_image(
     normalized_provider = str(provider).strip().lower()
     if normalized_provider == "manual":
         raise ValueError(
-            "AI image generation is disabled for this project. Upload a still image instead, or switch the image provider back to betTube Studio's Codex Exec still-image lane."
+            "AI image generation is disabled for this project. Upload a still image instead, or switch the image provider back to betTube Studio's GPT Image route."
         )
 
     try:

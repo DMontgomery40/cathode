@@ -15,14 +15,15 @@ test.describe('Home / Workspace', () => {
     // Brand mark shows "betTube Studio" when expanded
     await expect(rail.locator('text=betTube Studio')).toBeVisible()
 
-    // All 4 nav items visible
+    // All 5 nav items visible
     const menuItems = rail.locator('[role="menuitem"]')
-    await expect(menuItems).toHaveCount(4)
+    await expect(menuItems).toHaveCount(5)
 
     // Check labels
     await expect(rail.locator('text=Home')).toBeVisible()
     await expect(rail.locator('text=Projects')).toBeVisible()
     await expect(rail.locator('text=Queue')).toBeVisible()
+    await expect(rail.locator('text=Short Form')).toBeVisible()
     await expect(rail.locator('text=Settings')).toBeVisible()
   })
 
@@ -37,8 +38,8 @@ test.describe('Home / Workspace', () => {
     await collapseBtn.click()
     await page.waitForTimeout(400) // wait for transition
 
-    // Now should show "C" instead of "betTube Studio"
-    const brandText = rail.locator('span').filter({ hasText: /^C$/ }).first()
+    // Now should show the compact brand mark instead of "betTube Studio"
+    const brandText = rail.locator('span').filter({ hasText: /^bT$/ }).first()
     await expect(brandText).toBeVisible()
 
     // Expand button should now be present
@@ -94,9 +95,9 @@ test.describe('Home / Workspace', () => {
     await expect(page.locator('text=Monitor queue')).toBeVisible()
   })
 
-  test('IntentDeck shows badges', async ({ page }) => {
-    await expect(page.locator('text=3 projects')).toBeVisible()
-    await expect(page.locator('text=2 queued')).toBeVisible()
+  test('IntentDeck shows real project badge without stale queue count', async ({ page }) => {
+    await expect(page.getByText(/\d+ projects?/)).toBeVisible()
+    await expect(page.getByText('2 queued')).toHaveCount(0)
   })
 
   test('IntentDeck card click - Start a new video navigates to brief', async ({ page }) => {
@@ -141,6 +142,6 @@ test.describe('Home / Workspace', () => {
     await page.keyboard.press('Tab')
     const skipLink = page.locator('a:has-text("Skip to main content")')
     // Skip link may be first focusable; check it exists in DOM
-    await expect(page.locator('text=Skip to main content')).toBeAttached()
+    await expect(skipLink).toBeAttached()
   })
 })

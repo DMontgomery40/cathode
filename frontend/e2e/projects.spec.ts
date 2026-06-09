@@ -56,6 +56,70 @@ test.describe('Projects List', () => {
     await expect(sceneText).toBeVisible()
   })
 
+  test('project card does not infer in-progress state from scene count', async ({ page }) => {
+    const emptyCounts = {
+      total: 0,
+      queued: 0,
+      running: 0,
+      succeeded: 0,
+      partial_success: 0,
+      failed: 0,
+      cancelled: 0,
+      error: 0,
+      active: 0,
+    }
+    await page.route('**/api/projects', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([
+          {
+            name: 'draft_project',
+            scene_count: 3,
+            has_video: false,
+            jobs: {
+              counts: emptyCounts,
+              latest_status: null,
+              latest_job_id: null,
+              latest_requested_stage: null,
+              latest_updated_utc: null,
+            },
+            video_path: null,
+            thumbnail_path: null,
+            created_utc: '2026-03-10T08:00:00Z',
+            updated_utc: '2026-03-10T08:00:00Z',
+            image_profile: null,
+            tts_profile: null,
+          },
+          {
+            name: 'failed_project',
+            scene_count: 5,
+            has_video: false,
+            jobs: {
+              counts: { ...emptyCounts, total: 1, failed: 1 },
+              latest_status: 'failed',
+              latest_job_id: 'job-failed',
+              latest_requested_stage: 'render',
+              latest_updated_utc: '2026-03-10T09:00:00Z',
+            },
+            video_path: null,
+            thumbnail_path: null,
+            created_utc: '2026-03-10T07:00:00Z',
+            updated_utc: '2026-03-10T09:00:00Z',
+            image_profile: null,
+            tts_profile: null,
+          },
+        ]),
+      })
+    })
+
+    await page.reload()
+
+    await expect(page.getByRole('button', { name: /draft_project/ })).toContainText('Draft')
+    await expect(page.getByRole('button', { name: /failed_project/ })).toContainText('Failed')
+    await expect(page.getByText('In Progress')).toHaveCount(0)
+  })
+
   test('project card click navigates to scenes or brief', async ({ page }) => {
     await page.waitForSelector('button:has-text("bet365")', { timeout: 10000 })
 
@@ -71,15 +135,12 @@ test.describe('Projects List', () => {
     await page.waitForSelector('button:has-text("bet365")', { timeout: 10000 })
 
     const firstCard = page.locator('button').filter({ hasText: 'bet365' }).first()
-    const transformBefore = await firstCard.evaluate(el => getComputedStyle(el).transform)
-
     await firstCard.hover()
     await page.waitForTimeout(300)
 
-    const transformAfter = await firstCard.evaluate(el => getComputedStyle(el).transform)
     // Hover should change transform (translateY)
     // Just verifying no crash on hover is the minimum bar
-    expect(firstCard).toBeVisible()
+    await expect(firstCard).toBeVisible()
   })
 
   test('project cards grid layout responsive', async ({ page }) => {
@@ -99,6 +160,7 @@ test.describe('Projects List', () => {
             name: 'zebra_alpha',
             scene_count: 8,
             has_video: false,
+            jobs: { counts: { total: 0, queued: 0, running: 0, succeeded: 0, partial_success: 0, failed: 0, cancelled: 0, error: 0, active: 0 } },
             video_path: null,
             thumbnail_path: null,
             created_utc: '2026-03-10T08:00:00Z',
@@ -110,6 +172,7 @@ test.describe('Projects List', () => {
             name: 'moon_archive',
             scene_count: 4,
             has_video: true,
+            jobs: { counts: { total: 0, queued: 0, running: 0, succeeded: 0, partial_success: 0, failed: 0, cancelled: 0, error: 0, active: 0 } },
             video_path: null,
             thumbnail_path: null,
             created_utc: '2026-03-15T12:00:00Z',
@@ -121,6 +184,7 @@ test.describe('Projects List', () => {
             name: 'alpha_old',
             scene_count: 2,
             has_video: false,
+            jobs: { counts: { total: 0, queued: 0, running: 0, succeeded: 0, partial_success: 0, failed: 0, cancelled: 0, error: 0, active: 0 } },
             video_path: null,
             thumbnail_path: null,
             created_utc: '2026-03-01T05:00:00Z',

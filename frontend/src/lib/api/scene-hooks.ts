@@ -130,6 +130,7 @@ export function useGenerateAssets(project: string) {
     mutationFn: () => apiRequest<Job>(`/api/projects/${encodeURIComponent(project)}/assets`, { method: 'POST' }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['project', project, 'jobs'] })
+      void queryClient.invalidateQueries({ queryKey: ['projects'] })
     },
   })
 }
@@ -144,6 +145,7 @@ export function useStartRender(project: string) {
     }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['project', project, 'jobs'] })
+      void queryClient.invalidateQueries({ queryKey: ['projects'] })
     },
   })
 }
@@ -158,6 +160,7 @@ export function useRunAgentDemo(project: string) {
     }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['project', project, 'jobs'] })
+      void queryClient.invalidateQueries({ queryKey: ['projects'] })
     },
   })
 }
@@ -182,6 +185,7 @@ export function useCancelJob() {
     onSuccess: (job) => {
       if (job.project_name) {
         void queryClient.invalidateQueries({ queryKey: ['project', job.project_name, 'jobs'] })
+        void queryClient.invalidateQueries({ queryKey: ['projects'] })
       }
     },
   })

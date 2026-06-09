@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test'
+import { test, expect, type Page } from '@playwright/test'
 import fs from 'node:fs'
 import path from 'node:path'
 
@@ -9,6 +9,58 @@ const DISPOSABLE_PROJECT = `e2e_scene_mutation_${Date.now()}`
 const MOTION_PROJECT = `e2e_motion_scene_${Date.now()}`
 const MANUAL_IMAGE_PROJECT = `e2e_manual_image_${Date.now()}`
 const SWITCH_PROJECT = `e2e_scene_switch_${Date.now()}`
+const ONE_PIXEL_PNG = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=',
+  'base64',
+)
+
+type MutablePlan = Record<string, unknown> & {
+  meta: Record<string, unknown> & {
+    brief?: Record<string, unknown>
+    render_profile?: Record<string, unknown>
+    image_profile?: Record<string, unknown>
+    video_profile?: Record<string, unknown>
+  }
+  scenes: Array<Record<string, unknown>>
+}
+
+function writeProjectImage(project: string, filename: string) {
+  const imageDir = path.resolve(process.cwd(), '..', 'projects', project, 'images')
+  fs.mkdirSync(imageDir, { recursive: true })
+  fs.writeFileSync(path.join(imageDir, filename), ONE_PIXEL_PNG)
+}
+
+async function selectInspectorOption(page: Page, label: string, value: string, optionName: string) {
+  const control = page.getByLabel(label)
+  if (await control.evaluate((element) => element instanceof HTMLSelectElement)) {
+    await control.selectOption(value)
+    return
+  }
+  await control.click()
+  await page.getByRole('listbox', { name: label }).getByRole('option', { name: optionName }).click()
+}
+
+async function expectInspectorOption(page: Page, label: string, value: string, optionName: string) {
+  const control = page.getByLabel(label)
+  if (await control.evaluate((element) => element instanceof HTMLSelectElement || element instanceof HTMLInputElement)) {
+    await expect(control).toHaveValue(value)
+    return
+  }
+  await expect(control).toContainText(optionName)
+}
+
+async function inspectorOptionLabels(page: Page, label: string): Promise<string[]> {
+  const control = page.getByLabel(label)
+  if (await control.evaluate((element) => element instanceof HTMLSelectElement)) {
+    return control.locator('option').evaluateAll((options) => (
+      options.map((option) => (option as HTMLOptionElement).textContent?.trim() ?? '')
+    ))
+  }
+  await control.click()
+  const labels = await page.getByRole('listbox', { name: label }).getByRole('option').allTextContents()
+  await page.keyboard.press('Escape')
+  return labels.map((labelText) => labelText.trim())
+}
 
 test.describe('Scene Timeline', () => {
   function setNarrowInspectorLayout() {
@@ -38,9 +90,9 @@ test.describe('Scene Timeline', () => {
       await expect(options.first()).toBeVisible()
       await expect(page.getByLabel('Scene title')).toBeVisible()
       await expect(page.getByLabel('Narration text')).toBeVisible()
-      await expect(page.getByLabel('Visual prompt')).toBeVisible()
+      await expect(page.getByLabel('Image direction')).toBeVisible()
       await expect(page.getByLabel('Composition family')).toBeVisible()
-      await expect(page.getByLabel('Composition mode')).toBeVisible()
+      await expect(page.getByLabel('Composition behavior')).toBeVisible()
       await expect(page.getByLabel('Transition after')).toBeVisible()
       await expect(page.getByRole('button', { name: 'Generate All Assets' })).toBeVisible()
       await expect(page.getByRole('button', { name: 'Render Video' })).toBeVisible()
@@ -83,7 +135,7 @@ test.describe('Scene Timeline', () => {
       const boardProject = `e2e_timeline_board_${Date.now()}`
       cloneProjectFixture(PROJECT, boardProject)
       const planPath = path.resolve(process.cwd(), '..', 'projects', boardProject, 'plan.json')
-      const plan = JSON.parse(fs.readFileSync(planPath, 'utf8')) as Record<string, any>
+      const plan = JSON.parse(fs.readFileSync(planPath, 'utf8')) as MutablePlan
       plan.scenes = plan.scenes.slice(0, 4)
       fs.writeFileSync(planPath, JSON.stringify(plan, null, 2))
 
@@ -116,7 +168,7 @@ test.describe('Scene Timeline', () => {
       const legacyMotionProject = `e2e_legacy_motion_default_${Date.now()}`
       cloneProjectFixture(PROJECT, legacyMotionProject)
       const planPath = path.resolve(process.cwd(), '..', 'projects', legacyMotionProject, 'plan.json')
-      const plan = JSON.parse(fs.readFileSync(planPath, 'utf8')) as Record<string, any>
+      const plan = JSON.parse(fs.readFileSync(planPath, 'utf8')) as MutablePlan
       const scene = plan.scenes[0]
       plan.meta = {
         ...(plan.meta || {}),
@@ -160,21 +212,15 @@ test.describe('Scene Timeline', () => {
         await expect(page.getByRole('button', { name: 'Generate Motion Preview' })).toHaveCount(0)
         await expect(page.getByRole('button', { name: /Overlay Text/ })).toHaveCount(0)
         await expect(page.getByTestId('remotion-player-surface')).toHaveCount(0)
-        await expect(page.getByLabel('Scene type')).toHaveValue('image')
+        await expectInspectorOption(page, 'Scene type', 'image', 'Image')
 
-        const sceneTypeOptions = await page.getByLabel('Scene type').locator('option').evaluateAll((options) => (
-          options.map((option) => (option as HTMLOptionElement).value)
-        ))
-        const familyOptions = await page.getByLabel('Composition family').locator('option').evaluateAll((options) => (
-          options.map((option) => (option as HTMLOptionElement).value)
-        ))
-        const modeOptions = await page.getByLabel('Composition mode').locator('option').evaluateAll((options) => (
-          options.map((option) => (option as HTMLOptionElement).value)
-        ))
+        const sceneTypeOptions = await inspectorOptionLabels(page, 'Scene type')
+        const familyOptions = await inspectorOptionLabels(page, 'Composition family')
+        const modeOptions = await inspectorOptionLabels(page, 'Composition behavior')
 
-        expect(sceneTypeOptions).toEqual(['image', 'video'])
-        expect(familyOptions).toEqual(['static_media', 'media_pan'])
-        expect(modeOptions).toEqual(['none'])
+        expect(sceneTypeOptions).toEqual(['Image', 'Video'])
+        expect(familyOptions).toEqual(['Static media', 'Media pan'])
+        expect(modeOptions).toEqual(['None'])
       } finally {
         cleanupProjectFixture(legacyMotionProject)
       }
@@ -311,14 +357,16 @@ test.describe('Scene Timeline', () => {
       await expect(page.locator('button[aria-controls="scene-preview-content"]')).toBeVisible()
     })
 
-    test('operator section shows effective generation payload', async ({ page }) => {
+    test('operator section shows generation summary without raw request JSON', async ({ page }) => {
       await page.locator('button[aria-controls="scene-operator-content"]').click()
       const operatorContent = page.locator('#scene-operator-content')
       await expect(operatorContent.getByText('Generate image', { exact: true })).toBeVisible()
-      await expect(operatorContent).toContainText('"generate"')
-      await expect(operatorContent).toContainText('"provider": "replicate"')
-      await expect(operatorContent).toContainText('"edit"')
-      await expect(operatorContent).toContainText('"model": "qwen/qwen-image-edit-2511"')
+      await expect(operatorContent.getByText('Image', { exact: true })).toBeVisible()
+      await expect(operatorContent.getByText('Replicate / qwen/qwen-image-2512', { exact: true })).toBeVisible()
+      await expect(operatorContent.getByText('Edit', { exact: true })).toBeVisible()
+      await expect(operatorContent.getByText('qwen/qwen-image-edit-2511', { exact: true })).toBeVisible()
+      await expect(operatorContent.getByText('"generate"')).toHaveCount(0)
+      await expect(operatorContent.getByText('"provider": "replicate"')).toHaveCount(0)
     })
 
     test('scene upload buttons open real file choosers', async ({ page }) => {
@@ -470,8 +518,8 @@ test.describe('Scene Timeline', () => {
     test('motion scenes expose template controls in the live workspace', async ({ page }) => {
       await page.goto(`/projects/${MOTION_PROJECT}/scenes`)
       await expect(page.getByRole('region', { name: 'Scene inspector' })).toBeVisible()
-      await expect(page.getByLabel('Scene type')).toHaveValue('motion')
-      await expect(page.getByLabel('Composition family')).toHaveValue('bullet_stack')
+      await expectInspectorOption(page, 'Scene type', 'motion', 'Remotion')
+      await expectInspectorOption(page, 'Composition family', 'bullet_stack', 'Bullet stack')
       await expect(page.getByRole('button', { name: 'Generate Motion Preview' })).toBeVisible()
       await expect(page.getByLabel('Motion headline')).toHaveValue('Prompts on prompts')
       await expect(page.getByTestId('remotion-player-surface')).toBeVisible()
@@ -630,35 +678,59 @@ test.describe('Scene Timeline', () => {
         && response.url().includes(`/api/projects/${DISPOSABLE_PROJECT}/plan`),
       )
 
-      await page.getByLabel('Composition family').selectOption('kinetic_statements')
-      await page.getByLabel('Composition mode').selectOption('native')
-      await page.getByLabel('Transition after').selectOption('fade')
+      await selectInspectorOption(page, 'Composition family', 'kinetic_statements', 'Kinetic statements')
+      await expectInspectorOption(page, 'Composition behavior', 'native', 'Native')
+      await selectInspectorOption(page, 'Transition after', 'fade', 'Fade')
       await saveResponse
 
       await expect.poll(() => {
-        const plan = readProjectPlan(DISPOSABLE_PROJECT) as Record<string, any>
+        const plan = readProjectPlan(DISPOSABLE_PROJECT) as MutablePlan
         const composition = plan.scenes?.[0]?.composition ?? {}
         return `${composition.family ?? ''}|${composition.mode ?? ''}|${composition.transition_after?.kind ?? ''}`
       }).toBe('kinetic_statements|native|fade')
 
+      const resetPlan = readProjectPlan(DISPOSABLE_PROJECT) as MutablePlan
+      const firstScene = resetPlan.scenes[0]
+      firstScene.scene_type = 'image'
+      firstScene.image_path = `projects/${DISPOSABLE_PROJECT}/images/scene_000.svg`
+      firstScene.video_path = null
+      firstScene.preview_path = null
+      firstScene.motion = null
+      firstScene.composition = {
+        family: 'media_pan',
+        mode: 'none',
+        manifestation: 'authored_image',
+        props: {
+          headline: String(firstScene.title || 'Scene 1'),
+          body: String(firstScene.narration || ''),
+        },
+        transition_after: null,
+        data: {},
+        render_path: null,
+        preview_path: null,
+        rationale: 'Reset after native composition persistence check.',
+      }
+      const planPath = path.join(process.cwd(), '..', 'projects', DISPOSABLE_PROJECT, 'plan.json')
+      fs.writeFileSync(planPath, `${JSON.stringify(resetPlan, null, 2)}\n`, 'utf8')
+
       await page.reload()
-      await expect(page.getByLabel('Composition family')).toHaveValue('kinetic_statements')
-      await expect(page.getByLabel('Composition mode')).toHaveValue('native')
-      await expect(page.getByLabel('Transition after')).toHaveValue('fade')
+      await expectInspectorOption(page, 'Composition family', 'media_pan', 'Media pan')
+      await expectInspectorOption(page, 'Composition behavior', 'none', 'None')
+      await expectInspectorOption(page, 'Transition after', '', 'None')
     })
 
-    test('prompt refine sends feedback to the correct endpoint', async ({ page }) => {
+    test('image direction refine sends feedback to the correct endpoint', async ({ page }) => {
       const plan = readProjectPlan(DISPOSABLE_PROJECT)
       const firstScene = (plan.scenes as Array<Record<string, unknown>>)[0]
       const sceneUid = String(firstScene.uid)
 
       await page.route(`**/api/projects/${DISPOSABLE_PROJECT}/scenes/${sceneUid}/prompt-refine`, async (route) => {
         const payload = route.request().postDataJSON() as Record<string, unknown>
-        expect(payload.feedback).toBe('Make the prompt tighter and more cinematic')
+        expect(payload.feedback).toBe('Make the direction tighter and more cinematic')
 
         const updatedPlan = structuredClone(plan) as Record<string, unknown>
         const scenes = updatedPlan.scenes as Array<Record<string, unknown>>
-        scenes[0].visual_prompt = 'Prompt refined by intercepted request'
+        scenes[0].visual_prompt = 'Direction refined by intercepted request'
         await route.fulfill({
           status: 200,
           contentType: 'application/json',
@@ -666,11 +738,11 @@ test.describe('Scene Timeline', () => {
         })
       })
 
-      await page.getByRole('button', { name: 'Refine Prompt' }).click()
-      await page.getByLabel('Prompt refine feedback').fill('Make the prompt tighter and more cinematic')
+      await page.getByRole('button', { name: 'Improve Direction' }).click()
+      await page.getByLabel('Image direction feedback').fill('Make the direction tighter and more cinematic')
       await page.getByRole('button', { name: 'Submit' }).click()
 
-      await expect(page.getByLabel('Visual prompt')).toHaveValue('Prompt refined by intercepted request')
+      await expect(page.getByLabel('Image direction')).toHaveValue('Direction refined by intercepted request')
     })
 
     test('narration refine sends feedback to the correct endpoint', async ({ page }) => {
@@ -729,19 +801,19 @@ test.describe('Scene Timeline', () => {
       )
 
       await page.getByLabel('Override project narrator for this scene').check()
-      await page.getByLabel('Scene Voice').selectOption('af_sarah')
+      await page.getByLabel('Scene Voice', { exact: true }).selectOption('af_sarah')
       await page.getByLabel('Scene Voice Speed').fill('1.25')
       await saveResponse
 
       await expect.poll(() => {
-        const plan = readProjectPlan(DISPOSABLE_PROJECT) as Record<string, any>
+        const plan = readProjectPlan(DISPOSABLE_PROJECT) as MutablePlan
         const scene = plan.scenes?.[0] ?? {}
         return `${scene.tts_override_enabled ?? false}|${scene.tts_voice ?? ''}|${scene.tts_speed ?? ''}`
       }).toBe('true|af_sarah|1.25')
 
       await page.reload()
       await expect(page.getByLabel('Override project narrator for this scene')).toBeChecked()
-      await expect(page.getByLabel('Scene Voice')).toHaveValue('af_sarah')
+      await expect(page.getByLabel('Scene Voice', { exact: true })).toHaveValue('af_sarah')
     })
 
     test('image upload targets the image-upload endpoint', async ({ page }, testInfo) => {
@@ -759,6 +831,7 @@ test.describe('Scene Timeline', () => {
         const updatedPlan = structuredClone(plan) as Record<string, unknown>
         const scenes = updatedPlan.scenes as Array<Record<string, unknown>>
         scenes[0].image_path = `projects/${DISPOSABLE_PROJECT}/images/image_${sceneUid}.png`
+        writeProjectImage(DISPOSABLE_PROJECT, `image_${sceneUid}.png`)
         await route.fulfill({
           status: 200,
           contentType: 'application/json',
@@ -768,7 +841,7 @@ test.describe('Scene Timeline', () => {
 
       await page.locator('input[type="file"][accept="image/*"]').setInputFiles(uploadPath)
 
-      const stageImage = page.getByRole('region', { name: 'Media stage' }).locator('img')
+      const stageImage = page.getByRole('region', { name: 'Media stage' }).locator('img').filter({ visible: true }).first()
       await expect(stageImage).toBeVisible()
     })
 
@@ -782,6 +855,7 @@ test.describe('Scene Timeline', () => {
         const updatedPlan = structuredClone(plan) as Record<string, unknown>
         const scenes = updatedPlan.scenes as Array<Record<string, unknown>>
         scenes[0].image_path = `projects/${DISPOSABLE_PROJECT}/images/image_${sceneUid}.png`
+        writeProjectImage(DISPOSABLE_PROJECT, `image_${sceneUid}.png`)
         await new Promise((resolve) => setTimeout(resolve, 400))
         await route.fulfill({
           status: 200,
@@ -824,6 +898,7 @@ test.describe('Scene Timeline', () => {
         const updatedPlan = structuredClone(plan) as Record<string, unknown>
         updatedPlan.scenes[0].title = updatedTitle
         updatedPlan.scenes[0].image_path = `projects/${DISPOSABLE_PROJECT}/images/image_${sceneUid}.png`
+        writeProjectImage(DISPOSABLE_PROJECT, `image_${sceneUid}.png`)
         await route.fulfill({
           status: 200,
           contentType: 'application/json',
@@ -835,7 +910,7 @@ test.describe('Scene Timeline', () => {
       await page.getByRole('button', { name: /Generate Image|Regenerate Image/ }).click()
 
       await expect(page.getByLabel('Scene title')).toHaveValue(updatedTitle)
-      await expect(page.getByRole('region', { name: 'Media stage' }).locator('img')).toBeVisible()
+      await expect(page.getByRole('region', { name: 'Media stage' }).locator('img').filter({ visible: true }).first()).toBeVisible()
     })
 
     test('preview generation targets the preview endpoint and shows the player', async ({ page }) => {
@@ -847,6 +922,7 @@ test.describe('Scene Timeline', () => {
         const updatedPlan = structuredClone(plan) as Record<string, unknown>
         const scenes = updatedPlan.scenes as Array<Record<string, unknown>>
         scenes[0].preview_path = `projects/${DISPOSABLE_PROJECT}/previews/preview_scene_000.mp4`
+        scenes[0].preview_exists = true
         await route.fulfill({
           status: 200,
           contentType: 'application/json',
@@ -867,15 +943,15 @@ test.describe('Scene Timeline', () => {
       await expect(page.getByText('Increase contrast and clean the label')).toBeVisible()
     })
 
-    test('video scenes expose clip controls and the separate agent demo action', async ({ page }) => {
+    test('video scenes expose clip controls and the separate demo capture action', async ({ page }) => {
       const plan = readProjectPlan(DISPOSABLE_PROJECT)
       const videoScene = (plan.scenes as Array<Record<string, unknown>>)[1]
       const sceneUid = String(videoScene.uid)
 
       await page.getByRole('listbox', { name: 'Scene timeline' }).getByRole('option').nth(1).click()
-      await expect(page.getByLabel('Scene type')).toHaveValue('video')
+      await expectInspectorOption(page, 'Scene type', 'video', 'Video')
       await expect(page.getByRole('button', { name: 'Generate Video' })).toBeVisible()
-      await expect(page.getByRole('button', { name: 'Agent Demo Scene' })).toBeVisible()
+      await expect(page.getByRole('button', { name: 'Capture Demo Scene' })).toBeVisible()
       await expect(page.getByRole('button', { name: 'Generate Image' })).toHaveCount(0)
       await expect(page.getByText('Clip Notes / Shot Direction')).toBeVisible()
       const saveResponse = page.waitForResponse((response) =>
@@ -886,7 +962,7 @@ test.describe('Scene Timeline', () => {
       await saveResponse
       await expect(page.getByLabel('Clip style')).toHaveValue('auto')
       await expect(page.getByLabel('Model selection')).toHaveValue('automatic')
-      await expect(page.locator('p').filter({ hasText: /Clip audio enabled, so betTube Studio uses the speaking-video lane\./ })).toBeVisible()
+      await expect(page.locator('p').filter({ hasText: /Automatic routing picks the cinematic or speaking lane/ })).toBeVisible()
       await expect(page.getByLabel('Scene audio source')).toHaveValue('narration')
       await expect(page.getByLabel('Clip Start (seconds)')).toHaveValue('1.5')
       await expect(page.getByLabel('Playback Speed')).toHaveValue('1.25')
@@ -915,7 +991,7 @@ test.describe('Scene Timeline', () => {
         })
       })
 
-      await page.getByRole('button', { name: 'Agent Demo Scene' }).click()
+      await page.getByRole('button', { name: 'Capture Demo Scene' }).click()
     })
 
     test('scene management controls insert before and after, then delete the selected scene', async ({ page }) => {
@@ -985,7 +1061,7 @@ test.describe('Scene Timeline', () => {
     test.beforeAll(() => {
       cloneProjectFixture(PROJECT, CLINICAL_PROJECT)
       const planPath = path.resolve(process.cwd(), '..', 'projects', CLINICAL_PROJECT, 'plan.json')
-      const plan = JSON.parse(fs.readFileSync(planPath, 'utf8')) as Record<string, any>
+      const plan = JSON.parse(fs.readFileSync(planPath, 'utf8')) as MutablePlan
       plan.meta.render_profile = {
         ...(plan.meta.render_profile || {}),
         render_backend: 'remotion',
@@ -1090,8 +1166,8 @@ test.describe('Scene Timeline', () => {
     test('cover_hook editor shows headline, subtitle, and kicker fields', async ({ page }) => {
       await page.goto(`/projects/${CLINICAL_PROJECT}/scenes`)
       await expect(page.getByRole('region', { name: 'Scene inspector' })).toBeVisible()
-      await expect(page.getByLabel('Scene type')).toHaveValue('motion')
-      await expect(page.getByLabel('Composition family')).toHaveValue('cover_hook')
+      await expectInspectorOption(page, 'Scene type', 'motion', 'Remotion')
+      await expectInspectorOption(page, 'Composition family', 'cover_hook', 'Cover hook')
       await expect(page.getByLabel('Cover headline')).toHaveValue('Your Brain Map')
       await expect(page.getByLabel('Cover subtitle')).toHaveValue('A personalized neural landscape')
       await expect(page.getByLabel('Cover kicker')).toHaveValue('Session 3 of 10')
@@ -1101,7 +1177,7 @@ test.describe('Scene Timeline', () => {
       await page.goto(`/projects/${CLINICAL_PROJECT}/scenes`)
       await expect(page.getByRole('region', { name: 'Scene inspector' })).toBeVisible()
       await page.getByRole('listbox', { name: 'Scene timeline' }).getByRole('option').nth(1).click()
-      await expect(page.getByLabel('Composition family')).toHaveValue('metric_improvement')
+      await expectInspectorOption(page, 'Composition family', 'metric_improvement', 'Metric improvement')
       await expect(page.getByLabel('Metric headline')).toHaveValue('Alpha Power')
       await expect(page.getByLabel('Metric name')).toHaveValue('Fz Alpha (8-12 Hz)')
       await expect(page.getByLabel('Before value')).toHaveValue('4.2 uV')
@@ -1109,14 +1185,14 @@ test.describe('Scene Timeline', () => {
       await expect(page.getByLabel('After value')).toHaveValue('6.1 uV')
       await expect(page.getByLabel('After label')).toHaveValue('Session 3')
       await expect(page.getByLabel('Delta')).toHaveValue('+45%')
-      await expect(page.getByLabel('Direction')).toHaveValue('improvement')
+      await expect(page.getByLabel('Direction', { exact: true })).toHaveValue('improvement')
     })
 
     test('brain_region_focus editor shows headline, regions array, and caption', async ({ page }) => {
       await page.goto(`/projects/${CLINICAL_PROJECT}/scenes`)
       await expect(page.getByRole('region', { name: 'Scene inspector' })).toBeVisible()
       await page.getByRole('listbox', { name: 'Scene timeline' }).getByRole('option').nth(2).click()
-      await expect(page.getByLabel('Composition family')).toHaveValue('brain_region_focus')
+      await expectInspectorOption(page, 'Composition family', 'brain_region_focus', 'Brain region focus')
       await expect(page.getByLabel('Brain region headline')).toHaveValue('Regional Activity')
       await expect(page.getByLabel('Brain region caption')).toHaveValue('Two regions tracked')
       await expect(page.getByLabel('Region 1 name')).toHaveValue('Frontal')
@@ -1131,7 +1207,7 @@ test.describe('Scene Timeline', () => {
       await page.goto(`/projects/${CLINICAL_PROJECT}/scenes`)
       await expect(page.getByRole('region', { name: 'Scene inspector' })).toBeVisible()
       await page.getByRole('listbox', { name: 'Scene timeline' }).getByRole('option').nth(3).click()
-      await expect(page.getByLabel('Composition family')).toHaveValue('timeline_progression')
+      await expectInspectorOption(page, 'Composition family', 'timeline_progression', 'Timeline progression')
       await expect(page.getByLabel('Timeline headline')).toHaveValue('Treatment Window')
       await expect(page.getByLabel('Span label')).toHaveValue('6-month protocol')
       await expect(page.getByLabel('Timeline caption')).toHaveValue('On track')
@@ -1151,7 +1227,7 @@ test.describe('Scene Timeline', () => {
       await saveResponse
 
       await expect.poll(() => {
-        const plan = readProjectPlan(CLINICAL_PROJECT) as Record<string, any>
+        const plan = readProjectPlan(CLINICAL_PROJECT) as MutablePlan
         const props = plan.scenes?.[0]?.composition?.props ?? {}
         return props.headline ?? ''
       }).toBe('Updated Brain Map')

@@ -23,6 +23,10 @@ from server.schemas.jobs import AgentDemoRequest, MakeVideoRequest, RenderReques
 router = APIRouter()
 
 
+def _job_sort_key(job: dict[str, Any]) -> str:
+    return str(job.get("updated_utc") or job.get("created_utc") or "")
+
+
 def _project_dir(project: str):
     d = PROJECTS_DIR / project
     if not d.exists():
@@ -100,6 +104,17 @@ async def dispatch_make_video_job(body: MakeVideoRequest) -> dict[str, Any]:
 async def list_jobs(project: str) -> list[dict[str, Any]]:
     project_dir = _project_dir(project)
     return [make_job_response(job) for job in list_project_jobs(project_dir)]
+
+
+@router.get("/jobs")
+async def list_all_jobs() -> list[dict[str, Any]]:
+    """List persisted jobs across every project directory, including job-only projects."""
+    jobs: list[dict[str, Any]] = []
+    for project_dir in sorted(PROJECTS_DIR.iterdir()):
+        if not project_dir.is_dir():
+            continue
+        jobs.extend(make_job_response(job) for job in list_project_jobs(project_dir))
+    return sorted(jobs, key=_job_sort_key, reverse=True)
 
 
 @router.get("/jobs/{job_id}")

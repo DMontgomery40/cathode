@@ -12,8 +12,8 @@
   overflow: hidden;
   padding: var(--workspace-panel-gap);
   background:
-    radial-gradient(circle at 78% 0%, rgba(200, 169, 110, 0.12), transparent 26rem),
-    radial-gradient(circle at 10% 20%, rgba(91, 138, 130, 0.12), transparent 22rem),
+    radial-gradient(circle at 78% 0%, rgba(var(--focus-rgb), 0.08), transparent 26rem),
+    radial-gradient(circle at 10% 20%, rgba(var(--accent-primary-rgb), 0.14), transparent 22rem),
     var(--workspace-ambient-grid);
   background-size: auto, auto, 2.75rem 2.75rem;
   background-position: center, center, -1px -1px;
@@ -158,8 +158,8 @@
   background:
     linear-gradient(
       180deg,
-      rgba(91, 138, 130, 0.18),
-      rgba(200, 169, 110, 0.12)
+      rgba(var(--accent-primary-rgb), 0.2),
+      rgba(var(--focus-rgb), 0.1)
     );
   opacity: 0;
   transition: opacity var(--workspace-section-transition);
@@ -196,11 +196,11 @@
   border-radius: 999px;
   background: linear-gradient(
     180deg,
-    rgba(240, 236, 228, 0.12),
-    rgba(91, 138, 130, 0.34)
+    rgba(var(--text-primary-rgb), 0.12),
+    rgba(var(--focus-rgb), 0.32)
   );
   box-shadow:
-    0 0 0 1px rgba(240, 236, 228, 0.08),
+    0 0 0 1px rgba(var(--text-primary-rgb), 0.08),
     0 10px 20px rgba(0, 0, 0, 0.18);
 }
 
@@ -257,7 +257,7 @@
   overflow-x: auto;
   overflow-y: hidden;
   scrollbar-width: thin;
-  scrollbar-color: rgba(91, 138, 130, 0.65) rgba(255, 255, 255, 0.06);
+  scrollbar-color: rgba(var(--accent-primary-rgb), 0.7) rgba(255, 255, 255, 0.06);
 }
 
 .scene-timeline-strip__surface[data-layout='rail']::-webkit-scrollbar {
@@ -270,7 +270,7 @@
 }
 
 .scene-timeline-strip__surface[data-layout='rail']::-webkit-scrollbar-thumb {
-  background: linear-gradient(90deg, rgba(91, 138, 130, 0.72), rgba(200, 169, 110, 0.72));
+  background: linear-gradient(90deg, rgba(var(--accent-primary-rgb), 0.78), rgba(var(--focus-rgb), 0.52));
   border-radius: 999px;
 }
 

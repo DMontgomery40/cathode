@@ -8,8 +8,8 @@ test.describe('Short Form Studio', () => {
         contentType: 'application/json',
         body: JSON.stringify({
           tiers: [
-            { value: 'dev-native-credible', label: 'Dev-native credible', description: 'Proof-first.' },
-            { value: 'mass-native-technical', label: 'Mass-native technical', description: 'Cold-feed.' },
+            { value: 'dev-native-credible', label: 'Technical proof', description: 'Proof-first.' },
+            { value: 'mass-native-technical', label: 'Broad technical', description: 'Cold-feed.' },
           ],
           approaches: [
             { value: 'public-reframe', label: 'Public reframe', description: 'Fresh vertical idea.' },
@@ -46,13 +46,14 @@ test.describe('Short Form Studio', () => {
 
     await page.goto('/short-form')
     await expect(page.getByRole('heading', { name: 'Short Form Studio' })).toBeVisible()
+    await expect(page.getByText('Platform targets are saved into the short-form brief and request preview')).toBeVisible()
 
     await page.getByLabel('Project Name').fill('short_form_surface')
     await page.getByLabel('Source Material').fill('A longer technical demo about agent teams moving work through betTube Studio.')
     await page.getByLabel('Hook Promise').fill('This is what agent teams look like when they stop being slides.')
     await page.getByLabel('Payoff').fill('The viewer sees the operator handoff and the finished render path.')
     await page.getByLabel('Tier').selectOption('dev-native-credible')
-    await page.getByLabel('Short Mode').selectOption('mixed-media-proof')
+    await page.getByLabel('Short Approach').selectOption('mixed-media-proof')
     await page.getByLabel('Caption Strategy').selectOption('meaning-card-captions')
     await page.getByLabel('Runtime').fill('45')
     await page.getByLabel('Subject').fill('betTube Studio')
@@ -64,6 +65,7 @@ test.describe('Short Form Studio', () => {
       expect(payload.project_name).toBe('short_form_surface')
       expect(payload.runtime_seconds).toBe(45)
       expect(payload.approach).toBe('mixed-media-proof')
+      expect(payload.platform_targets).toEqual(['tiktok', 'instagram-reels', 'youtube-shorts'])
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -83,16 +85,21 @@ test.describe('Short Form Studio', () => {
           },
           preview: {
             frame: '9:16 928x1664 @ 30fps',
-            pipeline: ['brief', 'director', 'normalized_plan', 'storyboard_stop', 'render_stop'],
-            guardrails: ['one main idea', 'source-loyal visual prompts'],
+            tier: 'Technical proof',
+            approach: 'Mixed-media proof',
+            pipeline: ['brief', 'storyboard', 'asset plan', 'storyboard only', 'render later'],
+            guardrails: ['one main idea', 'source-loyal visual direction'],
           },
         }),
       })
     })
 
-    await page.getByRole('button', { name: 'Preview Payload' }).click()
-    await expect(page.getByText('9:16 928x1664 @ 30fps')).toBeVisible()
-    await expect(page.getByText('"short_form_format": "vertical_short"')).toBeVisible()
+    await page.getByRole('button', { name: 'Preview Plan' }).click()
+    await expect(page.locator('.workspace-kpi-grid').getByText('9:16 928x1664 @ 30fps')).toBeVisible()
+    await expect(page.locator('.workspace-kpi-grid').getByText('Technical proof')).toBeVisible()
+    await expect(page.getByText('One 9:16 MP4', { exact: true })).toBeVisible()
+    await expect(page.getByText('Show request JSON')).toHaveCount(0)
+    await expect(page.getByText('"short_form_format": "vertical_short"')).toHaveCount(0)
 
     await page.route('**/api/short-form/jobs', async (route) => {
       const payload = route.request().postDataJSON() as Record<string, unknown>
@@ -117,7 +124,7 @@ test.describe('Short Form Studio', () => {
       })
     })
 
-    await page.getByRole('button', { name: 'Start Short' }).click()
+    await page.getByRole('button', { name: 'Build Storyboard' }).click()
     await page.waitForURL('**/projects/short_form_surface/queue')
   })
 })

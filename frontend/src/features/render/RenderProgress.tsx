@@ -1,6 +1,7 @@
 import { clsx } from 'clsx'
 import { GlassPanel } from '../../components/primitives/GlassPanel.tsx'
-import type { Job } from '../../lib/api/jobs.ts'
+import { getRenderBackendMeta, type Job } from '../../lib/api/jobs.ts'
+import StepChecklist from '../jobs/StepChecklist.tsx'
 
 interface RenderProgressProps {
   job: Job | null
@@ -49,6 +50,11 @@ export function RenderProgress({ job, logContent, onCancel }: RenderProgressProp
   const prettyError = typeof job.error === 'string' ? job.error : job.error?.operatorHint || job.error?.message
   const progressLabel = job.progress_label || (isActive ? 'Working' : 'Last run')
   const progressDetail = job.progress_detail || job.suggestion || ''
+
+  const { warning: backendWarning, used: backendUsed } = getRenderBackendMeta(job.result)
+  const renderEngineWarning = backendWarning
+    ? backendWarning.replace(/\brender_backend\b/g, 'render engine').replace(/\bbackend\b/g, 'engine')
+    : null
 
   return (
     <GlassPanel variant="default" padding="md">
@@ -146,6 +152,38 @@ export function RenderProgress({ job, logContent, onCancel }: RenderProgressProp
               </span>
             )}
           </div>
+        )}
+
+        {/* Remotion fallback warning — shown when Remotion was requested but ffmpeg was used */}
+        {renderEngineWarning && (
+          <div
+            className="flex flex-col gap-[var(--space-1)] rounded-[var(--radius-md)] border border-[rgba(210,150,40,0.3)] bg-[rgba(210,150,40,0.08)]"
+            style={{ padding: 'var(--space-2) var(--space-3)' }}
+            role="alert"
+          >
+            <span
+              className="text-[var(--signal-warning)]"
+              style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--weight-medium)' }}
+            >
+              Render engine fallback
+            </span>
+            <span className="text-[var(--text-secondary)]" style={{ fontSize: 'var(--text-xs)' }}>
+              {renderEngineWarning}
+            </span>
+            {backendUsed && (
+              <span
+                className="text-[var(--text-tertiary)] font-[family-name:var(--font-mono)]"
+                style={{ fontSize: '10px' }}
+              >
+                Used: {backendUsed}
+              </span>
+            )}
+          </div>
+        )}
+
+        {/* Step checklist — compact view showing running/failed steps */}
+        {(job.steps ?? []).length > 0 && (
+          <StepChecklist steps={job.steps ?? []} compact />
         )}
 
         {logContent && (

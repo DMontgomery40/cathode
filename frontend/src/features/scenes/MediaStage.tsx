@@ -165,8 +165,9 @@ export function MediaStage({ scene, project, remotionEnabled = false, remotionMa
             <div
               className="rounded-full border border-[var(--border-subtle)] bg-[var(--surface-stage)] px-[var(--space-2)] py-[var(--space-1)] text-[var(--text-secondary)]"
               style={{ fontSize: '10px', fontFamily: 'var(--font-mono)' }}
+              title={scene.scene_type === 'motion' && !remotionEnabled ? 'Remotion scene — shown as still image (Remotion unavailable)' : undefined}
             >
-              {displaySceneType}
+              {scene.scene_type === 'motion' && !remotionEnabled ? 'Remotion (preview unavailable)' : displaySceneType}
             </div>
           )}
         </div>

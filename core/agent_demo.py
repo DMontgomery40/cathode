@@ -90,7 +90,7 @@ def build_agent_demo_prompt(
         ]
 
     if not target_scenes:
-        raise ValueError("No target video scenes were found for the Agent Demo run.")
+        raise ValueError("No target video scenes were found for the Demo Capture run.")
 
     resolved_workspace = str(workspace_path or default_target_repo_path()).strip()
     run_label = "render the project" if run_until == "render" else "stop after the scene media/preview work is complete"
@@ -108,7 +108,7 @@ def build_agent_demo_prompt(
     }
 
     return (
-        "You are running as betTube Studio's explicit Agent Demo path.\n"
+        "You are running as betTube Studio's explicit Demo Capture path.\n"
         "This is separate from local video generation and should use the live-demo capture workflow, not the image pipeline.\n\n"
         f"Repository root: {REPO_ROOT}\n"
         f"Live-demo utility scripts: {LIVE_DEMO_SCRIPTS_PATH}\n"

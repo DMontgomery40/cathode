@@ -78,6 +78,7 @@ Thumbs.db
 
 # Local operator context
 LOCAL_QEEG_ADMIN_CONTEXT.md
+.codex-scratchpad/
 
 # Experiments
 experiments/

@@ -36,6 +36,9 @@ export function RenderSettings({
   const textStrategyCopy = textRenderMode === 'deterministic_overlay'
     ? "betTube Studio uses the native overlay renderer for the scene's on-screen text."
     : 'Generated visuals and footage own the visible copy; no extra text layer is added by default.'
+  const renderEngineReason = renderBackendReason
+    ? renderBackendReason.replace(/\brender_backend\b/g, 'render engine').replace(/\bbackend\b/g, 'engine')
+    : null
 
   return (
     <GlassPanel variant="default" padding="md">
@@ -169,7 +172,7 @@ export function RenderSettings({
 
         <div className="flex flex-col gap-[var(--space-1)]" style={{ marginTop: 'var(--space-2)' }}>
           <span className="text-[var(--text-tertiary)]" style={{ fontSize: 'var(--text-xs)' }}>
-            Resolved render backend
+            Render engine
           </span>
           <span
             className="text-[var(--text-secondary)] font-[family-name:var(--font-mono)]"
@@ -177,9 +180,9 @@ export function RenderSettings({
           >
             {renderBackend}
           </span>
-          {renderBackendReason ? (
+          {renderEngineReason ? (
             <p className="m-0 text-[var(--text-tertiary)]" style={{ fontSize: 'var(--text-xs)' }}>
-              {renderBackendReason}
+              {renderEngineReason}
             </p>
           ) : null}
         </div>

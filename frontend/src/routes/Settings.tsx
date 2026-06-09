@@ -30,7 +30,7 @@ function mergeImageProfile(defaults: Record<string, unknown> | undefined, persis
 function imageProviderDisplayName(provider: string): string {
   switch (provider) {
     case 'codex':
-      return 'Codex Exec'
+      return 'GPT Image'
     case 'replicate':
       return 'Replicate'
     case 'local':
@@ -45,34 +45,23 @@ function imageProviderDisplayName(provider: string): string {
 export function Settings() {
   const { data: bootstrap } = useBootstrap()
   const { data: projects } = useProjects()
-  const [selectedProject, setSelectedProject] = useState(() => readLastProjectId())
+  const [selectedProjectDraft, setSelectedProjectDraft] = useState(() => readLastProjectId())
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [saving, setSaving] = useState(false)
-
-  useEffect(() => {
+  const selectedProject = useMemo(() => {
     if (!projects || projects.length === 0) {
-      if (selectedProject) {
-        setSelectedProject('')
-        writeLastProjectId('')
-      }
-      return
+      return ''
     }
-
     const projectNames = new Set(projects.map((project) => project.name))
+    if (selectedProjectDraft && projectNames.has(selectedProjectDraft)) {
+      return selectedProjectDraft
+    }
     const rememberedProject = readLastProjectId()
-    const desiredProject = rememberedProject && projectNames.has(rememberedProject)
-      ? rememberedProject
-      : selectedProject && projectNames.has(selectedProject)
-        ? selectedProject
-        : projects[0].name
-
-    if (selectedProject !== desiredProject) {
-      setSelectedProject(desiredProject)
+    if (rememberedProject && projectNames.has(rememberedProject)) {
+      return rememberedProject
     }
-    if (rememberedProject !== desiredProject) {
-      writeLastProjectId(desiredProject)
-    }
-  }, [projects, selectedProject])
+    return projects[0].name
+  }, [projects, selectedProjectDraft])
 
   useEffect(() => {
     if (!selectedProject) {
@@ -100,6 +89,11 @@ export function Settings() {
     ),
     [bootstrap, plan],
   )
+  const configuredImageProviders = bootstrap?.providers?.image_providers ?? []
+  const savedImageProvider = String(imageProfile.provider || configuredImageProviders[0] || 'manual')
+  const effectiveImageProvider = configuredImageProviders.includes(savedImageProvider)
+    ? savedImageProvider
+    : configuredImageProviders[0] || 'manual'
   const imageActionHistory = useMemo(
     () => Array.isArray(plan?.meta?.image_action_history)
       ? (plan?.meta?.image_action_history as ImageActionHistoryEntry[]).filter((entry): entry is ImageActionHistoryEntry => Boolean(entry && typeof entry === 'object'))
@@ -182,7 +176,7 @@ export function Settings() {
               <WorkspacePanel
                 title="Target project"
                 eyebrow="Editing context"
-                copy="Choose the project once, then tune image and voice defaults for that exact project without hunting for a hidden selector in a sub-panel."
+                copy="Choose the project, then tune image and voice defaults for that production."
               >
                 <div className="flex flex-col gap-[var(--space-4)]">
                   <Select
@@ -190,7 +184,7 @@ export function Settings() {
                     value={selectedProject}
                     onChange={(event) => {
                       const nextProject = event.target.value
-                      setSelectedProject(nextProject)
+                      setSelectedProjectDraft(nextProject)
                       writeLastProjectId(nextProject)
                     }}
                     options={(projects ?? []).map((project) => ({ value: project.name, label: project.name }))}
@@ -205,7 +199,7 @@ export function Settings() {
                       </div>
                       <div>
                         <p className="workspace-eyebrow">Image provider</p>
-                        <div className="workspace-panel-title text-[var(--text-xl)]">{imageProviderDisplayName(String(imageProfile.provider || 'manual'))}</div>
+                        <div className="workspace-panel-title text-[var(--text-xl)]">{imageProviderDisplayName(effectiveImageProvider)}</div>
                       </div>
                       <div>
                         <p className="workspace-eyebrow">Voice provider</p>
@@ -217,7 +211,7 @@ export function Settings() {
               </WorkspacePanel>
               <ImageProfilePanel
                 profile={imageProfile}
-                imageProviders={bootstrap?.providers?.image_providers ?? []}
+                imageProviders={configuredImageProviders}
                 editModels={bootstrap?.providers?.image_edit_models ?? []}
                 costCatalog={costCatalog}
                 saving={saving || savePlan.isPending}
@@ -234,6 +228,7 @@ export function Settings() {
               <TtsProfilePanel
                 profile={ttsProfile}
                 providers={bootstrap?.providers?.tts_providers ?? {}}
+                apiKeys={bootstrap?.providers?.api_keys ?? {}}
                 voiceOptions={bootstrap?.providers?.tts_voice_options ?? {}}
                 costCatalog={costCatalog}
                 saving={saving || savePlan.isPending}
@@ -242,16 +237,15 @@ export function Settings() {
               />
               <ProviderMatrix />
               <WorkspacePanel
-                title="Provider policy"
-                eyebrow="Operating model"
-                copy="This should clarify what the current machine can actually do, while making the image-first product stance obvious instead of treating motion and stills like equal defaults."
+                title="Provider availability"
+                eyebrow="Credentials"
+                copy="Configured services are enabled in the controls above. Missing services stay visible in provider menus with the credential they need."
               >
                 <div className="flex flex-wrap gap-[var(--space-2)]">
-                  <Badge variant="success">Env-driven</Badge>
-                  <Badge variant="active">Local-first</Badge>
-                  <Badge variant="active">Stills first</Badge>
-                  <Badge variant="default">No fake providers</Badge>
-                  <Badge variant="default">Capability-gated UI</Badge>
+                  <Badge variant={bootstrap?.providers?.api_keys?.anthropic ? 'success' : 'default'}>Anthropic</Badge>
+                  <Badge variant={bootstrap?.providers?.api_keys?.openai ? 'success' : 'default'}>OpenAI</Badge>
+                  <Badge variant={bootstrap?.providers?.api_keys?.replicate ? 'success' : 'default'}>Replicate</Badge>
+                  <Badge variant={bootstrap?.providers?.api_keys?.elevenlabs ? 'success' : 'default'}>ElevenLabs</Badge>
                 </div>
               </WorkspacePanel>
             </div>
@@ -259,30 +253,30 @@ export function Settings() {
           aside={(
             <div className="workspace-panel-stack">
               <WorkspacePanel
-                title="Image-first policy"
-                eyebrow="Provider UX"
-                copy="Configured capability should influence generation buttons, route affordances, and defaults across the app. Local Codex execution plus GPT Image should be the visible preferred lane for stills when this machine can support it."
+                title="Selected project"
+                eyebrow="Context"
+                copy="Settings are saved to the selected project and used by scene generation, narration, and render actions."
               >
                 <div className="workspace-kpi-grid">
                   <div>
-                    <p className="workspace-eyebrow">Surface</p>
-                    <div className="workspace-panel-title text-[var(--text-2xl)]">Practical</div>
+                    <p className="workspace-eyebrow">Scenes</p>
+                    <div className="workspace-panel-title text-[var(--text-2xl)]">{plan?.scenes.length ?? 0}</div>
                   </div>
                   <div>
-                    <p className="workspace-eyebrow">Fallback</p>
-                    <div className="workspace-panel-title text-[var(--text-2xl)]">Visible</div>
+                    <p className="workspace-eyebrow">Image</p>
+                    <div className="workspace-panel-title text-[var(--text-2xl)]">{imageProviderDisplayName(effectiveImageProvider)}</div>
                   </div>
                 </div>
               </WorkspacePanel>
               <WorkspacePanel
-                title="What this page should do"
-                eyebrow="Scope"
-                copy="Clarify the current machine state, show capability buckets, and explain what that means for the rest of the product without drowning the user in raw provider plumbing."
+                title="Voice availability"
+                eyebrow="Narration"
+                copy="Kokoro is available without cloud credentials. Cloud voices appear in the provider list with setup requirements when credentials are missing."
               >
                 <div className="flex flex-col gap-[var(--space-2)]">
-                  <p className="workspace-panel-copy m-0">If cloud image generation is missing, scene editing still needs a sane local/manual path.</p>
-                  <p className="workspace-panel-copy m-0">If only local TTS is available, render and scene actions should stay shippable instead of looking half broken.</p>
-                  <p className="workspace-panel-copy m-0">If a provider appears here, it should mean the rest of the app can actually use it.</p>
+                  <Badge variant="success">Kokoro available</Badge>
+                  <Badge variant={bootstrap?.providers?.api_keys?.elevenlabs || bootstrap?.providers?.api_keys?.replicate ? 'success' : 'default'}>ElevenLabs</Badge>
+                  <Badge variant={bootstrap?.providers?.api_keys?.openai ? 'success' : 'default'}>OpenAI voice</Badge>
                 </div>
               </WorkspacePanel>
             </div>

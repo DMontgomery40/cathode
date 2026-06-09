@@ -2,14 +2,35 @@
 
 from __future__ import annotations
 
+import os
 from typing import Any
 
 from .project_schema import sanitize_project_name
+from .runtime import available_tts_providers
 
 SHORT_FORM_TIERS = {"mass-native-technical", "dev-native-credible"}
 SHORT_FORM_APPROACHES = {"public-reframe", "source-cutdown", "mixed-media-proof"}
 CAPTION_STRATEGIES = {"word-level-highlight", "meaning-card-captions", "keyword-labels"}
 PLATFORM_TARGETS = {"tiktok", "instagram-reels", "youtube-shorts"}
+PLATFORM_LABELS = {
+    "tiktok": "TikTok",
+    "instagram-reels": "Instagram Reels",
+    "youtube-shorts": "YouTube Shorts",
+}
+TIER_LABELS = {
+    "dev-native-credible": "Technical proof",
+    "mass-native-technical": "Broad technical",
+}
+APPROACH_LABELS = {
+    "public-reframe": "Public reframe",
+    "source-cutdown": "Source cutdown",
+    "mixed-media-proof": "Mixed-media proof",
+}
+CAPTION_STRATEGY_LABELS = {
+    "word-level-highlight": "Word-level highlight",
+    "meaning-card-captions": "Meaning-card captions",
+    "keyword-labels": "Keyword labels",
+}
 RUN_UNTIL_VALUES = {"storyboard", "assets", "render"}
 DEFAULT_PLATFORM_TARGETS = ["tiktok", "instagram-reels", "youtube-shorts"]
 
@@ -24,12 +45,12 @@ SHORT_FORM_OPTIONS = {
     "tiers": [
         {
             "value": "dev-native-credible",
-            "label": "Dev-native credible",
+            "label": "Technical proof",
             "description": "Proof-first, technically credible, inspectable visuals, and less slang.",
         },
         {
             "value": "mass-native-technical",
-            "label": "Mass-native technical",
+            "label": "Broad technical",
             "description": "Broader cold-feed energy with simple language and restrained social-native punch.",
         },
     ],
@@ -68,9 +89,21 @@ SHORT_FORM_OPTIONS = {
         },
     ],
     "platform_targets": [
-        {"value": "tiktok", "label": "TikTok"},
-        {"value": "instagram-reels", "label": "Instagram Reels"},
-        {"value": "youtube-shorts", "label": "YouTube Shorts"},
+        {
+            "value": "tiktok",
+            "label": "TikTok",
+            "description": "Biases the hook, caption density, and mobile-safe framing for a fast cold-feed watch.",
+        },
+        {
+            "value": "instagram-reels",
+            "label": "Instagram Reels",
+            "description": "Biases polish, readability, and payoff clarity for Reels while keeping the same 9:16 render.",
+        },
+        {
+            "value": "youtube-shorts",
+            "label": "YouTube Shorts",
+            "description": "Biases context, retention, and payoff clarity for Shorts while keeping the same 9:16 render.",
+        },
     ],
     "run_until": [
         {"value": "storyboard", "label": "Storyboard", "description": "Plan only; safest first pass before spending media calls."},
@@ -88,6 +121,24 @@ def _clean_lines(value: Any) -> list[str]:
     if isinstance(value, list):
         return [str(item).strip() for item in value if str(item).strip()]
     return [line.strip() for line in str(value or "").splitlines() if line.strip()]
+
+
+def _short_form_tts_profile(data: dict[str, Any]) -> dict[str, Any]:
+    profile = data.get("tts_profile") if isinstance(data.get("tts_profile"), dict) else None
+    if profile:
+        return {**profile, "speed": float(profile.get("speed") or 1.0)}
+
+    if "openai" in available_tts_providers():
+        return {
+            "provider": "openai",
+            "voice": os.getenv("BETTUBE_STUDIO_OPENAI_TTS_VOICE") or "marin",
+            "model_id": os.getenv("BETTUBE_STUDIO_OPENAI_TTS_MODEL") or "gpt-4o-mini-tts",
+            "speed": 1.0,
+        }
+
+    return {
+        "speed": 1.0,
+    }
 
 
 def _slug_choice(value: Any, allowed: set[str], fallback: str) -> str:
@@ -190,6 +241,7 @@ def _brief_text(
     tier: str,
     approach: str,
     caption_strategy: str,
+    platform_targets: list[str],
 ) -> str:
     hook = _clean(data.get("hook_promise"))
     payoff = _clean(data.get("payoff"))
@@ -200,19 +252,21 @@ def _brief_text(
         "source-cutdown": "primary proof material; cut to one standalone moment",
         "mixed-media-proof": "proof anchor mixed with fresh generated vertical visuals",
     }[approach]
+    platform_labels = ", ".join(PLATFORM_LABELS.get(platform, platform) for platform in platform_targets)
     return "\n".join(
         [
             f"Create a {int(round(runtime_seconds))}-second vertical short-form video.",
             "It must be hook-first, fast-paced, caption-led, and built around one clear payoff.",
             "The first 1-3 seconds must create a concrete reason to keep watching.",
             "Use 3-5 beats with visible pattern changes every 3-5 seconds.",
-            f"Short-form tier: {tier}.",
-            f"Short-form approach: {approach.replace('-', ' ')}.",
+            f"Short-form tier: {TIER_LABELS.get(tier, tier)}.",
+            f"Short-form approach: {APPROACH_LABELS.get(approach, approach.replace('-', ' '))}.",
+            f"Platform targets: {platform_labels}.",
             f"Source footage role: {source_video_role}.",
             f"Hook promise: {hook or 'a concrete result, contradiction, mistake, or proof moment'}",
             f"Audience: {audience}",
             f"Payoff: {payoff or 'the viewer understands the one useful idea before the CTA'}",
-            f"Caption strategy: {caption_strategy.replace('-', ' ')}.",
+            f"Caption strategy: {CAPTION_STRATEGY_LABELS.get(caption_strategy, caption_strategy.replace('-', ' '))}.",
             f"CTA: {cta}",
         ]
     )
@@ -243,19 +297,19 @@ def _payload_preview(
         "format": "vertical_short",
         "frame": f"{render_profile['aspect_ratio']} {render_profile['width']}x{render_profile['height']} @ {render_profile['fps']}fps",
         "runtime_seconds": runtime_seconds,
-        "tier": tier,
-        "approach": approach,
-        "caption_strategy": caption_strategy,
+        "tier": TIER_LABELS.get(tier, tier),
+        "approach": APPROACH_LABELS.get(approach, approach),
+        "caption_strategy": CAPTION_STRATEGY_LABELS.get(caption_strategy, caption_strategy),
         "platform_targets": platform_targets,
         "run_until": run_until,
         "source_role": _approach_source_role(approach),
         "has_source_anchor": bool(anchor_card),
         "pipeline": [
             "brief",
-            "director",
-            "normalized_plan",
-            "assets" if run_until in {"assets", "render"} else "storyboard_stop",
-            "render" if run_until == "render" else "render_stop",
+            "storyboard",
+            "asset plan",
+            "assets" if run_until in {"assets", "render"} else "storyboard only",
+            "render" if run_until == "render" else "render later",
         ],
         "beat_shape": [
             {"range": "0-3s", "job": "hook promise"},
@@ -264,7 +318,7 @@ def _payload_preview(
         ],
         "guardrails": [
             "one main idea",
-            "source-loyal visual prompts",
+            "source-loyal visual direction",
             "caption-safe mobile framing",
             "no current-word captions without final-audio word timings",
         ],
@@ -306,6 +360,7 @@ def build_short_form_payload(data: dict[str, Any]) -> dict[str, Any]:
         tier=tier,
         approach=approach,
         caption_strategy=caption_strategy,
+        platform_targets=platform_targets,
     )
     must_include_parts = [
         "A first-3-second hook.",
@@ -393,9 +448,7 @@ def build_short_form_payload(data: dict[str, Any]) -> dict[str, Any]:
         "quality_mode": "standard",
         "generate_audio": True,
     }
-    tts_profile = {
-        "speed": 1.0,
-    }
+    tts_profile = _short_form_tts_profile(data)
     image_profile = data.get("image_profile") if isinstance(data.get("image_profile"), dict) else None
     preview = _payload_preview(
         project_name=project_name,

@@ -1,4 +1,5 @@
 import { JobCard } from '../jobs/JobCard.tsx'
+import { DetailGrid } from '../../components/composed/DetailGrid.tsx'
 import { WorkspacePanel } from '../../design-system/recipes'
 import { formatImageActionLabel, formatImageActionSummary, formatImageActionTime, imageActionStatusClass } from '../../lib/image-action-history.ts'
 import type { Job } from '../../lib/api/jobs.ts'
@@ -14,6 +15,16 @@ function failedCount(entries: ImageActionHistoryEntry[]): number {
   return entries.filter((entry) => entry.status === 'error').length
 }
 
+function actionValue(entry: ImageActionHistoryEntry, key: string): string {
+  const requestValue = entry.request?.[key]
+  const resultValue = entry.result?.[key]
+  const value = requestValue ?? resultValue
+  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+    return String(value)
+  }
+  return ''
+}
+
 export function ImageActivityPanel({ project, entries, jobs }: ImageActivityPanelProps) {
   const recentEntries = entries.slice(0, 6)
   const recentJobs = jobs.slice(0, 3)
@@ -22,7 +33,7 @@ export function ImageActivityPanel({ project, entries, jobs }: ImageActivityPane
     <WorkspacePanel
       title="Image activity"
       eyebrow="Logs & history"
-      copy="Recent scene image actions stay with the project, and background asset job logs are visible here instead of disappearing into a transient inspector state."
+      copy="Recent scene image actions and background asset job logs for the selected project."
     >
       <div className="flex flex-col gap-[var(--space-4)]">
         <div className="workspace-kpi-grid">
@@ -45,13 +56,13 @@ export function ImageActivityPanel({ project, entries, jobs }: ImageActivityPane
             <div className="flex items-center justify-between gap-[var(--space-3)]">
               <div>
                 <div className="workspace-eyebrow">Recent scene image actions</div>
-                <p className="workspace-panel-copy m-0">Uploads, generates, and edits now persist with the plan so operators can retrace what happened.</p>
+                <p className="workspace-panel-copy m-0">Uploads, generations, and edits are saved with the project history.</p>
               </div>
             </div>
 
             {recentEntries.length === 0 ? (
               <div className="rounded-[var(--radius-lg)] border border-[var(--border-subtle)] bg-[var(--surface-stage)] px-[var(--space-4)] py-[var(--space-4)] text-[var(--text-tertiary)]" style={{ fontSize: 'var(--text-sm)' }}>
-                No image actions recorded yet. Use scene image upload, generate, or edit actions and the latest requests will land here.
+                No image actions recorded yet. Upload, generate, or edit a scene image and the latest action summaries will land here.
               </div>
             ) : (
               recentEntries.map((entry, index) => (
@@ -87,20 +98,14 @@ export function ImageActivityPanel({ project, entries, jobs }: ImageActivityPane
                   </summary>
 
                   <div className="mt-[var(--space-3)] flex flex-col gap-[var(--space-3)]">
-                    <pre
-                      className="m-0 overflow-x-auto rounded-[var(--radius-md)] border border-[var(--border-subtle)] bg-[var(--surface-void)] p-[var(--space-3)] text-[var(--text-tertiary)]"
-                      style={{ fontSize: '10px', fontFamily: 'var(--font-mono)' }}
-                    >
-                      {JSON.stringify(entry.request ?? {}, null, 2)}
-                    </pre>
-                    {entry.result && Object.keys(entry.result).length > 0 && (
-                      <pre
-                        className="m-0 overflow-x-auto rounded-[var(--radius-md)] border border-[var(--border-subtle)] bg-[var(--surface-void)] p-[var(--space-3)] text-[var(--text-tertiary)]"
-                        style={{ fontSize: '10px', fontFamily: 'var(--font-mono)' }}
-                      >
-                        {JSON.stringify(entry.result, null, 2)}
-                      </pre>
-                    )}
+                    <DetailGrid
+                      items={[
+                        { label: 'Provider', value: actionValue(entry, 'provider') || 'Project default' },
+                        { label: 'Model', value: actionValue(entry, 'model') || 'Model default', title: actionValue(entry, 'model') },
+                        { label: 'Output', value: actionValue(entry, 'output_path') ? 'Saved' : entry.status || 'Recorded' },
+                        { label: 'Scene', value: entry.scene_title || `Scene ${entry.scene_index ?? '--'}` },
+                      ]}
+                    />
                     {entry.error && (
                       <div className="text-[var(--signal-danger)]" role="alert" style={{ fontSize: 'var(--text-xs)' }}>
                         {entry.error}
@@ -116,7 +121,7 @@ export function ImageActivityPanel({ project, entries, jobs }: ImageActivityPane
             <div className="flex items-end justify-between gap-[var(--space-3)]">
               <div>
                 <div className="workspace-eyebrow">Background image jobs</div>
-                <p className="workspace-panel-copy m-0">Asset passes keep their raw log tails here. Expand a job to inspect the request and latest log output.</p>
+                <p className="workspace-panel-copy m-0">Asset passes keep their step trail here. Expand a job to inspect status, timing, and latest log output.</p>
               </div>
               {project && (
                 <a

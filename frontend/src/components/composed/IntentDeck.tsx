@@ -126,7 +126,7 @@ export function IntentDeck({ cards, columns = 3 }: IntentDeckProps) {
         const sharedClassName = clsx(
           'block text-left cursor-pointer w-full',
           'outline-none focus-visible:shadow-[var(--focus-ring)]',
-          isPrimary && 'border-[var(--border-accent)] shadow-[0_0_24px_rgba(200,169,110,0.06)]',
+          isPrimary && 'border-[var(--border-accent)] shadow-[0_0_24px_rgba(var(--accent-primary-rgb),0.12)]',
           card.disabled && 'opacity-50 cursor-not-allowed',
           !reducedMotion && 'transition-all duration-200',
           !reducedMotion && !card.disabled && 'hover:-translate-y-0.5 hover:border-[var(--border-accent)]',

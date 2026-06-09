@@ -51,22 +51,40 @@ export function CostPanel({ plan }: { plan: Plan | undefined }) {
 
   const estimateEntries = asEntries(estimate?.entries)
   const actualEntries = asEntries(actual?.entries)
+  const hasActualUsage = actualEntries.length > 0 || asNumber(actual?.total_usd) > 0
+  if (!estimate && !hasActualUsage) {
+    return null
+  }
+
   const status = typeof estimate?.status === 'string' ? estimate.status : 'unbudgeted'
   const budget = estimate?.budget_usd
   const badges = [
-    { label: `Estimated ${money(estimate?.gating_total_usd ?? estimate?.total_usd)}`, variant: status === 'over_budget' ? 'warning' as const : 'active' as const },
-    budget != null ? { label: `Budget ${money(budget)}`, variant: 'default' as const } : null,
-    actual ? { label: `Actual ${money(actual.total_usd)}`, variant: 'success' as const } : null,
+    estimate ? { label: `Estimated cost (public rates) ${money(estimate.gating_total_usd ?? estimate.total_usd)}`, variant: status === 'over_budget' ? 'warning' as const : 'active' as const } : null,
+    budget != null ? { label: `Budget guardrail ${money(budget)}`, variant: 'default' as const } : null,
+    hasActualUsage ? { label: `Recorded usage (est.) ${money(actual?.total_usd)}`, variant: 'success' as const } : null,
   ].filter((item): item is { label: string; variant: 'warning' | 'active' | 'default' | 'success' } => Boolean(item))
 
   return (
     <GlassPanel variant="default" padding="lg" rounded="lg">
-      <h3
-        className="font-[family-name:var(--font-display)] text-[var(--text-primary)] m-0"
-        style={{ fontSize: 'var(--text-lg)', fontWeight: 'var(--weight-semibold)', marginBottom: 'var(--space-3)' }}
-      >
-        Cost Outlook
-      </h3>
+      <div className="flex items-center gap-[var(--space-2)]" style={{ marginBottom: 'var(--space-2)' }}>
+        <h3
+          className="font-[family-name:var(--font-display)] text-[var(--text-primary)] m-0"
+          style={{ fontSize: 'var(--text-lg)', fontWeight: 'var(--weight-semibold)' }}
+        >
+          Cost Outlook
+        </h3>
+        <span
+          title="Estimates use public provider list prices as guardrails. Actual bet365 spend for proxy-routed traffic is tracked in the AIProxy usage dashboard (Kibana), not here."
+          className="cursor-help"
+        >
+          <Badge variant="default" size="sm">
+            Estimate · not billing ⓘ
+          </Badge>
+        </span>
+      </div>
+      <p className="workspace-panel-copy m-0" style={{ marginBottom: 'var(--space-3)' }}>
+        Estimates use public provider list prices as guardrails. Actual bet365 spend for proxy-routed traffic is tracked in the AIProxy usage dashboard (Kibana), not here.
+      </p>
       <div className="flex flex-wrap gap-[var(--space-2)]" style={{ marginBottom: 'var(--space-3)' }}>
         {badges.map((badge) => (
           <Badge key={badge.label} variant={badge.variant} size="sm">
@@ -76,7 +94,7 @@ export function CostPanel({ plan }: { plan: Plan | undefined }) {
       </div>
       {status === 'over_budget' && (
         <p className="workspace-panel-copy m-0" style={{ marginBottom: 'var(--space-3)' }}>
-          Estimated paid generation exceeds the current budget. Review the routes below before kicking off the asset pass.
+          Estimated paid generation (at public list rates) exceeds the current budget guardrail. Review the routes below before kicking off the asset pass.
         </p>
       )}
       {estimate && typeof estimate.breakdown === 'object' && estimate.breakdown && (
@@ -100,16 +118,21 @@ export function CostPanel({ plan }: { plan: Plan | undefined }) {
         </div>
       )}
       {actual && typeof actual.total_usd === 'number' && actual.total_usd > 0 && (
-        <div className="workspace-kpi-grid" style={{ marginBottom: 'var(--space-3)' }}>
-          <div>
-            <p className="workspace-eyebrow">Actual LLM</p>
-            <div className="workspace-panel-title text-[var(--text-xl)]">{money((actual as Record<string, unknown>).llm_total_usd)}</div>
+        <>
+          <div className="workspace-kpi-grid" style={{ marginBottom: 'var(--space-2)' }}>
+            <div>
+              <p className="workspace-eyebrow">Recorded LLM (est.)</p>
+              <div className="workspace-panel-title text-[var(--text-xl)]">{money((actual as Record<string, unknown>).llm_total_usd)}</div>
+            </div>
+            <div>
+              <p className="workspace-eyebrow">Recorded total (est.)</p>
+              <div className="workspace-panel-title text-[var(--text-xl)]">{money(actual.total_usd)}</div>
+            </div>
           </div>
-          <div>
-            <p className="workspace-eyebrow">Actual Total</p>
-            <div className="workspace-panel-title text-[var(--text-xl)]">{money(actual.total_usd)}</div>
-          </div>
-        </div>
+          <p className="workspace-panel-copy m-0" style={{ marginBottom: 'var(--space-3)' }}>
+            Recorded token/asset usage costed at public list rates — not bet365 billing.
+          </p>
+        </>
       )}
       <ul className="list-none p-0 m-0 flex flex-col gap-[var(--space-2)]">
         {estimateEntries.slice(0, 5).map((entry, index) => (
@@ -128,7 +151,7 @@ export function CostPanel({ plan }: { plan: Plan | undefined }) {
               {labelForEntry(entry)}
             </div>
             <div className="text-[var(--text-tertiary)]" style={{ fontSize: 'var(--text-xs)', marginTop: 'var(--space-1)' }}>
-              Actual {money(entry.total_usd)}
+              Recorded (est.) {money(entry.total_usd)}
             </div>
             {cacheDetail(entry) && (
               <div className="text-[var(--text-tertiary)]" style={{ fontSize: 'var(--text-xs)', marginTop: 'var(--space-1)' }}>

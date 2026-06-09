@@ -1,4 +1,4 @@
-import { useForm, Controller, type FieldErrors, type Resolver } from 'react-hook-form'
+import { useForm, useWatch, Controller, type FieldErrors, type Resolver } from 'react-hook-form'
 import { BriefSchema, type Brief } from '../../lib/schemas/plan.ts'
 import type { ShortFormOption, ShortFormOptions } from '../../lib/api/hooks.ts'
 import { TextInput } from '../../components/primitives/TextInput.tsx'
@@ -7,6 +7,7 @@ import { Select } from '../../components/primitives/Select.tsx'
 import { Slider } from '../../components/primitives/Slider.tsx'
 import { Button } from '../../components/primitives/Button.tsx'
 import { GlassPanel } from '../../components/primitives/GlassPanel.tsx'
+import { PlatformTargetsField } from '../short-form/PlatformTargetsField.tsx'
 
 const SOURCE_MODE_OPTIONS = [
   { value: 'ideas_notes', label: 'Ideas / Notes' },
@@ -20,8 +21,8 @@ const OUTPUT_MODE_OPTIONS = [
 ]
 
 const FALLBACK_SHORT_FORM_TIERS: ShortFormOption[] = [
-  { value: 'dev-native-credible', label: 'Dev-native credible', description: 'Proof-first and technically credible.' },
-  { value: 'mass-native-technical', label: 'Mass-native technical', description: 'Broader cold-feed energy.' },
+  { value: 'dev-native-credible', label: 'Technical proof', description: 'Proof-first and technically credible.' },
+  { value: 'mass-native-technical', label: 'Broad technical', description: 'Broader cold-feed energy.' },
 ]
 
 const FALLBACK_SHORT_FORM_APPROACHES: ShortFormOption[] = [
@@ -37,9 +38,21 @@ const FALLBACK_CAPTION_STRATEGIES: ShortFormOption[] = [
 ]
 
 const FALLBACK_PLATFORM_TARGETS: ShortFormOption[] = [
-  { value: 'tiktok', label: 'TikTok' },
-  { value: 'instagram-reels', label: 'Instagram Reels' },
-  { value: 'youtube-shorts', label: 'YouTube Shorts' },
+  {
+    value: 'tiktok',
+    label: 'TikTok',
+    description: 'Biases the hook, caption density, and mobile-safe framing for a fast cold-feed watch.',
+  },
+  {
+    value: 'instagram-reels',
+    label: 'Instagram Reels',
+    description: 'Biases polish, readability, and payoff clarity for Reels while keeping the same 9:16 render.',
+  },
+  {
+    value: 'youtube-shorts',
+    label: 'YouTube Shorts',
+    description: 'Biases context, retention, and payoff clarity for Shorts while keeping the same 9:16 render.',
+  },
 ]
 
 const DEFAULT_SHORT_RUNTIME_SECONDS = 42
@@ -64,7 +77,7 @@ const SCENE_ENGINE_OPTIONS = [
   { value: 'auto', label: 'Image-First Auto' },
   { value: 'classic', label: 'Still-Image Focus' },
   { value: 'hybrid', label: 'Mixed Media' },
-  { value: 'motion_only', label: 'Motion System' },
+  { value: 'motion_only', label: 'Remotion Scenes' },
 ]
 
 const TEXT_RENDER_MODE_OPTIONS = [
@@ -116,16 +129,6 @@ function optionDescription(options: ShortFormOption[] | undefined, fallback: Sho
   return source.find((option) => option.value === value)?.description ?? ''
 }
 
-function updateList(values: string[] | undefined, value: string, checked: boolean): string[] {
-  const current = new Set(values ?? [])
-  if (checked) {
-    current.add(value)
-  } else {
-    current.delete(value)
-  }
-  return [...current]
-}
-
 export function BriefForm({
   defaults,
   onSubmit,
@@ -140,8 +143,8 @@ export function BriefForm({
     register,
     handleSubmit,
     control,
-    watch,
     setValue,
+    getValues,
     formState: { errors },
   } = useForm<Brief>({
     resolver: briefResolver,
@@ -180,13 +183,13 @@ export function BriefForm({
     },
   })
 
-  const targetLength = watch('target_length_minutes')
-  const visualSourceStrategy = watch('visual_source_strategy')
-  const shortFormFormat = watch('short_form_format')
-  const shortFormTier = watch('short_form_tier')
-  const shortFormApproach = watch('short_form_approach')
-  const captionStrategy = watch('caption_strategy')
-  const shortRuntime = Number(watch('short_form_duration_seconds') || 42)
+  const targetLength = useWatch({ control, name: 'target_length_minutes' })
+  const visualSourceStrategy = useWatch({ control, name: 'visual_source_strategy' })
+  const shortFormFormat = useWatch({ control, name: 'short_form_format' })
+  const shortFormTier = useWatch({ control, name: 'short_form_tier' })
+  const shortFormApproach = useWatch({ control, name: 'short_form_approach' })
+  const captionStrategy = useWatch({ control, name: 'caption_strategy' })
+  const shortRuntime = Number(useWatch({ control, name: 'short_form_duration_seconds' }) || 42)
   const shortFormEnabled = shortFormFormat === 'vertical_short'
   const budgetAppliesToVideo = visualSourceStrategy === 'mixed_media' || visualSourceStrategy === 'video_preferred'
   const showPaidMediaBudget = paidMediaGenerationAvailable
@@ -203,7 +206,7 @@ export function BriefForm({
   const sceneEngineOptions = remotionAvailable === false
     ? SCENE_ENGINE_OPTIONS.map((option) => (
       option.value === 'hybrid' || option.value === 'motion_only'
-        ? { ...option, label: `${option.label} (requires Remotion)`, disabled: true }
+        ? { ...option, label: `${option.label} (not installed)`, disabled: true }
         : option
     ))
     : SCENE_ENGINE_OPTIONS
@@ -230,10 +233,10 @@ export function BriefForm({
       setValue('video_scene_style', 'auto', { shouldDirty: true })
       setValue('composition_mode', 'auto', { shouldDirty: true })
       setValue('text_render_mode', 'visual_authored', { shouldDirty: true })
-      if (watch('tone') === DEFAULT_SHORT_TONE) {
+      if (getValues('tone') === DEFAULT_SHORT_TONE) {
         setValue('tone', '', { shouldDirty: true })
       }
-      if (watch('visual_style') === DEFAULT_SHORT_VISUAL_STYLE) {
+      if (getValues('visual_style') === DEFAULT_SHORT_VISUAL_STYLE) {
         setValue('visual_style', '', { shouldDirty: true })
       }
       return
@@ -252,9 +255,9 @@ export function BriefForm({
     setValue('video_scene_style', 'auto', { shouldDirty: true })
     setValue('composition_mode', 'classic', { shouldDirty: true })
     setValue('text_render_mode', 'visual_authored', { shouldDirty: true })
-    setValue('tone', watch('tone') || DEFAULT_SHORT_TONE, { shouldDirty: true })
-    setValue('visual_style', watch('visual_style') || DEFAULT_SHORT_VISUAL_STYLE, { shouldDirty: true })
-    setValue('voice_direction', watch('voice_direction') || DEFAULT_SHORT_VOICE_DIRECTION, { shouldDirty: true })
+    setValue('tone', getValues('tone') || DEFAULT_SHORT_TONE, { shouldDirty: true })
+    setValue('visual_style', getValues('visual_style') || DEFAULT_SHORT_VISUAL_STYLE, { shouldDirty: true })
+    setValue('voice_direction', getValues('voice_direction') || DEFAULT_SHORT_VOICE_DIRECTION, { shouldDirty: true })
   }
 
   function syncShortApproach(approach: string) {
@@ -302,7 +305,7 @@ export function BriefForm({
                 {...register('project_name')}
               />
               <Select
-                label="Source Mode"
+                label="Source Type"
                 options={SOURCE_MODE_OPTIONS}
                 error={errors.source_mode?.message}
                 {...register('source_mode')}
@@ -312,12 +315,12 @@ export function BriefForm({
                 name="short_form_format"
                 render={({ field }) => (
                   <Select
-                    label="Output Mode"
+                    label="Output Type"
                     value={field.value ?? ''}
                     options={OUTPUT_MODE_OPTIONS}
                     hint={shortFormEnabled
-                      ? 'Vertical Short keeps Brief Studio canonical while selecting the short-form director capability and 9:16 render profile.'
-                      : 'Standard Explainer uses the normal broad-video brief contract.'}
+                      ? 'Vertical Short uses the same project workflow with a 9:16 render profile.'
+                      : 'Standard Explainer uses the normal broad-video project workflow.'}
                     onChange={(event) => applyShortFormMode(event.currentTarget.value === 'vertical_short')}
                   />
                 )}
@@ -398,21 +401,21 @@ export function BriefForm({
                   marginBottom: 'var(--space-4)',
                 }}
               >
-                Short-Form Mode
+                Short-Form Setup
               </legend>
               <div className="flex flex-col gap-[var(--space-4)]">
                 <div
                   className="rounded-[var(--radius-lg)] border p-[var(--space-4)]"
                   style={{
-                    borderColor: 'rgba(91, 138, 130, 0.32)',
-                    background: 'linear-gradient(135deg, rgba(91,138,130,0.14), rgba(245,233,219,0.58))',
+                    borderColor: 'rgba(var(--accent-primary-rgb), 0.34)',
+                    background: 'linear-gradient(135deg, rgba(var(--accent-primary-rgb), 0.16), rgba(var(--focus-rgb), 0.08))',
                   }}
                 >
                   <div className="text-[var(--text-primary)]" style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--weight-semibold)' }}>
-                    9:16 brief to director to normalized plan
+                    9:16 short setup
                   </div>
                   <p className="m-0 mt-[var(--space-1)] text-[var(--text-secondary)]" style={{ fontSize: 'var(--text-xs)' }}>
-                    This mode uses the same pipeline as Brief Studio, but adds the vertical-short capability block, source-loyalty fields, caption policy, and 928x1664 render profile.
+                    Adds the hook, platform targets, source boundaries, caption plan, and 928x1664 render profile needed for a vertical short.
                   </p>
                 </div>
                 <div className="grid gap-[var(--space-4)] md:grid-cols-2">
@@ -428,7 +431,7 @@ export function BriefForm({
                     name="short_form_approach"
                     render={({ field }) => (
                       <Select
-                        label="Short Mode"
+                        label="Short Approach"
                         value={field.value ?? ''}
                         options={shortApproachOptions}
                         hint={approachHint}
@@ -464,25 +467,11 @@ export function BriefForm({
                   control={control}
                   name="platform_targets"
                   render={({ field }) => (
-                    <div>
-                      <p className="workspace-eyebrow">Platforms</p>
-                      <div className="mt-[var(--space-2)] flex flex-wrap gap-[var(--space-3)]">
-                        {platformOptions.map((platform) => (
-                          <label
-                            key={platform.value}
-                            className="flex items-center gap-[var(--space-2)] text-[var(--text-secondary)]"
-                            style={{ fontSize: 'var(--text-sm)' }}
-                          >
-                            <input
-                              type="checkbox"
-                              checked={(field.value ?? []).includes(platform.value)}
-                              onChange={(event) => field.onChange(updateList(field.value, platform.value, event.target.checked))}
-                            />
-                            {platform.label}
-                          </label>
-                        ))}
-                      </div>
-                    </div>
+                    <PlatformTargetsField
+                      options={platformOptions}
+                      value={field.value}
+                      onChange={field.onChange}
+                    />
                   )}
                 />
                 <div className="grid gap-[var(--space-4)] md:grid-cols-2">
@@ -545,16 +534,16 @@ export function BriefForm({
                   className="m-0 uppercase tracking-[0.22em] text-[var(--text-tertiary)]"
                   style={{ fontSize: '10px', fontFamily: 'var(--font-mono)', fontWeight: 700 }}
                 >
-                  Default lane
+                  Visual defaults
                 </p>
                 <div
                   className="mt-[var(--space-2)] text-[var(--text-primary)]"
                   style={{ fontSize: 'clamp(1.4rem, 3vw, 2.2rem)', lineHeight: 0.92, fontWeight: 700, letterSpacing: '-0.04em' }}
                 >
-                  Author the stills first.
+                  Choose the primary visual path.
                 </div>
                 <p className="m-0 mt-[var(--space-2)] text-[var(--text-secondary)]" style={{ fontSize: 'var(--text-sm)' }}>
-                  betTube Studio now treats GPT Image stills as the primary visual path. Mixed-media and motion should be deliberate choices for scenes that truly need them, not the default posture of the whole storyboard.
+                  Use GPT Image for generated stills, or switch to mixed media and Remotion only when a scene needs motion or footage.
                 </p>
               </div>
               <TextInput
@@ -583,7 +572,7 @@ export function BriefForm({
                 {...register('video_scene_style')}
               />
               {showPaidMediaBudget && (
-                <div className="rounded-[var(--radius-lg)] border border-[var(--border-accent)] bg-[linear-gradient(135deg,rgba(255,196,83,0.14),rgba(255,86,56,0.08))] p-[var(--space-4)]">
+                <div className="rounded-[var(--radius-lg)] border border-[var(--border-accent)] bg-[linear-gradient(135deg,rgba(var(--accent-primary-rgb),0.16),rgba(var(--accent-secondary-rgb),0.08))] p-[var(--space-4)]">
                   <div className="text-[var(--text-primary)]" style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--weight-semibold)' }}>
                     Paid media path
                   </div>
@@ -669,15 +658,38 @@ export function BriefForm({
                 Override scene engine and text strategy
               </summary>
               <div className="mt-[var(--space-4)] grid gap-[var(--space-4)] md:grid-cols-2">
-                <Select
-                  label="Scene Engine"
-                  options={sceneEngineOptions}
-                  hint={remotionAvailable === false
-                    ? 'Auto and Classic stay available. Hybrid and Motion Only need the local Remotion toolchain.'
-                    : 'Auto keeps betTube Studio image-first by default. Mixed Media and Motion System are explicit specialist overrides when you truly want them.'}
-                  error={errors.composition_mode?.message}
-                  {...register('composition_mode')}
-                />
+                <div className="flex flex-col gap-[var(--space-1)]">
+                  <div className="flex items-center gap-[var(--space-2)]">
+                    <span
+                      className="font-[family-name:var(--font-body)] text-[var(--text-secondary)]"
+                      style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--weight-medium)' }}
+                    >
+                      Remotion availability
+                    </span>
+                    <button
+                      type="button"
+                      aria-label={remotionAvailable === false
+                        ? 'Remotion is the optional React-based renderer for advanced animated/template scenes. It is not installed in this build, so Remotion scenes are disabled.'
+                        : 'Remotion is enabled. Advanced Remotion scenes and previews can be generated/rendered locally.'}
+                      title={remotionAvailable === false
+                        ? 'Remotion is the optional React-based renderer for advanced animated/template scenes. It is not installed in this build, so Remotion scenes are disabled.'
+                        : 'Remotion is enabled. Advanced Remotion scenes and previews can be generated/rendered locally.'}
+                      className="inline-flex h-[16px] w-[16px] items-center justify-center rounded-full border border-[var(--border-default)] text-[var(--text-tertiary)] outline-none focus-visible:shadow-[var(--focus-ring)] cursor-help"
+                      style={{ fontSize: '10px', fontFamily: 'var(--font-mono)', fontWeight: 700, lineHeight: 1 }}
+                    >
+                      i
+                    </button>
+                  </div>
+                  <Select
+                    label="Scene Engine"
+                    options={sceneEngineOptions}
+                    hint={remotionAvailable === false
+                      ? 'Auto and Classic stay available. Mixed Media and Remotion scenes need the local Remotion toolchain.'
+                      : 'Auto keeps betTube Studio image-first by default. Mixed Media and Remotion are explicit specialist overrides when you truly want them.'}
+                    error={errors.composition_mode?.message}
+                    {...register('composition_mode')}
+                  />
+                </div>
                 <Select
                   label="Text Strategy"
                   options={TEXT_RENDER_MODE_OPTIONS}
@@ -692,7 +704,7 @@ export function BriefForm({
 
         <div className="flex flex-wrap gap-[var(--space-3)]">
           <Button type="submit" variant="primary" size="lg" loading={loading && loadingAction === 'video'}>
-            F#@K it, we&apos;re doing it live!!
+            {loading && loadingAction === 'video' ? 'Building Video…' : 'Build Video'}
           </Button>
           <Button
             type="button"

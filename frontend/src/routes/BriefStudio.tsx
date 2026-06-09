@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { WorkspaceHeader } from '../components/composed/WorkspaceHeader.tsx'
 import { ProjectWorkspaceNav } from '../components/composed/ProjectWorkspaceNav.tsx'
@@ -16,11 +16,36 @@ import {
   useShortFormOptions,
   useStartMakeVideoJob,
 } from '../lib/api/hooks.ts'
+import { getApiErrorMessage } from '../lib/api/errors.ts'
 import type { Brief } from '../lib/schemas/plan.ts'
 import { GlassPanel } from '../components/primitives/GlassPanel.tsx'
 import { Select } from '../components/primitives/Select.tsx'
 import { TextInput } from '../components/primitives/TextInput.tsx'
 import { WorkspaceCanvas, WorkspaceGrid, WorkspacePanel } from '../design-system/recipes'
+
+type DemoTargetDraft = {
+  workspace_path: string
+  app_url: string
+  launch_command: string
+  expected_url: string
+  preferred_agent: string
+  repo_url: string
+  flow_hints: string
+}
+
+function demoTargetFromProfile(agentDemoProfile: Record<string, unknown>): DemoTargetDraft {
+  return {
+    workspace_path: String(agentDemoProfile.workspace_path ?? ''),
+    app_url: String(agentDemoProfile.app_url ?? ''),
+    launch_command: String(agentDemoProfile.launch_command ?? ''),
+    expected_url: String(agentDemoProfile.expected_url ?? ''),
+    preferred_agent: String(agentDemoProfile.preferred_agent ?? 'codex') || 'codex',
+    repo_url: String(agentDemoProfile.repo_url ?? ''),
+    flow_hints: Array.isArray(agentDemoProfile.flow_hints)
+      ? agentDemoProfile.flow_hints.map((value) => String(value)).join('\n')
+      : String(agentDemoProfile.flow_hints ?? ''),
+  }
+}
 
 export function BriefStudio() {
   const { projectId = 'new' } = useParams<{ projectId: string }>()
@@ -35,17 +60,16 @@ export function BriefStudio() {
   const rebuildStoryboard = useRebuildStoryboard(projectId)
   const startMakeVideoJob = useStartMakeVideoJob()
   const [loadingAction, setLoadingAction] = useState<'video' | 'storyboard' | null>(null)
-  const [demoTarget, setDemoTarget] = useState({
-    workspace_path: '',
-    app_url: '',
-    launch_command: '',
-    expected_url: '',
-    preferred_agent: 'codex',
-    repo_url: '',
-    flow_hints: '',
-  })
+  const [demoTargetDraft, setDemoTargetDraft] = useState<{ projectId: string; value: DemoTargetDraft } | null>(null)
 
   const loading = createProject.isPending || rebuildStoryboard.isPending || startMakeVideoJob.isPending
+  const actionError = startMakeVideoJob.error
+    ? getApiErrorMessage(startMakeVideoJob.error, 'Video job failed to start.')
+    : createProject.error
+      ? getApiErrorMessage(createProject.error, 'Project creation failed.')
+      : rebuildStoryboard.error
+        ? getApiErrorMessage(rebuildStoryboard.error, 'Storyboard rebuild failed.')
+        : null
   const briefMeta = (plan?.meta?.brief as Record<string, unknown> | undefined) ?? {}
   const agentDemoProfile = (plan?.meta?.agent_demo_profile as Record<string, unknown> | undefined) ?? {}
 
@@ -63,20 +87,19 @@ export function BriefStudio() {
   const imageProviders = bootstrap?.providers?.image_providers ?? []
   const videoProviders = bootstrap?.providers?.video_providers ?? []
   const paidMediaGenerationAvailable = imageProviders.includes('replicate') || videoProviders.includes('replicate')
+  const demoTarget = demoTargetDraft?.projectId === projectId
+    ? demoTargetDraft.value
+    : demoTargetFromProfile(agentDemoProfile)
 
-  useEffect(() => {
-    setDemoTarget({
-      workspace_path: String(agentDemoProfile.workspace_path ?? ''),
-      app_url: String(agentDemoProfile.app_url ?? ''),
-      launch_command: String(agentDemoProfile.launch_command ?? ''),
-      expected_url: String(agentDemoProfile.expected_url ?? ''),
-      preferred_agent: String(agentDemoProfile.preferred_agent ?? 'codex') || 'codex',
-      repo_url: String(agentDemoProfile.repo_url ?? ''),
-      flow_hints: Array.isArray(agentDemoProfile.flow_hints)
-        ? agentDemoProfile.flow_hints.map((value) => String(value)).join('\n')
-        : String(agentDemoProfile.flow_hints ?? ''),
+  function patchDemoTarget(patch: Partial<DemoTargetDraft>) {
+    setDemoTargetDraft({
+      projectId,
+      value: {
+        ...demoTarget,
+        ...patch,
+      },
     })
-  }, [agentDemoProfile.app_url, agentDemoProfile.expected_url, agentDemoProfile.flow_hints, agentDemoProfile.launch_command, agentDemoProfile.preferred_agent, agentDemoProfile.repo_url, agentDemoProfile.workspace_path])
+  }
 
   function normalizedDemoTarget() {
     const flowHints = demoTarget.flow_hints
@@ -211,9 +234,22 @@ export function BriefStudio() {
             <div className="workspace-panel-stack">
               <WorkspacePanel
                 title={isNew ? 'Shape the brief' : 'Retune the project brief'}
-                eyebrow="Intent-driven setup"
-                copy="The brief drives the real pipeline. Define the outcome, source material, and clip preferences here so the director can plan the storyboard and generated-video beats before assets and render run."
+                eyebrow="Project setup"
+                copy="Define the outcome, source material, and clip preferences here so betTube Studio can plan the storyboard, assets, and final render."
               >
+                {actionError && (
+                  <div
+                    className="rounded-[var(--radius-md)] border border-[rgba(200,90,90,0.3)] bg-[rgba(200,90,90,0.12)] text-[var(--signal-danger)]"
+                    style={{
+                      padding: 'var(--space-3)',
+                      marginBottom: 'var(--space-4)',
+                      fontSize: 'var(--text-sm)',
+                    }}
+                    role="alert"
+                  >
+                    {actionError}
+                  </div>
+                )}
                 <BriefForm
                   defaults={defaults}
                   onSubmit={handleSubmit}
@@ -233,9 +269,9 @@ export function BriefStudio() {
               >
                 <GlassPanel variant="inset" padding="lg" rounded="lg">
                   <div className="flex flex-col gap-[var(--space-4)]">
-                    <div className="rounded-[var(--radius-lg)] border border-[var(--border-accent)] bg-[linear-gradient(135deg,rgba(255,86,56,0.16),rgba(255,196,83,0.08))] px-[var(--space-4)] py-[var(--space-3)]">
+                    <div className="rounded-[var(--radius-lg)] border border-[var(--border-accent)] bg-[linear-gradient(135deg,rgba(var(--accent-primary-rgb),0.16),rgba(var(--focus-rgb),0.08))] px-[var(--space-4)] py-[var(--space-3)]">
                       <div className="text-[var(--text-primary)]" style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--weight-semibold)' }}>
-                        F#@K it, we&apos;re doing it live!!
+                        Live demo target
                       </div>
                       <p className="m-0 mt-[var(--space-1)] text-[var(--text-secondary)]" style={{ fontSize: 'var(--text-xs)' }}>
                         The primary button starts the full background run: storyboard, assets, demo capture path, logs, and final render. This panel tells that job what app or repo it should actually show.
@@ -245,39 +281,39 @@ export function BriefStudio() {
                     <TextInput
                       label="Workspace Path"
                       value={demoTarget.workspace_path}
-                      onChange={(event) => setDemoTarget((current) => ({ ...current, workspace_path: event.target.value }))}
+                      onChange={(event) => patchDemoTarget({ workspace_path: event.target.value })}
                       placeholder="/absolute/path/to/the/repo/or-workspace"
                       hint="If omitted, betTube Studio will try to use the current local betTube Studio workspace for tonight's self-demo path."
                     />
                     <TextInput
                       label="App URL"
                       value={demoTarget.app_url}
-                      onChange={(event) => setDemoTarget((current) => ({ ...current, app_url: event.target.value }))}
+                      onChange={(event) => patchDemoTarget({ app_url: event.target.value })}
                       placeholder="http://127.0.0.1:9322"
                       hint="Prefill this when the app is already running and you want the agent path to attach instead of guessing."
                     />
                     <TextInput
                       label="Launch Command"
                       value={demoTarget.launch_command}
-                      onChange={(event) => setDemoTarget((current) => ({ ...current, launch_command: event.target.value }))}
+                      onChange={(event) => patchDemoTarget({ launch_command: event.target.value })}
                       placeholder="./start.sh --react"
                     />
                     <TextInput
                       label="Expected URL"
                       value={demoTarget.expected_url}
-                      onChange={(event) => setDemoTarget((current) => ({ ...current, expected_url: event.target.value }))}
+                      onChange={(event) => patchDemoTarget({ expected_url: event.target.value })}
                       placeholder="http://127.0.0.1:9322"
                     />
                     <TextInput
                       label="Repo URL"
                       value={demoTarget.repo_url}
-                      onChange={(event) => setDemoTarget((current) => ({ ...current, repo_url: event.target.value }))}
+                      onChange={(event) => patchDemoTarget({ repo_url: event.target.value })}
                       placeholder="https://github.com/your/repo"
                     />
                     <Select
                       label="Preferred Agent"
                       value={demoTarget.preferred_agent}
-                      onChange={(event) => setDemoTarget((current) => ({ ...current, preferred_agent: event.target.value }))}
+                      onChange={(event) => patchDemoTarget({ preferred_agent: event.target.value })}
                       options={[
                         { value: 'codex', label: 'Codex' },
                         { value: 'claude', label: 'Claude' },
@@ -287,9 +323,9 @@ export function BriefStudio() {
                       <span>Flow Hints</span>
                       <textarea
                         value={demoTarget.flow_hints}
-                        onChange={(event) => setDemoTarget((current) => ({ ...current, flow_hints: event.target.value }))}
+                        onChange={(event) => patchDemoTarget({ flow_hints: event.target.value })}
                         rows={4}
-                        placeholder={'Open GitHub to the system prompts\nShow the queue/log surface\nReturn to storyboard for manual tweaks'}
+                        placeholder={'Open the source repository\nShow the queue and progress surfaces\nReturn to storyboard for manual tweaks'}
                         className="w-full resize-y rounded-[var(--radius-md)] border border-[var(--border-subtle)] bg-[var(--surface-stage)] px-[var(--space-2)] py-[var(--space-2)] text-[var(--text-primary)] outline-none focus-visible:shadow-[var(--focus-ring)]"
                         aria-label="Flow Hints"
                       />
@@ -303,15 +339,6 @@ export function BriefStudio() {
             <div className="workspace-panel-stack">
               {!isNew && <WhyThisNext plan={plan} />}
               {!isNew && <CostPanel plan={plan} />}
-              <WorkspacePanel
-                title="Why these panels moved"
-                eyebrow="Layout priority"
-                copy="The right rail is now for light guidance. Style refs and footage live in the main workspace so the operator can actually inspect and compare them at a useful size."
-              >
-                <p className="workspace-panel-copy m-0">
-                  Keep the rail lightweight: use it for status and nudges, not for the primary creative material.
-                </p>
-              </WorkspacePanel>
             </div>
           )}
         />
@@ -322,7 +349,7 @@ export function BriefStudio() {
               <p className="workspace-eyebrow">Creative inputs</p>
               <h2 className="workspace-panel-title">Style references and footage</h2>
               <p className="workspace-panel-copy m-0 mt-[var(--space-1)]">
-                These inputs should read like first-class creative material, not like cramped utilities. Give them room to breathe before storyboarding.
+                Add reference images, clips, and notes before storyboarding.
               </p>
             </div>
           </div>

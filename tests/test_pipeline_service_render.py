@@ -97,6 +97,7 @@ def test_render_project_service_falls_back_to_ffmpeg_when_remotion_unavailable(m
     }
     rendered_video_path = project_dir / "rendered.mp4"
     rendered_video_path.write_bytes(b"mp4")
+    saved_plans: list[dict] = []
 
     def _must_not_run(*_args, **_kwargs):
         raise AssertionError("Remotion render must not run when the toolchain is unavailable")
@@ -114,7 +115,10 @@ def test_render_project_service_falls_back_to_ffmpeg_when_remotion_unavailable(m
         "core.pipeline_service.optimize_video_for_web_in_place",
         lambda *a, **k: {"path": str(rendered_video_path), "optimized": False},
     )
-    monkeypatch.setattr("core.pipeline_service.save_plan", lambda _d, p: p)
+    monkeypatch.setattr(
+        "core.pipeline_service.save_plan",
+        lambda _d, p: saved_plans.append(p) or p,
+    )
     monkeypatch.setattr(
         "core.pipeline_service.review_project_scenes",
         lambda *a, **k: {"provider": "codex", "scene_count": 1, "review_dir": "/tmp/review"},
@@ -124,6 +128,70 @@ def test_render_project_service_falls_back_to_ffmpeg_when_remotion_unavailable(m
 
     assert result["status"] == "succeeded"
     assert result["video_path"] == str(rendered_video_path)
+    # Phase B: render_backend_used / render_backend_warning contract.
+    assert result["render_backend_used"] == "ffmpeg"
+    assert result["render_backend_warning"] is not None
+    assert "Remotion" in result["render_backend_warning"]
+    # plan.meta["render"] must record the fallback.
+    assert saved_plans, "save_plan must have been called at least once"
+    final_plan_meta = saved_plans[-1].get("meta", {})
+    render_meta = final_plan_meta.get("render", {})
+    assert render_meta.get("requested_backend") == "remotion"
+    assert render_meta.get("backend_used") == "ffmpeg"
+    assert render_meta.get("fallback_warning") is not None
+
+
+def test_render_project_service_ffmpeg_path_reports_backend_used_and_no_warning(monkeypatch, tmp_path):
+    """A project using the plain ffmpeg backend reports render_backend_used='ffmpeg'
+    and render_backend_warning=None (no fallback occurred)."""
+    project_dir = tmp_path / "render_project"
+    project_dir.mkdir(parents=True, exist_ok=True)
+    audio_path = project_dir / "audio" / "scene_000.wav"
+    audio_path.parent.mkdir(parents=True, exist_ok=True)
+    audio_path.write_bytes(b"wav")
+
+    plan = {
+        "meta": {"render_profile": {"render_backend": "ffmpeg", "fps": 24}},
+        "scenes": [{"id": 1, "scene_type": "image", "audio_path": str(audio_path)}],
+    }
+    rendered_video_path = project_dir / "rendered.mp4"
+    rendered_video_path.write_bytes(b"mp4")
+    saved_plans: list[dict] = []
+
+    monkeypatch.setattr("core.pipeline_service.load_plan", lambda _: plan)
+    monkeypatch.setattr("core.pipeline_service._scene_has_primary_visual", lambda *a, **k: True)
+    monkeypatch.setattr("core.pipeline_service.assemble_video", lambda *a, **k: rendered_video_path)
+    monkeypatch.setattr(
+        "core.pipeline_service.compress_video_if_oversized",
+        lambda *a, **k: {"path": str(rendered_video_path), "compressed": False},
+    )
+    monkeypatch.setattr(
+        "core.pipeline_service.optimize_video_for_web_in_place",
+        lambda *a, **k: {"path": str(rendered_video_path), "optimized": False},
+    )
+    monkeypatch.setattr(
+        "core.pipeline_service.save_plan",
+        lambda _d, p: saved_plans.append(p) or p,
+    )
+    monkeypatch.setattr(
+        "core.pipeline_service.review_project_scenes",
+        lambda *a, **k: {"provider": "codex", "scene_count": 1, "review_dir": "/tmp/review"},
+    )
+
+    result = render_project_service(project_dir)
+
+    assert result["status"] == "succeeded"
+    assert result["video_path"] == str(rendered_video_path)
+    # Phase B: no fallback means render_backend_used is 'ffmpeg' and warning is None.
+    assert result["render_backend_used"] == "ffmpeg"
+    assert result["render_backend_warning"] is None
+    # plan.meta["render"] should reflect the straightforward ffmpeg path.
+    assert saved_plans, "save_plan must have been called at least once"
+    final_plan_meta = saved_plans[-1].get("meta", {})
+    render_meta = final_plan_meta.get("render", {})
+    assert render_meta.get("requested_backend") == "ffmpeg"
+    assert render_meta.get("backend_used") == "ffmpeg"
+    assert render_meta.get("fallback_warning") is None
 
 
 def test_render_project_service_allows_clip_audio_video_without_audio_path(monkeypatch, tmp_path):

@@ -1,4 +1,31 @@
-"""Cost catalog, estimation, and actual-cost ledger helpers."""
+"""Cost catalog, estimation, and budget-guardrail helpers.
+
+This module produces ESTIMATES and BUDGET GUARDRAILS derived from a static
+catalog of PUBLIC provider list prices (see _ENTRY_DEFS / COST_CATALOG_VERSION).
+The figures are multiplied against token/asset counts in-process. They are NOT
+bet365 accounting-grade spend and must not be treated as authoritative billing
+records.
+
+Real spend for traffic routed through the bet365 infrastructure is captured
+elsewhere. Future integration options (all requiring owner confirmation before
+implementation):
+
+- AIProxy ELK index (*:golangcounters_aiproxy_detail*): per-request costs keyed
+  by tool.keyword, runtime field computed_total_token_cost (USD). Shown in the
+  Kibana "PAM Platform - AIProxy Breakdown" dashboard (per-user/provider GBP).
+  This is the authoritative ledger for proxied traffic.
+- aicostingapi guardrail endpoints: GET /aicostingapi/blocked-keys (tools over
+  daily ~£200 threshold) and GET /aicostingapi/emergency-stop (monthly
+  spend-limit hit). Read-only; suitable for client-side guardrail checks.
+- bss-ai-pam-proxy: GET /admin/pats/{pat_id}/usage — real USD by day/model,
+  Okta-authenticated. Currently serves the BSS environment, not the innovation
+  environment betTube Studio runs in.
+- Innovation LiteLLM proxy (https://litellm.innovation.dev.gcp): native admin
+  spend endpoints (/spend/logs, /global/spend, /key/info) — UNCONFIRMED;
+  availability and auth not yet verified.
+- GCP BigQuery billing export: org-wide, ~24 h latency, SKU-level granularity
+  (not per-request). Suitable only for coarse trend analysis.
+"""
 
 from __future__ import annotations
 

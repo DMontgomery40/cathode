@@ -13,7 +13,12 @@ from core.job_runner import list_project_jobs
 from core.pipeline_service import create_project_from_brief_service
 from core.project_store import annotate_plan_asset_existence, collect_project_artifacts, list_projects, load_plan
 from core.runtime import PROJECTS_DIR
-from server.schemas.projects import CreateProjectRequest, ProjectSummary
+from server.schemas.projects import (
+    CreateProjectRequest,
+    ProjectJobCounts,
+    ProjectJobSummary,
+    ProjectSummary,
+)
 
 router = APIRouter()
 
@@ -50,6 +55,40 @@ def _latest_utc_iso(*values: Any) -> str | None:
         if latest is None or moment > latest:
             latest = moment
     return latest.isoformat().replace("+00:00", "Z") if latest else None
+
+
+def _project_job_summary(jobs: list[dict[str, Any]]) -> ProjectJobSummary:
+    counts = ProjectJobCounts(total=len(jobs))
+    latest_job: dict[str, Any] | None = None
+    latest_timestamp: str | None = None
+
+    for job in jobs:
+        status = str(job.get("status") or "error").strip() or "error"
+        if hasattr(counts, status):
+            setattr(counts, status, getattr(counts, status) + 1)
+        else:
+            counts.error += 1
+
+        timestamp = _latest_utc_iso(job.get("updated_utc"), job.get("created_utc"))
+        if latest_job is None:
+            latest_job = job
+            latest_timestamp = timestamp
+            continue
+        if timestamp and (not latest_timestamp or timestamp > latest_timestamp):
+            latest_job = job
+            latest_timestamp = timestamp
+
+    counts.active = counts.queued + counts.running
+    if latest_job is None:
+        return ProjectJobSummary(counts=counts)
+
+    return ProjectJobSummary(
+        counts=counts,
+        latest_status=str(latest_job.get("status") or "error"),
+        latest_job_id=str(latest_job.get("job_id") or "") or None,
+        latest_requested_stage=str(latest_job.get("requested_stage") or "") or None,
+        latest_updated_utc=latest_timestamp,
+    )
 
 
 def _project_dates(project_dir: Path, meta: dict[str, Any]) -> tuple[str | None, str | None]:
@@ -91,13 +130,39 @@ def _project_asset_path(project_dir: Path, raw_path: Any) -> str | None:
     return str(candidate.relative_to(project_root)).replace("\\", "/")
 
 
+def _all_project_directory_names() -> list[str]:
+    names = set(list_projects())
+    for path in PROJECTS_DIR.iterdir():
+        if path.is_dir() and (path / ".bettube-studio" / "jobs").exists():
+            names.add(path.name)
+    return sorted(names)
+
+
 @router.get("/projects", response_model=list[ProjectSummary])
 async def get_projects() -> list[ProjectSummary]:
     summaries: list[ProjectSummary] = []
-    for name in list_projects():
+    for name in _all_project_directory_names():
         project_dir = PROJECTS_DIR / name
+        jobs = list_project_jobs(project_dir)
         plan = load_plan(project_dir)
         if plan is None:
+            job_summary = _project_job_summary(jobs)
+            latest_timestamp = job_summary.latest_updated_utc
+            summaries.append(
+                ProjectSummary(
+                    name=name,
+                    scene_count=0,
+                    has_video=False,
+                    jobs=job_summary,
+                    video_path=None,
+                    thumbnail_path=None,
+                    created_utc=latest_timestamp,
+                    updated_utc=latest_timestamp,
+                    pipeline_mode="",
+                    short_form_format="",
+                    render_aspect_ratio="",
+                )
+            )
             continue
         meta = plan.get("meta") or {}
         brief = meta.get("brief") if isinstance(meta.get("brief"), dict) else {}
@@ -121,6 +186,7 @@ async def get_projects() -> list[ProjectSummary]:
                 name=name,
                 scene_count=len(plan.get("scenes", [])),
                 has_video=bool(video_path),
+                jobs=_project_job_summary(jobs),
                 video_path=video_path,
                 thumbnail_path=thumbnail_path,
                 created_utc=created_utc,

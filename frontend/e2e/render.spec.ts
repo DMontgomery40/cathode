@@ -9,6 +9,14 @@ const MOTION_RENDER_PROJECT = `e2e_render_motion_${Date.now()}`
 const ROUTE_RESET_PROJECT = `e2e_render_route_reset_${Date.now()}`
 const TEXT_MODE_PROJECT = `e2e_render_text_mode_${Date.now()}`
 
+type MutablePlan = Record<string, unknown> & {
+  meta: Record<string, unknown> & {
+    brief?: Record<string, unknown>
+    render_profile?: Record<string, unknown>
+  }
+  scenes?: Array<Record<string, unknown>>
+}
+
 test.describe('Render Control', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto(`/projects/${PROJECT}/render`)
@@ -98,7 +106,7 @@ test.describe('Render Control', () => {
     const sceneDot = sceneLabel.locator('xpath=preceding-sibling::span[1]')
     const visualLabel = page.getByText(/\d+\/\d+ with visuals/)
     const visualDot = visualLabel.locator('xpath=preceding-sibling::span[1]')
-    const backendLabel = page.getByText(/Backend: (ffmpeg|remotion)/)
+    const backendLabel = page.getByText(/Engine: (ffmpeg|remotion)/)
     const backendDot = backendLabel.locator('xpath=preceding-sibling::span[1]')
     const audioLabel = page.getByText(/\d+\/\d+ with audio/)
     const audioDot = audioLabel.locator('xpath=preceding-sibling::span[1]')
@@ -768,7 +776,7 @@ test.describe('Render Control', () => {
 
   // ── Keyboard interaction ───────────────────────────────────────
   test('Tab through render settings fields', async ({ page }) => {
-    await expect(page.getByText(/Backend: (ffmpeg|remotion)/)).toBeVisible()
+    await expect(page.getByText(/Engine: (ffmpeg|remotion)/)).toBeVisible()
     const filenameInput = page.locator('#output-filename')
     await filenameInput.focus()
     await expect(filenameInput).toBeFocused()
@@ -841,7 +849,7 @@ test.describe('Render Control', () => {
       cloneProjectFixture(PROJECT, TEXT_MODE_PROJECT)
       const projectDir = path.resolve(process.cwd(), '..', 'projects', TEXT_MODE_PROJECT)
       const planPath = path.join(projectDir, 'plan.json')
-      const plan = JSON.parse(fs.readFileSync(planPath, 'utf8')) as Record<string, any>
+      const plan = JSON.parse(fs.readFileSync(planPath, 'utf8')) as MutablePlan
       plan.meta.brief = {
         ...(plan.meta.brief || {}),
         composition_mode: 'hybrid',
@@ -862,7 +870,7 @@ test.describe('Render Control', () => {
     test('render settings persist text strategy into the project plan', async ({ page }) => {
       await page.goto(`/projects/${TEXT_MODE_PROJECT}/render`)
       await expect(page.getByRole('heading', { name: 'Render', exact: true })).toBeVisible()
-      await expect(page.getByText('Backend: remotion')).toBeVisible()
+      await expect(page.getByText('Engine: remotion')).toBeVisible()
       await expect(page.locator('#text-render-mode-select')).toBeEnabled()
       await expect(page.locator('#text-render-mode-select')).toHaveValue('visual_authored')
 
@@ -870,7 +878,7 @@ test.describe('Render Control', () => {
       await expect(page.locator('#text-render-mode-select')).toHaveValue('deterministic_overlay')
 
       await expect.poll(() => {
-        const plan = readProjectPlan(TEXT_MODE_PROJECT) as Record<string, any>
+        const plan = readProjectPlan(TEXT_MODE_PROJECT) as MutablePlan
         return `${plan.meta?.brief?.text_render_mode ?? ''}|${plan.meta?.render_profile?.text_render_mode ?? ''}`
       }).toBe('deterministic_overlay|deterministic_overlay')
 
@@ -959,7 +967,7 @@ test.describe('Render Control', () => {
     test('remotion backend treats motion scenes as visual-ready in render gate', async ({ page }) => {
       await page.goto(`/projects/${MOTION_RENDER_PROJECT}/render`)
       await expect(page.getByRole('heading', { name: 'Render', exact: true })).toBeVisible()
-      await expect(page.getByText('Backend: remotion')).toBeVisible()
+      await expect(page.getByText('Engine: remotion')).toBeVisible()
       await expect(page.getByText('1/1 with visuals')).toBeVisible()
       await expect(page.getByText('1/1 with audio')).toBeVisible()
       await expect(page.getByRole('button', { name: 'Render Video' })).toBeEnabled()

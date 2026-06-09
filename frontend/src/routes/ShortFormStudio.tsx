@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { WorkspaceHeader } from '../components/composed/WorkspaceHeader'
+import { DetailGrid } from '../components/composed/DetailGrid'
 import { Button } from '../components/primitives/Button'
 import { GlassPanel } from '../components/primitives/GlassPanel'
 import { Select } from '../components/primitives/Select'
@@ -8,9 +9,11 @@ import { Slider } from '../components/primitives/Slider'
 import { TextArea } from '../components/primitives/TextArea'
 import { TextInput } from '../components/primitives/TextInput'
 import { WorkspaceCanvas, WorkspaceGrid, WorkspacePanel } from '../design-system/recipes'
+import { PlatformTargetsField } from '../features/short-form/PlatformTargetsField.tsx'
 import { getApiErrorMessage } from '../lib/api/errors'
 import {
   type ShortFormOption,
+  type ShortFormOptions,
   type ShortFormRequest,
   usePreviewShortForm,
   useShortFormOptions,
@@ -20,12 +23,12 @@ import {
 const FALLBACK_TIER_OPTIONS: ShortFormOption[] = [
   {
     value: 'dev-native-credible',
-    label: 'Dev-native credible',
+    label: 'Technical proof',
     description: 'Proof-first, technically credible, inspectable visuals, and less slang.',
   },
   {
     value: 'mass-native-technical',
-    label: 'Mass-native technical',
+    label: 'Broad technical',
     description: 'Broader cold-feed energy with simple language and restrained social-native punch.',
   },
 ]
@@ -73,9 +76,21 @@ const FALLBACK_RUN_UNTIL_OPTIONS: ShortFormOption[] = [
 ]
 
 const FALLBACK_PLATFORM_OPTIONS: ShortFormOption[] = [
-  { value: 'tiktok', label: 'TikTok' },
-  { value: 'instagram-reels', label: 'Instagram Reels' },
-  { value: 'youtube-shorts', label: 'YouTube Shorts' },
+  {
+    value: 'tiktok',
+    label: 'TikTok',
+    description: 'Biases the hook, caption density, and mobile-safe framing for a fast cold-feed watch.',
+  },
+  {
+    value: 'instagram-reels',
+    label: 'Instagram Reels',
+    description: 'Biases polish, readability, and payoff clarity for Reels while keeping the same 9:16 render.',
+  },
+  {
+    value: 'youtube-shorts',
+    label: 'YouTube Shorts',
+    description: 'Biases context, retention, and payoff clarity for Shorts while keeping the same 9:16 render.',
+  },
 ]
 
 const DEFAULT_FORM: ShortFormRequest = {
@@ -113,16 +128,6 @@ const DEFAULT_FORM: ShortFormRequest = {
   overwrite: false,
 }
 
-function updateList(values: string[] | undefined, value: string, checked: boolean): string[] {
-  const current = new Set(values ?? [])
-  if (checked) {
-    current.add(value)
-  } else {
-    current.delete(value)
-  }
-  return [...current]
-}
-
 function selectOptions(options: ShortFormOption[] | undefined, fallback: ShortFormOption[]) {
   return (options?.length ? options : fallback).map((option) => ({
     value: option.value,
@@ -139,16 +144,36 @@ function asStringArray(value: unknown): string[] {
   return Array.isArray(value) ? value.map((item) => String(item)) : []
 }
 
+function hydrateDefaults(form: ShortFormRequest, defaults: ShortFormOptions['defaults'] | undefined): ShortFormRequest {
+  if (!defaults) return form
+  return {
+    ...form,
+    short_form_tier: defaults.short_form_tier || form.short_form_tier,
+    approach: defaults.approach || form.approach,
+    caption_strategy: defaults.caption_strategy || form.caption_strategy,
+    platform_targets: defaults.platform_targets.length > 0
+      ? defaults.platform_targets
+      : form.platform_targets,
+    runtime_seconds: Number.isFinite(defaults.runtime_seconds)
+      ? defaults.runtime_seconds
+      : form.runtime_seconds,
+    run_until: defaults.run_until || form.run_until,
+  }
+}
+
 export function ShortFormStudio() {
   const navigate = useNavigate()
   const shortFormOptions = useShortFormOptions()
   const preview = usePreviewShortForm()
   const startJob = useStartShortFormJob()
-  const [form, setForm] = useState<ShortFormRequest>(DEFAULT_FORM)
+  const [draftForm, setDraftForm] = useState<ShortFormRequest>(DEFAULT_FORM)
   const [formDirty, setFormDirty] = useState(false)
-  const [defaultsHydrated, setDefaultsHydrated] = useState(false)
 
   const options = shortFormOptions.data
+  const form = useMemo(
+    () => formDirty ? draftForm : hydrateDefaults(draftForm, options?.defaults),
+    [draftForm, formDirty, options?.defaults],
+  )
   const tierOptions = selectOptions(options?.tiers, FALLBACK_TIER_OPTIONS)
   const approachOptions = selectOptions(options?.approaches, FALLBACK_APPROACH_OPTIONS)
   const captionOptions = selectOptions(options?.caption_strategies, FALLBACK_CAPTION_OPTIONS)
@@ -194,36 +219,25 @@ export function ShortFormStudio() {
     return {
       project: String(payloadPreview.project_name ?? form.project_name),
       aspect: String(previewMeta?.frame ?? `${render?.aspect_ratio ?? '9:16'} ${render?.width ?? 928}x${render?.height ?? 1664}`),
-      tier: String(brief?.short_form_tier ?? form.short_form_tier),
-      approach: String(brief?.short_form_approach ?? form.approach),
+      tier: String(previewMeta?.tier ?? brief?.short_form_tier ?? form.short_form_tier),
+      approach: String(previewMeta?.approach ?? brief?.short_form_approach ?? form.approach),
       run_until: String(payloadPreview.run_until ?? form.run_until),
     }
   }, [form.approach, form.project_name, form.run_until, form.short_form_tier, payloadPreview, previewMeta])
   const previewPipeline = asStringArray(previewMeta?.pipeline)
   const previewGuardrails = asStringArray(previewMeta?.guardrails)
-
-  useEffect(() => {
-    const defaults = options?.defaults
-    if (!defaults || defaultsHydrated || formDirty) return
-    setForm((current) => ({
-      ...current,
-      short_form_tier: defaults.short_form_tier || current.short_form_tier,
-      approach: defaults.approach || current.approach,
-      caption_strategy: defaults.caption_strategy || current.caption_strategy,
-      platform_targets: defaults.platform_targets.length > 0
-        ? defaults.platform_targets
-        : current.platform_targets,
-      runtime_seconds: Number.isFinite(defaults.runtime_seconds)
-        ? defaults.runtime_seconds
-        : current.runtime_seconds,
-      run_until: defaults.run_until || current.run_until,
-    }))
-    setDefaultsHydrated(true)
-  }, [defaultsHydrated, formDirty, options?.defaults])
+  const selectedPlatformLabels = (form.platform_targets ?? [])
+    .map((value) => platformOptions.find((option) => option.value === value)?.label ?? value)
+  const RUN_UNTIL_LABEL: Record<string, string> = {
+    storyboard: 'Build Storyboard',
+    assets: 'Generate Assets',
+    render: 'Build Short',
+  }
+  const startButtonLabel = RUN_UNTIL_LABEL[form.run_until ?? 'storyboard'] ?? 'Build Short'
 
   function patch(patchValue: Partial<ShortFormRequest>) {
     setFormDirty(true)
-    setForm((current) => ({ ...current, ...patchValue }))
+    setDraftForm((current) => ({ ...(formDirty ? current : form), ...patchValue }))
   }
 
   function handlePreview() {
@@ -256,7 +270,7 @@ export function ShortFormStudio() {
               <WorkspacePanel
                 title="Short-form brief"
                 eyebrow="Vertical surface"
-                copy="Create a hook-first 30-50 second short through the same brief, director, plan, asset, and render pipeline as the rest of betTube Studio."
+                copy="Create a hook-first 30-50 second short through the same brief, storyboard, asset, and render workflow as the rest of betTube Studio."
               >
                 <div className="flex flex-col gap-[var(--space-5)]">
                   <GlassPanel variant="inset" padding="lg" rounded="lg">
@@ -331,7 +345,7 @@ export function ShortFormStudio() {
                         options={tierOptions}
                       />
                       <Select
-                        label="Short Mode"
+                        label="Short Approach"
                         value={form.approach}
                         onChange={(event) => patch({ approach: event.target.value })}
                         options={approachOptions}
@@ -359,23 +373,12 @@ export function ShortFormStudio() {
                         onChange={(event) => patch({ runtime_seconds: Number(event.currentTarget.value) })}
                       />
                     </div>
-                    <div className="mt-[var(--space-4)] flex flex-wrap gap-[var(--space-3)]">
-                      {platformOptions.map((platform) => (
-                        <label
-                          key={platform.value}
-                          className="flex items-center gap-[var(--space-2)] text-[var(--text-secondary)]"
-                          style={{ fontSize: 'var(--text-sm)' }}
-                        >
-                          <input
-                            type="checkbox"
-                            checked={(form.platform_targets ?? []).includes(platform.value)}
-                            onChange={(event) => patch({
-                              platform_targets: updateList(form.platform_targets, platform.value, event.target.checked),
-                            })}
-                          />
-                          {platform.label}
-                        </label>
-                      ))}
+                    <div className="mt-[var(--space-4)]">
+                      <PlatformTargetsField
+                        options={platformOptions}
+                        value={form.platform_targets}
+                        onChange={(platform_targets) => patch({ platform_targets })}
+                      />
                     </div>
                   </GlassPanel>
 
@@ -413,14 +416,14 @@ export function ShortFormStudio() {
           aside={(
             <div className="workspace-panel-stack">
               <WorkspacePanel
-                title="Mode"
+                title="Strategy"
                 eyebrow="Short-form strategy"
-                copy="The selected mode controls how the director treats source material, footage, captions, and spend depth."
+                copy="The selected strategy controls how betTube Studio treats source material, footage, captions, and spend depth."
               >
                 <div className="flex flex-col gap-[var(--space-3)]">
                   {[
                     { label: 'Tier', option: selectedTier },
-                    { label: 'Source mode', option: selectedApproach },
+                    { label: 'Approach', option: selectedApproach },
                     { label: 'Captions', option: selectedCaption },
                     { label: 'Run depth', option: selectedRunUntil },
                   ].map(({ label, option }) => (
@@ -438,7 +441,7 @@ export function ShortFormStudio() {
               <WorkspacePanel
                 title="Run controls"
                 eyebrow="Job"
-                copy="Preview the exact backend payload, then launch the short-form job at storyboard, asset, or render depth."
+                copy="Preview the job plan, then launch the short-form job at storyboard, asset, or render depth."
               >
                 <div className="flex flex-col gap-[var(--space-4)]">
                   <Select
@@ -465,10 +468,10 @@ export function ShortFormStudio() {
                   </label>
                   <div className="flex flex-col gap-[var(--space-2)]">
                     <Button type="button" variant="secondary" onClick={handlePreview} loading={preview.isPending}>
-                      Preview Payload
+                      Preview Plan
                     </Button>
                     <Button type="button" variant="primary" onClick={handleStart} loading={startJob.isPending} disabled={!canSubmit}>
-                      Start Short
+                      {startButtonLabel}
                     </Button>
                   </div>
                   {errorMessage && (
@@ -480,9 +483,9 @@ export function ShortFormStudio() {
               </WorkspacePanel>
 
               <WorkspacePanel
-                title="Payload"
-                eyebrow="Effective request"
-                copy="The preview is the contract the GUI sends to the FastAPI short-form backend."
+                title="Job Preview"
+                eyebrow="Ready check"
+                copy="The preview summarizes the short-form plan that will run when the job starts."
               >
                 {previewSummary ? (
                   <div className="workspace-kpi-grid" style={{ marginBottom: 'var(--space-3)' }}>
@@ -508,12 +511,20 @@ export function ShortFormStudio() {
                     </div>
                   </div>
                 ) : null}
-                <pre
-                  className="m-0 max-h-[30rem] overflow-auto rounded-[var(--radius-md)] border border-[var(--border-subtle)] bg-[var(--surface-void)] p-[var(--space-3)] text-[var(--text-tertiary)]"
-                  style={{ fontSize: '10px', fontFamily: 'var(--font-mono)' }}
-                >
-                  {payloadPreview ? JSON.stringify(payloadPreview, null, 2) : 'Preview has not been generated yet.'}
-                </pre>
+                {payloadPreview ? (
+                  <DetailGrid
+                    items={[
+                      { label: 'Runtime', value: `${payloadPreview.runtime_seconds ?? runtimeSeconds}s` },
+                      { label: 'Platforms', value: selectedPlatformLabels.join(', ') || '9:16 vertical', title: selectedPlatformLabels.join(', ') },
+                      { label: 'Captions', value: selectedCaption?.label ?? 'Caption cards' },
+                      { label: 'Output', value: 'One 9:16 MP4' },
+                    ]}
+                  />
+                ) : (
+                  <p className="m-0 rounded-[var(--radius-md)] border border-[var(--border-subtle)] bg-[var(--surface-void)] p-[var(--space-3)] text-[var(--text-tertiary)]" style={{ fontSize: 'var(--text-sm)' }}>
+                    Preview has not been generated yet.
+                  </p>
+                )}
                 {previewPipeline.length > 0 || previewGuardrails.length > 0 ? (
                   <div className="mt-[var(--space-4)] grid gap-[var(--space-3)]">
                     {previewPipeline.length > 0 ? (

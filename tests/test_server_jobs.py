@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from typing import Any
 from unittest.mock import patch
 
@@ -202,6 +203,64 @@ def test_list_jobs(mock_list, client, tmp_path):
     assert body[0]["job_id"] == "test-job-123"
     assert body[0]["requested_stage"] == "assets"
     assert body[0]["request"]["stage"] == "assets"
+
+
+def test_list_all_jobs_includes_job_only_projects(client, tmp_path):
+    job_only_dir = tmp_path / "job_only_project"
+    jobs_dir = job_only_dir / ".bettube-studio" / "jobs"
+    jobs_dir.mkdir(parents=True)
+    (jobs_dir / "active.json").write_text(
+        json.dumps(
+            {
+                "job_id": "active-job",
+                "project_name": "job_only_project",
+                "project_dir": str(job_only_dir),
+                "status": "running",
+                "current_stage": "storyboard",
+                "requested_stage": "render",
+                "created_utc": "2026-06-09T20:00:00",
+                "updated_utc": "2026-06-09T20:01:00",
+                "pid": 123,
+                "request": {"kind": "make_video"},
+                "result": {},
+                "error": None,
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    planned_dir = tmp_path / "planned_project"
+    planned_jobs_dir = planned_dir / ".bettube-studio" / "jobs"
+    planned_jobs_dir.mkdir(parents=True)
+    (planned_dir / "plan.json").write_text("{}", encoding="utf-8")
+    (planned_jobs_dir / "failed.json").write_text(
+        json.dumps(
+            {
+                "job_id": "failed-job",
+                "project_name": "planned_project",
+                "project_dir": str(planned_dir),
+                "status": "failed",
+                "current_stage": "done",
+                "requested_stage": "render",
+                "created_utc": "2026-06-09T19:00:00",
+                "updated_utc": "2026-06-09T19:01:00",
+                "pid": None,
+                "request": {"kind": "make_video"},
+                "result": {},
+                "error": {"message": "failed"},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    with patch("server.routers.jobs.PROJECTS_DIR", tmp_path):
+        resp = client.get("/api/jobs")
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert [job["job_id"] for job in body] == ["active-job", "failed-job"]
+    assert body[0]["project_name"] == "job_only_project"
+    assert body[0]["status"] == "running"
 
 
 # ---------------------------------------------------------------------------

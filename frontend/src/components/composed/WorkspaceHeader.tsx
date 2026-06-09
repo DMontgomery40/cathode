@@ -41,7 +41,7 @@ export function WorkspaceHeader({
   return (
     <header
       role="banner"
-      className="flex items-center justify-between border-b border-[var(--border-subtle)] bg-[var(--surface-shell)]/80 backdrop-blur-[var(--glass-blur)]"
+      className="flex flex-wrap items-center justify-between gap-[var(--space-3)] border-b border-[var(--border-subtle)] bg-[var(--surface-shell)]/80 backdrop-blur-[var(--glass-blur)]"
       style={{
         zIndex: 'var(--z-header)',
         padding: `var(--space-4) var(--space-6)`,
@@ -49,7 +49,7 @@ export function WorkspaceHeader({
       }}
     >
       {/* Left: breadcrumbs + title */}
-      <div className="flex flex-col gap-[var(--space-1)] min-w-0">
+      <div className="flex min-w-[min(100%,18rem)] flex-1 flex-col gap-[var(--space-1)]">
         {breadcrumbs && breadcrumbs.length > 0 && (
           <nav aria-label="Breadcrumb">
             <ol className="flex items-center gap-[var(--space-1)] list-none p-0 m-0">
@@ -91,9 +91,9 @@ export function WorkspaceHeader({
             </ol>
           </nav>
         )}
-        <div className="flex items-baseline gap-[var(--space-3)]">
+        <div className="flex min-w-0 flex-wrap items-baseline gap-x-[var(--space-3)] gap-y-[var(--space-1)]">
           <h1
-            className="font-[family-name:var(--font-display)] text-[var(--text-primary)] m-0 truncate"
+            className="font-[family-name:var(--font-display)] text-[var(--text-primary)] m-0 break-words"
             style={{
               fontSize: 'var(--text-4xl)',
               fontWeight: 'var(--weight-bold)',

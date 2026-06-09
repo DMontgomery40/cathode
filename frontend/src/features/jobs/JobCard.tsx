@@ -1,8 +1,10 @@
 import { useState } from 'react'
 import { clsx } from 'clsx'
 import { GlassPanel } from '../../components/primitives/GlassPanel.tsx'
-import type { Job } from '../../lib/api/jobs.ts'
+import { DetailGrid } from '../../components/composed/DetailGrid.tsx'
+import { getRenderBackendMeta, jobStatusLabel, type Job } from '../../lib/api/jobs.ts'
 import { useJobLog } from '../../lib/api/scene-hooks.ts'
+import StepChecklist from './StepChecklist.tsx'
 
 interface JobCardProps {
   job: Job
@@ -27,6 +29,13 @@ function formatTime(iso?: string): string {
   return d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
 }
 
+function stageLabel(value?: string): string {
+  const raw = String(value || '').trim()
+  if (!raw) return 'Job'
+  const normalized = raw.replace(/[_-]+/g, ' ')
+  return normalized.replace(/\b\w/g, (letter) => letter.toUpperCase())
+}
+
 function errorMessage(error: Job['error']): string {
   if (!error) return ''
   if (typeof error === 'string') return error
@@ -38,8 +47,12 @@ export function JobCard({ job, project, onCancel }: JobCardProps) {
   const isActive = job.status === 'queued' || job.status === 'running'
   const log = useJobLog(project ?? job.project_name, expanded ? job.job_id : null, { enabled: expanded && Boolean(project || job.project_name) })
   const shortId = job.job_id.length > 12 ? job.job_id.slice(0, 12) + '...' : job.job_id
-  const prettyStage = job.requested_stage || job.current_stage || job.kind || 'job'
+  const prettyStage = stageLabel(job.requested_stage || job.current_stage || job.kind)
   const prettyError = errorMessage(job.error)
+  const renderBackend = getRenderBackendMeta(job.result)
+  const renderEngineWarning = renderBackend.warning
+    ? renderBackend.warning.replace(/\brender_backend\b/g, 'render engine').replace(/\bbackend\b/g, 'engine')
+    : null
 
   return (
     <GlassPanel variant="default" padding="sm">
@@ -88,7 +101,7 @@ export function JobCard({ job, project, onCancel }: JobCardProps) {
             fontFamily: 'var(--font-mono)',
           }}
         >
-          {job.status}
+          {jobStatusLabel(job.status)}
         </span>
 
         {isActive && onCancel && (
@@ -119,6 +132,13 @@ export function JobCard({ job, project, onCancel }: JobCardProps) {
         </div>
       )}
 
+      {/* Compact step summary — visible in collapsed view when steps are present */}
+      {!expanded && (job.steps?.length ?? 0) > 0 && (
+        <div style={{ marginTop: 'var(--space-2)' }}>
+          <StepChecklist steps={job.steps ?? []} compact />
+        </div>
+      )}
+
       {/* Expanded detail */}
       {expanded && (
         <div
@@ -138,28 +158,39 @@ export function JobCard({ job, project, onCancel }: JobCardProps) {
               {job.suggestion}
             </div>
           )}
-          {job.request && Object.keys(job.request).length > 0 && (
-            <pre
-              className="text-[var(--text-tertiary)] overflow-x-auto rounded-[var(--radius-md)] border border-[var(--border-subtle)] bg-[var(--surface-stage)]"
-              style={{ fontSize: '10px', fontFamily: 'var(--font-mono)', margin: 0, padding: 'var(--space-2)' }}
+
+          {/* Remotion -> ffmpeg fallback warning */}
+          {renderEngineWarning && (
+            <div
+              className="rounded-[var(--radius-md)] border border-[rgba(200,160,60,0.3)] bg-[rgba(200,160,60,0.08)] text-[var(--signal-warning)]"
+              style={{ fontSize: 'var(--text-xs)', padding: 'var(--space-2) var(--space-3)' }}
+              role="alert"
             >
-              {JSON.stringify(job.request, null, 2)}
-            </pre>
+              <span style={{ fontWeight: 'var(--weight-medium)' }}>Render engine:</span>{' '}
+              {renderEngineWarning}
+              {renderBackend.used && (
+                <span className="text-[var(--text-tertiary)]">
+                  {' '}(used: {renderBackend.used})
+                </span>
+              )}
+            </div>
           )}
-          {job.result != null && (
-            <pre
-              className="text-[var(--text-tertiary)] overflow-x-auto"
-              style={{ fontSize: '10px', fontFamily: 'var(--font-mono)', margin: 0 }}
-            >
-              {JSON.stringify(job.result, null, 2)}
-            </pre>
+
+          {/* Full step checklist — primary state UI */}
+          {(job.steps?.length ?? 0) > 0 && (
+            <div style={{ marginTop: 'var(--space-1)', marginBottom: 'var(--space-2)' }}>
+              <StepChecklist steps={job.steps ?? []} />
+            </div>
           )}
-          <div className="text-[var(--text-tertiary)]" style={{ fontSize: '10px' }}>
-            ID: {job.job_id}
-          </div>
-          <div className="text-[var(--text-tertiary)]" style={{ fontSize: '10px' }}>
-            Updated: {formatTime(job.updated_utc)}
-          </div>
+
+          <DetailGrid
+            columns={3}
+            items={[
+              { label: 'Stage', value: prettyStage, title: prettyStage },
+              { label: 'Updated', value: formatTime(job.updated_utc) },
+              { label: 'Reference', value: job.job_id, title: job.job_id },
+            ]}
+          />
           {log.data?.content && (
             <pre
               className="max-h-[16rem] overflow-auto rounded-[var(--radius-md)] border border-[var(--border-subtle)] bg-[var(--surface-void)]"

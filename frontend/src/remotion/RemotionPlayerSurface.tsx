@@ -6,7 +6,8 @@
 // It is excluded from tsconfig.app.json type-checking for the same reason.
 import { Player } from '@remotion/player'
 import { clsx } from 'clsx'
-import { BetTubeStudioRender, FALLBACK_PROPS, type BetTubeStudioRenderProps } from './index.tsx'
+import { BetTubeStudioRender, type BetTubeStudioRenderProps } from './index.tsx'
+import { FALLBACK_PROPS } from './constants.ts'
 
 interface RemotionPlayerSurfaceProps {
   manifest: Record<string, unknown> | null | undefined

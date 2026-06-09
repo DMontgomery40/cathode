@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { clsx } from 'clsx'
 import { WorkspaceHeader } from '../components/composed/WorkspaceHeader.tsx'
@@ -7,7 +7,7 @@ import { RenderSettings } from '../features/render/RenderSettings.tsx'
 import { RenderProgress } from '../features/render/RenderProgress.tsx'
 import { ArtifactShelf } from '../features/render/ArtifactShelf.tsx'
 import { CostPanel } from '../features/projects/CostPanel.tsx'
-import { useBootstrap, usePlan, useRemotionManifest } from '../lib/api/hooks.ts'
+import { usePlan, useRemotionManifest } from '../lib/api/hooks.ts'
 import {
   useStartRender,
   useGenerateAssets,
@@ -41,7 +41,6 @@ function resolveTextRenderMode(
 
 export function RenderControl() {
   const { projectId = '' } = useParams<{ projectId: string }>()
-  const { data: bootstrap } = useBootstrap()
   const { data: plan } = usePlan(projectId)
   const { data: jobs } = useProjectJobs(projectId, { refetchInterval: 2000 })
   const startRender = useStartRender(projectId)
@@ -49,12 +48,9 @@ export function RenderControl() {
   const cancelJobMut = useCancelJob()
   const savePlan = useSavePlan(projectId)
 
-  const [outputFilename, setOutputFilename] = useState(() => resolveRenderOutputFilename({ projectId }))
-  const [fps, setFps] = useState(DEFAULT_FPS)
-  const [outputFilenameDirty, setOutputFilenameDirty] = useState(false)
-  const [fpsDirty, setFpsDirty] = useState(false)
-  const [textRenderMode, setTextRenderMode] = useState('visual_authored')
-  const [textRenderModeDirty, setTextRenderModeDirty] = useState(false)
+  const [outputFilenameDraft, setOutputFilenameDraft] = useState<{ projectId: string; value: string } | null>(null)
+  const [fpsDraft, setFpsDraft] = useState<{ projectId: string; value: number } | null>(null)
+  const [textRenderModeDraft, setTextRenderModeDraft] = useState<{ projectId: string; value: string } | null>(null)
 
   const scenes = plan?.scenes ?? []
   const renderProfile = plan?.meta?.render_profile ?? null
@@ -75,7 +71,7 @@ export function RenderControl() {
       )
     : false
   const remotionManifest = useRemotionManifest(projectId, {
-    enabled: remotionExplicitlyEnabled && Boolean(bootstrap?.providers?.remotion_capabilities?.player_available && projectId),
+    enabled: remotionExplicitlyEnabled && Boolean(projectId),
   })
   const renderBackendReason = typeof renderProfile === 'object' && renderProfile
     ? String((renderProfile as Record<string, unknown>).render_backend_reason || '').trim() || null
@@ -118,6 +114,17 @@ export function RenderControl() {
           ? renderProfile as Record<string, unknown>
           : null,
       )
+  const outputFilename = outputFilenameDraft?.projectId === projectId
+    ? outputFilenameDraft.value
+    : existingOutputFilename
+  const fps = projectMode.locksFps
+    ? 30
+    : fpsDraft?.projectId === projectId
+      ? fpsDraft.value
+      : renderFps
+  const textRenderMode = textRenderModeDraft?.projectId === projectId
+    ? textRenderModeDraft.value
+    : planTextRenderMode
 
   useInvalidateProjectOnJobCompletion(projectId, jobs, ['assets', 'render'])
   const { data: renderLog } = useJobLog(projectId, (activeRenderJob ?? latestRenderJob)?.job_id ?? null, {
@@ -125,50 +132,17 @@ export function RenderControl() {
     tailLines: 160,
   })
 
-  useEffect(() => {
-    setOutputFilenameDirty(false)
-    setFpsDirty(false)
-    setOutputFilename(resolveRenderOutputFilename({ projectId }))
-    setFps(DEFAULT_FPS)
-    setTextRenderModeDirty(false)
-    setTextRenderMode('visual_authored')
-  }, [projectId])
-
-  useEffect(() => {
-    if (!outputFilenameDirty) {
-      setOutputFilename(existingOutputFilename)
-    }
-  }, [existingOutputFilename, outputFilenameDirty])
-
-  useEffect(() => {
-    if (projectMode.locksFps) {
-      setFpsDirty(false)
-      setFps(30)
-    } else if (!fpsDirty) {
-      setFps(renderFps)
-    }
-  }, [fpsDirty, projectMode.locksFps, renderFps])
-
-  useEffect(() => {
-    if (!textRenderModeDirty) {
-      setTextRenderMode(planTextRenderMode)
-    }
-  }, [planTextRenderMode, textRenderModeDirty])
-
   const handleOutputFilenameChange = (value: string) => {
-    setOutputFilenameDirty(true)
-    setOutputFilename(value)
+    setOutputFilenameDraft({ projectId, value })
   }
 
   const handleFpsChange = (value: number) => {
-    setFpsDirty(true)
-    setFps(value)
+    setFpsDraft({ projectId, value })
   }
 
   const handleTextRenderModeChange = (value: string) => {
     if (!plan || savePlan.isPending) return
-    setTextRenderModeDirty(true)
-    setTextRenderMode(value)
+    setTextRenderModeDraft({ projectId, value })
     savePlan.mutate(
       {
         ...plan,
@@ -186,7 +160,7 @@ export function RenderControl() {
       },
       {
         onSettled: () => {
-          setTextRenderModeDirty(false)
+          setTextRenderModeDraft((current) => current?.projectId === projectId ? null : current)
         },
       },
     )
@@ -220,7 +194,7 @@ export function RenderControl() {
               <WorkspacePanel
                 title="Render surface"
                 eyebrow="Output"
-                copy="The final render should stay front and center, with settings and gating details acting like a sidecar instead of overwhelming the canvas."
+                copy="Review the current output, render settings, and readiness checks."
               >
                 <ArtifactShelf
                   videoPath={plan?.meta?.video_path}
@@ -318,7 +292,7 @@ export function RenderControl() {
               <WorkspacePanel
                 title="Readiness"
                 eyebrow="Render gate"
-                copy="Rendering should feel transactional: you know exactly what is ready, what is missing, and whether the current project is safe to kick off."
+                copy="Check scenes, audio, and output settings before starting a render."
               >
                 <ul className="list-none p-0 m-0 flex flex-col gap-[var(--space-2)]">
                   <li className="flex items-center gap-[var(--space-2)]">
@@ -356,7 +330,7 @@ export function RenderControl() {
                       style={{ width: 6, height: 6 }}
                     />
                     <span className="text-[var(--text-secondary)]" style={{ fontSize: 'var(--text-xs)' }}>
-                      Backend: {renderBackend}
+                      Engine: {renderBackend}
                     </span>
                   </li>
                   <li className="flex items-center gap-[var(--space-2)]">

@@ -117,9 +117,9 @@ test.describe('Brief Studio', () => {
       const nameInput = page.getByLabel('Project Name')
       await expect(nameInput).toBeVisible()
 
-      const sourceMode = page.getByLabel('Source Mode')
+      const sourceMode = page.getByLabel('Source Type')
       await expect(sourceMode).toBeVisible()
-      await expect(page.getByLabel('Output Mode')).toBeVisible()
+      await expect(page.getByLabel('Output Type')).toBeVisible()
       await expect(page.locator('legend:has-text("Advanced Creative Controls")')).toBeVisible()
     })
 
@@ -182,8 +182,8 @@ test.describe('Brief Studio', () => {
     })
 
     // ── Select interactions ──────────────────────────────────────
-    test('Source Mode select has all options', async ({ page }) => {
-      const select = page.getByLabel('Source Mode')
+    test('Source Type select has all options', async ({ page }) => {
+      const select = page.getByLabel('Source Type')
       const options = select.locator('option')
       await expect(options).toHaveCount(3)
 
@@ -198,26 +198,26 @@ test.describe('Brief Studio', () => {
       await expect(select).toHaveValue('ideas_notes')
     })
 
-    test('Output Mode vertical short reveals short-form controls', async ({ page }) => {
-      await page.getByLabel('Output Mode').selectOption('vertical_short')
-      await expect(page.locator('legend:has-text("Short-Form Mode")')).toBeVisible()
+    test('Output Type vertical short reveals short-form controls', async ({ page }) => {
+      await page.getByLabel('Output Type').selectOption('vertical_short')
+      await expect(page.locator('legend:has-text("Short-Form Setup")')).toBeVisible()
       await expect(page.getByLabel('Short Tier')).toBeVisible()
-      await expect(page.getByLabel('Short Mode')).toBeVisible()
+      await expect(page.getByLabel('Short Approach')).toBeVisible()
       await expect(page.getByLabel('Caption Strategy')).toBeVisible()
       await expect(page.getByLabel('Short Runtime')).toHaveValue('42')
-      await expect(page.getByLabel('Source Mode')).toHaveValue('source_text')
+      await expect(page.getByLabel('Source Type')).toHaveValue('source_text')
       await expect(page.getByText(/Controlled by Short Runtime/)).toBeVisible()
 
-      await page.getByLabel('Short Mode').selectOption('mixed-media-proof')
+      await page.getByLabel('Short Approach').selectOption('mixed-media-proof')
       await expect(page.getByLabel('Visual Source Strategy')).toHaveValue('mixed_media')
       await expect(page.getByLabel('Generated Video Scene Style')).toHaveValue('mixed')
 
       await page.getByLabel('Hook Promise').fill('A clean hook')
-      await page.getByLabel('Output Mode').selectOption('')
-      await expect(page.locator('legend:has-text("Short-Form Mode")')).toBeHidden()
+      await page.getByLabel('Output Type').selectOption('')
+      await expect(page.locator('legend:has-text("Short-Form Setup")')).toBeHidden()
       await expect(page.getByLabel('Target Length')).toBeVisible()
 
-      await page.getByLabel('Output Mode').selectOption('vertical_short')
+      await page.getByLabel('Output Type').selectOption('vertical_short')
       await expect(page.getByLabel('Hook Promise')).toHaveValue('')
     })
 
@@ -256,6 +256,17 @@ test.describe('Brief Studio', () => {
     })
 
     test('Scene Engine select has all options, including image-first auto', async ({ page }) => {
+      await page.route('**/api/bootstrap', async (route) => {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify(MOCK_BOOTSTRAP),
+        })
+      })
+
+      await page.reload()
+      await expect(page.getByRole('heading', { name: 'Brief Studio' })).toBeVisible()
+
       await openAdvancedCreativeControls(page)
       const select = page.getByLabel('Scene Engine')
       const options = select.locator('option')
@@ -376,7 +387,7 @@ test.describe('Brief Studio', () => {
 
     // ── Submit button ────────────────────────────────────────────
     test('primary and secondary creation actions are visible for new project', async ({ page }) => {
-      await expect(page.locator('button[type="submit"]:has-text("F#@K it, we\'re doing it live!!")')).toBeVisible()
+      await expect(page.locator('button[type="submit"]:has-text("Build Video")')).toBeVisible()
       await expect(page.getByRole('button', { name: 'Storyboard Only' })).toBeVisible()
       await expect(page.getByRole('heading', { name: 'Demo target' })).toBeVisible()
     })
@@ -415,7 +426,7 @@ test.describe('Brief Studio', () => {
         })
       })
 
-      await page.locator('button[type="submit"]:has-text("F#@K it, we\'re doing it live!!")').click()
+      await page.locator('button[type="submit"]:has-text("Build Video")').click()
       await page.waitForURL('**/projects/brief_live_demo/render')
       await expect(page.getByRole('heading', { name: 'Render', exact: true })).toBeVisible()
     })
@@ -428,9 +439,9 @@ test.describe('Brief Studio', () => {
         await route.abort('failed')
       })
 
-      await page.locator('button[type="submit"]:has-text("F#@K it, we\'re doing it live!!")').click()
+      await page.locator('button[type="submit"]:has-text("Build Video")').click()
 
-      await expect(page.getByText('Could not reach the betTube Studio API at http://127.0.0.1:9321. Make sure the server is running and try again.')).toBeVisible()
+      await expect(page.locator('#main-content').getByRole('alert').getByText('Could not reach the betTube Studio API at http://127.0.0.1:9321. Make sure the server is running and try again.')).toBeVisible()
       await expect(page).toHaveURL(/\/projects\/new\/brief$/)
     })
 
@@ -442,7 +453,7 @@ test.describe('Brief Studio', () => {
 
       // Tab through subsequent fields
       await page.keyboard.press('Tab')
-      // Should move to Source Mode
+      // Should move to Source Type
       await page.keyboard.press('Tab')
       // Continue tabbing through the form
       for (let i = 0; i < 10; i++) {
@@ -496,7 +507,7 @@ test.describe('Brief Studio', () => {
       // Should show project name in subtitle
       await expect(banner.getByText(EXISTING_PROJECT, { exact: true }).last()).toBeVisible()
 
-      await expect(page.locator('button[type="submit"]:has-text("F#@K it, we\'re doing it live!!")')).toBeVisible()
+      await expect(page.locator('button[type="submit"]:has-text("Build Video")')).toBeVisible()
       await expect(page.getByRole('button', { name: 'Rebuild Storyboard' })).toBeVisible()
     })
 

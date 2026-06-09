@@ -1,4 +1,5 @@
 import { GlassPanel } from '../../components/primitives/GlassPanel.tsx'
+import { DetailGrid } from '../../components/composed/DetailGrid.tsx'
 import { Select } from '../../components/primitives/Select.tsx'
 import { Slider } from '../../components/primitives/Slider.tsx'
 import { TextInput } from '../../components/primitives/TextInput.tsx'
@@ -29,7 +30,7 @@ function asBool(value: unknown, fallback = false): boolean {
 function providerLabel(provider: string): string {
   switch (provider) {
     case 'codex':
-      return 'Codex Exec'
+      return 'GPT Image'
     case 'replicate':
       return 'Replicate'
     case 'manual':
@@ -45,8 +46,8 @@ function providerHint(provider: string, generationModel: string): string {
   switch (provider) {
     case 'codex':
       return generationModel
-        ? `betTube Studio will ask the local Codex CLI to run the checked-in GPT Image helper with ${generationModel}. This is the preferred still-image lane now.`
-        : 'betTube Studio will ask the local Codex CLI to run the checked-in GPT Image helper. This is the preferred still-image lane now.'
+        ? `Image generation uses the configured GPT Image route with ${generationModel}.`
+        : 'Image generation uses the configured GPT Image route.'
     case 'replicate':
       return 'Cloud image generation stays available as a fallback. Generate and Regenerate Image will use the model shown here only when you keep Replicate selected.'
     case 'local':
@@ -54,7 +55,7 @@ function providerHint(provider: string, generationModel: string): string {
         ? `Local image generation will use ${generationModel} on this machine.`
         : 'Local image generation will use the configured on-device model.'
     case 'manual':
-      return 'Manual mode skips AI image generation. The scene workspace remains upload-first.'
+      return 'Manual image generation skips AI image generation. The scene workspace remains upload-first.'
     default:
       return 'The selected provider determines what the scene generation actions will actually call.'
   }
@@ -62,7 +63,7 @@ function providerHint(provider: string, generationModel: string): string {
 
 function editorBackendLabel(model: string): string {
   if (!model) return 'None configured'
-  if (model.startsWith('gpt-image')) return 'Codex Exec / OpenAI API'
+  if (model.startsWith('gpt-image')) return 'GPT Image'
   if (model.startsWith('qwen/')) return 'Replicate-backed'
   if (model.startsWith('qwen-image-edit')) return 'DashScope-backed'
   return 'Custom'
@@ -92,7 +93,9 @@ export function ImageProfilePanel({
   onProfileChange,
 }: ImageProfilePanelProps) {
   const currentProfile = profile ?? {}
-  const provider = asString(currentProfile.provider, imageProviders[0] ?? 'manual')
+  const savedProvider = asString(currentProfile.provider, imageProviders[0] ?? 'manual')
+  const provider = imageProviders.includes(savedProvider) ? savedProvider : imageProviders[0] ?? 'manual'
+  const unavailableSavedProvider = savedProvider && savedProvider !== provider ? savedProvider : ''
   const generationModel = asString(currentProfile.generation_model, 'gpt-image-2')
   const editModel = asString(currentProfile.edit_model, editModels[0] ?? '')
   const dashscopeN = asNumber(currentProfile.dashscope_edit_n, 1)
@@ -114,31 +117,17 @@ export function ImageProfilePanel({
     const price = entryDisplayPrice(entry)
     return {
       value: item,
-      label: price ? `${editorLabel(item)} · ${price}` : editorLabel(item),
+      label: price ? `${editorLabel(item)} · ~${price} est.` : editorLabel(item),
     }
   })
-  const effectiveGenerateRequest = {
-    provider,
-    model: generationModel || null,
-    route: provider === 'codex' ? 'local codex exec -> checked-in GPT Image helper' : 'direct provider call',
-  }
-  const effectiveEditRequest = {
-    backend: editorBackendLabel(editModel),
-    model: editModel || null,
-    dashscope_edit_n: isDashscopeModel ? dashscopeN : null,
-    dashscope_edit_seed: isDashscopeModel && dashscopeSeed ? dashscopeSeed : null,
-    dashscope_edit_negative_prompt: isDashscopeModel && dashscopeNegativePrompt ? dashscopeNegativePrompt : null,
-    dashscope_edit_prompt_extend: isDashscopeModel ? dashscopePromptExtend : null,
-  }
-
   return (
     <GlassPanel variant="default" padding="lg" rounded="lg">
       <div className="workspace-panel-head">
         <div className="min-w-0">
-          <p className="workspace-eyebrow">Streamlit parity</p>
+          <p className="workspace-eyebrow">Image defaults</p>
           <h3 className="workspace-panel-title">Image profile</h3>
           <p className="workspace-panel-copy m-0 mt-[var(--space-1)]">
-            Project-level generation and edit defaults. betTube Studio is image-first now: local Codex execution plus GPT Image is the primary still-building lane, while motion stays a specialist override.
+            Project-level defaults for image generation and image editing.
           </p>
         </div>
         <span
@@ -150,79 +139,13 @@ export function ImageProfilePanel({
       </div>
 
       <div className="flex flex-col gap-[var(--space-4)]">
-        <div
-          className="relative overflow-hidden rounded-[var(--radius-xl)] border"
-          style={{
-            borderColor: 'rgba(218, 126, 94, 0.28)',
-            background: 'linear-gradient(135deg, rgba(245, 233, 219, 0.9) 0%, rgba(255, 244, 230, 0.72) 45%, rgba(231, 121, 87, 0.12) 100%)',
-            boxShadow: '0 24px 70px rgba(42, 27, 21, 0.12)',
-            padding: 'var(--space-5)',
-          }}
-        >
-          <div
-            aria-hidden="true"
-            className="absolute inset-y-0 right-0 w-[38%] opacity-80"
-            style={{
-              background: 'repeating-linear-gradient(135deg, rgba(78, 39, 27, 0.06) 0px, rgba(78, 39, 27, 0.06) 10px, transparent 10px, transparent 22px)',
-            }}
-          />
-          <div className="relative grid gap-[var(--space-4)] lg:grid-cols-[1.4fr_0.9fr] lg:items-end">
-            <div>
-              <p
-                className="m-0 uppercase tracking-[0.24em] text-[var(--text-secondary)]"
-                style={{ fontSize: '10px', fontFamily: 'var(--font-mono)', fontWeight: 700 }}
-              >
-                First-Class Lane
-              </p>
-              <div
-                className="mt-[var(--space-2)] text-[var(--text-primary)]"
-                style={{
-                  fontSize: 'clamp(1.8rem, 4vw, 3rem)',
-                  lineHeight: 0.95,
-                  fontWeight: 700,
-                  letterSpacing: '-0.04em',
-                }}
-              >
-                Stills First.
-              </div>
-              <p
-                className="m-0 mt-[var(--space-3)] text-[var(--text-secondary)]"
-                style={{ fontSize: 'var(--text-sm)', maxWidth: '46ch' }}
-              >
-                Use local Codex execution to drive GPT Image for authored stills. Keep motion and deterministic renderer work for the scenes that truly need it, not as the default posture of the whole product.
-              </p>
-            </div>
-            <div className="grid gap-[var(--space-2)]">
-              {[
-                'Codex Exec -> GPT Image',
-                'Motion is opt-in now',
-                'Replicate stays fallback-only',
-              ].map((line) => (
-                <div
-                  key={line}
-                  className="rounded-[var(--radius-lg)] border px-[var(--space-3)] py-[var(--space-2)] text-[var(--text-primary)]"
-                  style={{
-                    borderColor: 'rgba(78, 39, 27, 0.14)',
-                    background: 'rgba(255,255,255,0.56)',
-                    fontSize: '12px',
-                    fontWeight: 600,
-                    letterSpacing: '0.02em',
-                  }}
-                >
-                  {line}
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-
         <div className="workspace-kpi-grid">
           <div>
             <p className="workspace-eyebrow">Generator</p>
             <div className="workspace-panel-title text-[var(--text-xl)]">{providerLabel(provider)}</div>
           </div>
           <div>
-            <p className="workspace-eyebrow">Editor backend</p>
+            <p className="workspace-eyebrow">Image editor route</p>
             <div className="workspace-panel-title text-[var(--text-xl)]">{editorBackendLabel(editModel)}</div>
           </div>
           <div>
@@ -230,6 +153,11 @@ export function ImageProfilePanel({
             <div className="workspace-panel-title text-[var(--text-xl)]">{isDashscopeModel ? dashscopeN : 'Model default'}</div>
           </div>
         </div>
+        {unavailableSavedProvider && (
+          <p className="m-0 rounded-[var(--radius-md)] border border-[var(--signal-warning)]/40 bg-[var(--signal-warning)]/10 p-[var(--space-3)] text-[var(--text-secondary)]" style={{ fontSize: 'var(--text-sm)' }}>
+            Saved image provider {providerLabel(unavailableSavedProvider)} is not configured on this machine. Current actions will use {providerLabel(provider)} until credentials are added or a new provider is saved.
+          </p>
+        )}
 
         <div className="grid gap-[var(--space-4)] xl:grid-cols-2">
           <GlassPanel variant="inset" padding="sm" rounded="lg">
@@ -253,9 +181,9 @@ export function ImageProfilePanel({
                 onChange={(event) => onProfileChange({ generation_model: event.target.value })}
                 disabled={disabled}
                 hint={provider === 'codex'
-                  ? 'Used by the local Codex Exec still-image lane. GPT Image pricing varies by requested size and quality.'
+                  ? 'Used by image generation. GPT Image pricing varies by requested size and quality.'
                   : generationCost
-                    ? `Used by Generate and Regenerate Image. Current catalog rate: ${generationCost}.`
+                    ? `Used by Generate and Regenerate Image. Est. list rate: ~${generationCost} est.`
                     : 'Used by Generate and Regenerate Image.'}
               />
             </div>
@@ -266,7 +194,7 @@ export function ImageProfilePanel({
               <div>
                 <p className="workspace-eyebrow">Edit defaults</p>
                 <p className="workspace-panel-copy m-0 mt-[var(--space-1)]">
-                  Choose the backend that the per-scene Edit Image action will call. GPT Image 2 uses local Codex execution when available and falls back to the OpenAI API on machines without Codex.
+                  Choose the route that the per-scene Edit Image action will call.
                 </p>
               </div>
               <Select
@@ -279,7 +207,7 @@ export function ImageProfilePanel({
               />
               {editModel && (
                 <p className="m-0 text-[var(--text-tertiary)]" style={{ fontSize: 'var(--text-xs)' }}>
-                  Effective backend: {editorBackendLabel(editModel)}.
+                  Selected route: {editorBackendLabel(editModel)}.
                 </p>
               )}
 
@@ -303,7 +231,7 @@ export function ImageProfilePanel({
                     hint="Leave blank for random."
                   />
                   <TextInput
-                    label="Negative Prompt"
+                    label="Negative Guidance"
                     value={dashscopeNegativePrompt}
                     onChange={(event) => onProfileChange({ dashscope_edit_negative_prompt: event.target.value })}
                     disabled={disabled}
@@ -315,7 +243,7 @@ export function ImageProfilePanel({
                       onChange={(event) => onProfileChange({ dashscope_edit_prompt_extend: event.target.checked })}
                       disabled={disabled}
                     />
-                    Prompt extend
+                    Expand edit direction
                   </label>
                 </>
               )}
@@ -325,22 +253,28 @@ export function ImageProfilePanel({
 
         <div className="grid gap-[var(--space-4)] xl:grid-cols-2">
           <GlassPanel variant="inset" padding="sm" rounded="lg">
-            <div className="workspace-eyebrow">Effective generate request</div>
-            <pre
-              className="m-0 mt-[var(--space-2)] overflow-x-auto rounded-[var(--radius-md)] border border-[var(--border-subtle)] bg-[var(--surface-void)] p-[var(--space-3)] text-[var(--text-tertiary)]"
-              style={{ fontSize: '10px', fontFamily: 'var(--font-mono)' }}
-            >
-              {JSON.stringify(effectiveGenerateRequest, null, 2)}
-            </pre>
+            <div className="workspace-eyebrow">Generation path</div>
+            <DetailGrid
+              className="mt-[var(--space-2)]"
+              items={[
+                { label: 'Provider', value: providerLabel(provider) },
+                { label: 'Model', value: generationModel || 'Model default', title: generationModel },
+                { label: 'Route', value: provider === 'codex' ? 'GPT Image' : providerLabel(provider) },
+                { label: 'Price', value: generationCost ? `~${generationCost} est.` : 'Catalog default' },
+              ]}
+            />
           </GlassPanel>
           <GlassPanel variant="inset" padding="sm" rounded="lg">
-            <div className="workspace-eyebrow">Effective edit request</div>
-            <pre
-              className="m-0 mt-[var(--space-2)] overflow-x-auto rounded-[var(--radius-md)] border border-[var(--border-subtle)] bg-[var(--surface-void)] p-[var(--space-3)] text-[var(--text-tertiary)]"
-              style={{ fontSize: '10px', fontFamily: 'var(--font-mono)' }}
-            >
-              {JSON.stringify(effectiveEditRequest, null, 2)}
-            </pre>
+            <div className="workspace-eyebrow">Edit path</div>
+            <DetailGrid
+              className="mt-[var(--space-2)]"
+              items={[
+                { label: 'Provider', value: editorBackendLabel(editModel) },
+                { label: 'Model', value: editorLabel(editModel), title: editModel },
+                { label: 'Variants', value: isDashscopeModel ? String(dashscopeN) : 'Model default' },
+                { label: 'Direction', value: isDashscopeModel && dashscopePromptExtend ? 'Expanded' : 'As written' },
+              ]}
+            />
           </GlassPanel>
         </div>
       </div>

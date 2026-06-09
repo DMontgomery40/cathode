@@ -7,16 +7,11 @@ export function BackgroundMesh() {
         zIndex: 'var(--z-base)',
         backgroundColor: 'var(--surface-void)',
         backgroundImage: [
-          // Warm teal radial, top-left
-          'radial-gradient(ellipse 80% 60% at 15% 20%, rgba(91, 138, 130, 0.05) 0%, transparent 70%)',
-          // Brass radial, center-right
-          'radial-gradient(ellipse 70% 50% at 75% 45%, rgba(200, 169, 110, 0.04) 0%, transparent 65%)',
-          // Deeper teal radial, bottom
-          'radial-gradient(ellipse 90% 40% at 40% 85%, rgba(91, 138, 130, 0.03) 0%, transparent 60%)',
-          // Vertical grid lines
-          'repeating-linear-gradient(90deg, transparent, transparent 79px, rgba(240, 236, 228, 0.024) 79px, rgba(240, 236, 228, 0.024) 80px)',
-          // Horizontal grid lines
-          'repeating-linear-gradient(0deg, transparent, transparent 79px, rgba(240, 236, 228, 0.024) 79px, rgba(240, 236, 228, 0.024) 80px)',
+          'radial-gradient(ellipse 80% 60% at 15% 20%, rgba(var(--accent-primary-rgb), 0.07) 0%, transparent 70%)',
+          'radial-gradient(ellipse 70% 50% at 75% 45%, rgba(var(--focus-rgb), 0.035) 0%, transparent 65%)',
+          'radial-gradient(ellipse 90% 40% at 40% 85%, rgba(var(--accent-primary-hover-rgb), 0.06) 0%, transparent 60%)',
+          'repeating-linear-gradient(90deg, transparent, transparent 79px, rgba(var(--text-primary-rgb), 0.024) 79px, rgba(var(--text-primary-rgb), 0.024) 80px)',
+          'repeating-linear-gradient(0deg, transparent, transparent 79px, rgba(var(--text-primary-rgb), 0.024) 79px, rgba(var(--text-primary-rgb), 0.024) 80px)',
         ].join(', '),
       }}
     />

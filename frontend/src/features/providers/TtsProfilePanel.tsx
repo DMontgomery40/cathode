@@ -10,6 +10,7 @@ type VoiceOption = { value: string; label: string; description: string }
 interface TtsProfilePanelProps {
   profile: Record<string, unknown> | null
   providers: Record<string, string>
+  apiKeys?: Record<string, boolean>
   voiceOptions: Record<string, VoiceOption[]>
   costCatalog?: CostCatalog | null
   saving?: boolean
@@ -55,9 +56,29 @@ function providerCostHint(provider: string): string {
   return ''
 }
 
+function missingProviderHint(provider: string, apiKeys: Record<string, boolean>): string {
+  if (provider === 'elevenlabs') {
+    if (!apiKeys.elevenlabs && !apiKeys.replicate) return 'needs ELEVENLABS_API_KEY or REPLICATE_API_TOKEN'
+    if (!apiKeys.elevenlabs) return 'needs ELEVENLABS_API_KEY for direct ElevenLabs'
+    return 'needs REPLICATE_API_TOKEN for fallback'
+  }
+  if (provider === 'chatterbox') return 'needs REPLICATE_API_TOKEN'
+  if (provider === 'openai' || provider === 'openai_realtime') return 'needs OpenAI credentials'
+  return 'not configured'
+}
+
+const KNOWN_TTS_PROVIDERS: Record<string, string> = {
+  kokoro: 'Kokoro (Local)',
+  elevenlabs: 'ElevenLabs',
+  chatterbox: 'Chatterbox',
+  openai_realtime: 'OpenAI Realtime Voice',
+  openai: 'OpenAI TTS',
+}
+
 export function TtsProfilePanel({
   profile,
   providers,
+  apiKeys = {},
   voiceOptions,
   costCatalog,
   saving,
@@ -66,14 +87,23 @@ export function TtsProfilePanel({
 }: TtsProfilePanelProps) {
   const currentProfile = profile ?? {}
   const providerOptions = useMemo(
-    () => Object.entries(providers).map(([value, label]) => {
-      const hint = providerCostHint(value)
-      return { value, label: hint ? `${label} · ${hint}` : label }
+    () => Object.entries(KNOWN_TTS_PROVIDERS).map(([value, fallbackLabel]) => {
+      const configuredLabel = providers[value]
+      const hint = configuredLabel ? providerCostHint(value) : missingProviderHint(value, apiKeys)
+      return {
+        value,
+        label: `${configuredLabel ?? fallbackLabel} · ${hint}`,
+        disabled: !configuredLabel,
+      }
     }),
-    [providers],
+    [apiKeys, providers],
   )
 
-  const provider = asString(currentProfile.provider, providerOptions[0]?.value ?? 'kokoro')
+  const savedProvider = asString(currentProfile.provider, providerOptions.find((option) => !option.disabled)?.value ?? 'kokoro')
+  const provider = providers[savedProvider]
+    ? savedProvider
+    : providerOptions.find((option) => !option.disabled)?.value ?? 'kokoro'
+  const unavailableSavedProvider = savedProvider && savedProvider !== provider ? savedProvider : ''
   const voice = asString(currentProfile.voice)
   const speed = asNumber(currentProfile.speed, 1.1)
   const exaggeration = asNumber(currentProfile.exaggeration, 0.6)
@@ -99,10 +129,10 @@ export function TtsProfilePanel({
     <GlassPanel variant="default" padding="lg" rounded="lg">
       <div className="workspace-panel-head">
         <div className="min-w-0">
-          <p className="workspace-eyebrow">Streamlit parity</p>
+          <p className="workspace-eyebrow">Voice defaults</p>
           <h3 className="workspace-panel-title">Voice settings</h3>
           <p className="workspace-panel-copy m-0 mt-[var(--space-1)]">
-            Project-level TTS profile for Kokoro, ElevenLabs, Chatterbox, and OpenAI. These controls write back to `meta.tts_profile`.
+            Project-level narrator defaults for available voice providers.
           </p>
         </div>
         <span
@@ -124,6 +154,11 @@ export function TtsProfilePanel({
             ? 'Kokoro stays local and free on this machine.'
             : 'Provider pricing depends on the selected model. Exact numbers are shown on the active model path below.'}
         />
+        {unavailableSavedProvider && (
+          <p className="m-0 rounded-[var(--radius-md)] border border-[var(--signal-warning)]/40 bg-[var(--signal-warning)]/10 p-[var(--space-3)] text-[var(--text-secondary)]" style={{ fontSize: 'var(--text-sm)' }}>
+            Saved voice provider {KNOWN_TTS_PROVIDERS[unavailableSavedProvider] ?? unavailableSavedProvider} is not configured. Current actions use {KNOWN_TTS_PROVIDERS[provider] ?? provider}.
+          </p>
+        )}
 
         {provider === 'kokoro' && (
           <>
@@ -218,7 +253,7 @@ export function TtsProfilePanel({
             </label>
             {providerExactCost && (
               <p className="m-0 text-[var(--text-tertiary)]" style={{ fontSize: 'var(--text-xs)' }}>
-                Current model rate: {providerExactCost}.
+                Est. list rate: ~{providerExactCost} <span className="text-[var(--text-tertiary)]" title="Estimated from public provider list prices, not bet365 billing">est.</span>
               </p>
             )}
           </>
@@ -238,7 +273,7 @@ export function TtsProfilePanel({
             />
             {providerExactCost && (
               <p className="m-0 text-[var(--text-tertiary)]" style={{ fontSize: 'var(--text-xs)' }}>
-                Current model rate: {providerExactCost}.
+                Est. list rate: ~{providerExactCost} <span className="text-[var(--text-tertiary)]" title="Estimated from public provider list prices, not bet365 billing">est.</span>
               </p>
             )}
           </>
@@ -258,7 +293,7 @@ export function TtsProfilePanel({
               value={asString(currentProfile.model_id, 'gpt-4o-mini-tts')}
               onChange={(event) => onProfileChange({ model_id: event.target.value })}
               disabled={disabled}
-              hint={providerExactCost ? `Optional override if you want a specific OpenAI TTS model. Current model rate: ${providerExactCost}.` : 'Optional override if you want a specific OpenAI TTS model.'}
+              hint={providerExactCost ? `Optional override if you want a specific OpenAI TTS model. Est. list rate: ~${providerExactCost} est.` : 'Optional override if you want a specific OpenAI TTS model.'}
             />
           </>
         )}
@@ -277,7 +312,7 @@ export function TtsProfilePanel({
               value={asString(currentProfile.model_id, 'gpt-realtime-2')}
               onChange={(event) => onProfileChange({ model_id: event.target.value })}
               disabled={disabled}
-              hint={providerExactCost ? `Server-side Realtime voice output. Current model rate: ${providerExactCost}.` : 'Server-side Realtime voice output for GPT-Realtime-2.'}
+              hint={providerExactCost ? `Server-side Realtime voice output. Est. list rate: ~${providerExactCost} est.` : 'Server-side Realtime voice output for GPT-Realtime-2.'}
             />
           </>
         )}

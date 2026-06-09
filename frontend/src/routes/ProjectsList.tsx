@@ -49,6 +49,8 @@ export function ProjectsList() {
   const { data: projects, isLoading } = useProjects()
   const [sortOrder, setSortOrder] = useState<ProjectSortOrder>('created-desc')
   const projectCount = projects?.length ?? 0
+  const sceneCount = (projects ?? []).reduce((total, project) => total + project.scene_count, 0)
+  const renderedCount = (projects ?? []).filter((project) => project.has_video).length
   const sortedProjects = useMemo(
     () => sortProjects(projects ?? [], sortOrder),
     [projects, sortOrder],
@@ -73,7 +75,7 @@ export function ProjectsList() {
         <WorkspacePanel
           title="Project library"
           eyebrow="Workspace index"
-          copy="Every project should read like a durable production object with a brief, a timeline, generated assets, and a render history."
+          copy="Browse saved videos, open a scene timeline, or start a new production."
         >
           <div className="workspace-kpi-grid">
             <div>
@@ -81,12 +83,12 @@ export function ProjectsList() {
               <div className="workspace-panel-title text-[var(--text-3xl)]">{projectCount}</div>
             </div>
             <div>
-              <p className="workspace-eyebrow">Mode</p>
-              <div className="workspace-panel-title text-[var(--text-3xl)]">Local-first</div>
+              <p className="workspace-eyebrow">Scenes</p>
+              <div className="workspace-panel-title text-[var(--text-3xl)]">{sceneCount}</div>
             </div>
             <div>
-              <p className="workspace-eyebrow">Source of truth</p>
-              <div className="workspace-panel-title text-[var(--text-3xl)]">plan.json</div>
+              <p className="workspace-eyebrow">Rendered</p>
+              <div className="workspace-panel-title text-[var(--text-3xl)]">{renderedCount}</div>
             </div>
           </div>
         </WorkspacePanel>

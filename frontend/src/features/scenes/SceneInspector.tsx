@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { clsx } from 'clsx'
+import { DetailGrid, type DetailGridItem } from '../../components/composed/DetailGrid.tsx'
 import { GlassPanel } from '../../components/primitives/GlassPanel.tsx'
 import { FileTriggerButton } from '../../components/primitives/FileTriggerButton.tsx'
 import { useReducedMotion, transitions } from '../../design-system/motion'
@@ -36,6 +37,82 @@ type CompositionFamilyOption = {
   value: string
   label: string
   motionAllowed: boolean
+}
+
+type InspectorSelectOption = {
+  value: string
+  label: string
+  disabled?: boolean
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}
+}
+
+function displayScalar(value: unknown, fallback = 'Default'): string {
+  if (typeof value === 'string' && value.trim()) return value
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value)
+  return fallback
+}
+
+function readableToken(value: unknown, fallback = 'Default'): string {
+  const raw = displayScalar(value, fallback)
+  return raw.replace(/[_-]+/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase())
+}
+
+function requestPreviewItems(preview: Record<string, unknown>): DetailGridItem[] {
+  const generate = asRecord(preview.generate)
+  const edit = asRecord(preview.edit)
+  const video = asRecord(preview.video)
+  const audio = asRecord(preview.audio)
+  const render = asRecord(preview.render)
+  const composition = asRecord(preview.composition)
+
+  return [
+    {
+      label: 'Image',
+      value: `${readableToken(generate.provider, 'Manual')} / ${displayScalar(generate.model, 'Model default')}`,
+      title: `${displayScalar(generate.provider, 'Manual')} / ${displayScalar(generate.model, 'Model default')}`,
+    },
+    {
+      label: 'Edit',
+      value: displayScalar(edit.model, 'Project default'),
+      title: displayScalar(edit.model, 'Project default'),
+    },
+    {
+      label: 'Video',
+      value: `${readableToken(video.provider, 'Manual')} / ${displayScalar(video.resolved_model ?? video.configured_model, 'Model default')}`,
+      title: `${displayScalar(video.provider, 'Manual')} / ${displayScalar(video.resolved_model ?? video.configured_model, 'Model default')}`,
+    },
+    {
+      label: 'Audio',
+      value: `${readableToken(audio.provider, 'Project default')} / ${displayScalar(audio.voice, 'Default voice')}`,
+      title: `${displayScalar(audio.provider, 'Project default')} / ${displayScalar(audio.voice, 'Default voice')}`,
+    },
+    {
+      label: 'Render',
+      value: readableToken(render.backend, 'Project renderer'),
+    },
+    {
+      label: 'Composition',
+      value: readableToken(composition.family, 'Scene default'),
+    },
+  ]
+}
+
+function actionTraceItems(request: Record<string, unknown>): DetailGridItem[] {
+  const sceneUids = Array.isArray(request.scene_uids) ? request.scene_uids : []
+  const scope = sceneUids.length > 0
+    ? `${sceneUids.length} ${sceneUids.length === 1 ? 'scene' : 'scenes'}`
+    : request.scene_uid
+      ? 'Current scene'
+      : 'Current project'
+
+  return [
+    { label: 'Scope', value: scope },
+    { label: 'Depth', value: readableToken(request.run_until ?? request.stage, 'Current action') },
+    { label: 'Output', value: displayScalar(request.output_filename, 'Project default') },
+  ]
 }
 
 const COMPOSITION_FAMILY_OPTIONS: CompositionFamilyOption[] = [
@@ -81,6 +158,161 @@ const THREE_DATA_STAGE_PALETTE_OPTIONS = [
   { value: 'teal_amber_on_charcoal', label: 'Teal and amber on charcoal' },
   { value: 'multi_zone_on_charcoal', label: 'Multi-zone on charcoal' },
 ]
+
+const TRANSITION_OPTIONS: InspectorSelectOption[] = [
+  { value: '', label: 'None' },
+  { value: 'fade', label: 'Fade' },
+  { value: 'wipe', label: 'Wipe' },
+]
+
+function InspectorSelect({
+  label,
+  value,
+  options,
+  onChange,
+  disabled = false,
+  compact = false,
+  className,
+}: {
+  label: string
+  value: string
+  options: InspectorSelectOption[]
+  onChange: (value: string) => void
+  disabled?: boolean
+  compact?: boolean
+  className?: string
+}) {
+  const id = useId()
+  const listboxId = `${id}-listbox`
+  const rootRef = useRef<HTMLDivElement>(null)
+  const [open, setOpen] = useState(false)
+  const selectedOption = options.find((option) => option.value === value) ?? options.find((option) => !option.disabled) ?? options[0]
+  const enabledOptions = options.filter((option) => !option.disabled)
+
+  useEffect(() => {
+    if (!open) return
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (!rootRef.current?.contains(event.target as Node)) {
+        setOpen(false)
+      }
+    }
+    const handleKeyDown = (event: globalThis.KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setOpen(false)
+      }
+    }
+
+    document.addEventListener('pointerdown', handlePointerDown)
+    document.addEventListener('keydown', handleKeyDown)
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown)
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [open])
+
+  function selectValue(nextValue: string) {
+    const nextOption = options.find((option) => option.value === nextValue)
+    if (!nextOption || nextOption.disabled) return
+    onChange(nextValue)
+    setOpen(false)
+  }
+
+  function moveSelection(direction: 1 | -1) {
+    if (enabledOptions.length === 0) return
+    const currentIndex = enabledOptions.findIndex((option) => option.value === value)
+    const nextIndex = currentIndex === -1
+      ? 0
+      : (currentIndex + direction + enabledOptions.length) % enabledOptions.length
+    selectValue(enabledOptions[nextIndex].value)
+  }
+
+  function handleButtonKeyDown(event: KeyboardEvent<HTMLButtonElement>) {
+    if (event.key === 'ArrowDown') {
+      event.preventDefault()
+      if (!open) {
+        setOpen(true)
+        return
+      }
+      moveSelection(1)
+    }
+    if (event.key === 'ArrowUp') {
+      event.preventDefault()
+      if (!open) {
+        setOpen(true)
+        return
+      }
+      moveSelection(-1)
+    }
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault()
+      setOpen((current) => !current)
+    }
+  }
+
+  return (
+    <div ref={rootRef} className={clsx('relative flex flex-col gap-[var(--space-1)] text-[var(--text-secondary)]', className)} style={{ fontSize: 'var(--text-xs)' }}>
+      <span id={id}>{label}</span>
+      <button
+        type="button"
+        aria-labelledby={id}
+        aria-controls={listboxId}
+        aria-expanded={open}
+        aria-haspopup="listbox"
+        className={clsx(
+          'flex w-full items-center justify-between gap-[var(--space-2)] rounded-[var(--radius-md)] border border-[var(--border-subtle)] bg-[var(--surface-stage)] text-left text-[var(--text-primary)] outline-none focus-visible:shadow-[var(--focus-ring)]',
+          'hover:border-[var(--border-default)] disabled:cursor-not-allowed disabled:opacity-50',
+          compact ? 'px-[var(--space-2)] py-[var(--space-1)]' : 'px-[var(--space-2)] py-[var(--space-2)]',
+        )}
+        disabled={disabled}
+        onClick={() => setOpen((current) => !current)}
+        onKeyDown={handleButtonKeyDown}
+      >
+        <span className="min-w-0 truncate">{selectedOption?.label ?? value}</span>
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true" className={clsx('shrink-0 transition-transform', open && 'rotate-180')}>
+          <path d="M4 5.5L7 8.5L10 5.5" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </button>
+      {open && (
+        <div
+          id={listboxId}
+          role="listbox"
+          aria-labelledby={id}
+          className="absolute left-0 right-0 top-[calc(100%+4px)] z-[80] max-h-[220px] overflow-auto rounded-[var(--radius-md)] border border-[var(--border-default)] bg-[var(--surface-void)] p-[var(--space-1)] shadow-[0_18px_44px_rgba(0,0,0,0.42)]"
+        >
+          {options.map((option) => {
+            const selected = option.value === value
+            return (
+              <button
+                key={option.value}
+                type="button"
+                role="option"
+                aria-selected={selected}
+                disabled={option.disabled}
+                className={clsx(
+                  'flex w-full items-center justify-between rounded-[var(--radius-sm)] px-[var(--space-2)] py-[var(--space-2)] text-left outline-none',
+                  'focus-visible:shadow-[var(--focus-ring)] disabled:cursor-not-allowed disabled:opacity-40',
+                  selected
+                    ? 'bg-[var(--accent-primary)] text-[var(--surface-void)]'
+                    : 'text-[var(--text-secondary)] hover:bg-[var(--surface-stage)] hover:text-[var(--text-primary)]',
+                )}
+                style={{ fontSize: 'var(--text-xs)' }}
+                onClick={() => selectValue(option.value)}
+              >
+                <span>{option.label}</span>
+                {selected && (
+                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true">
+                    <path d="M3 7.3L5.6 9.8L11 4.2" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                )}
+              </button>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
 
 interface SceneInspectorProps {
   scene: Scene | null
@@ -778,7 +1010,7 @@ export function SceneInspector({
   const [narrationFeedback, setNarrationFeedback] = useState('')
   const [imageEditFeedback, setImageEditFeedback] = useState('')
   const [localUploadError, setLocalUploadError] = useState<string | null>(null)
-  const [replicateCustomModelOpen, setReplicateCustomModelOpen] = useState(false)
+  const [replicateCustomModelOverride, setReplicateCustomModelOverride] = useState<{ model: string; open: boolean } | null>(null)
   const sceneDraftRef = useRef(scene)
   const [sectionOpen, setSectionOpen] = useState({
     visual: true,
@@ -790,14 +1022,13 @@ export function SceneInspector({
     operator: false,
   })
   const replicateModelPreset = getReplicateVideoModelPreset(videoGenerationModel)
-
-  useEffect(() => {
-    if (videoGenerationProvider !== 'replicate') {
-      setReplicateCustomModelOpen(false)
-      return
-    }
-    setReplicateCustomModelOpen(replicateModelPreset === CUSTOM_REPLICATE_VIDEO_MODEL)
-  }, [replicateModelPreset, videoGenerationProvider])
+  const replicateOverrideMatches = replicateCustomModelOverride !== null
+    && replicateCustomModelOverride.model === videoGenerationModel
+  const replicateCustomModelOpen = videoGenerationProvider === 'replicate'
+    ? replicateOverrideMatches
+      ? replicateCustomModelOverride.open
+      : replicateModelPreset === CUSTOM_REPLICATE_VIDEO_MODEL
+    : false
 
   useEffect(() => {
     sceneDraftRef.current = scene
@@ -871,6 +1102,30 @@ export function SceneInspector({
     ? compositionState.family
     : 'static_media'
   const compositionModeValue = remotionEnabled ? compositionState.mode : 'none'
+  const sceneTypeValue = !remotionEnabled && (scene.scene_type ?? 'image') === 'motion' ? 'image' : scene.scene_type ?? 'image'
+  const sceneTypeOptions: InspectorSelectOption[] = [
+    { value: 'image', label: 'Image' },
+    { value: 'video', label: 'Video' },
+    ...(remotionEnabled ? [{ value: 'motion', label: 'Remotion' }] : []),
+  ]
+  const compositionFamilySelectOptions = compositionFamilyOptions.map((option) => ({
+    value: option.value,
+    label: option.label,
+  }))
+  const nativeMotionFamilySelectOptions = COMPOSITION_FAMILY_OPTIONS.map((option) => ({
+    value: option.value,
+    label: option.label,
+    disabled: !option.motionAllowed,
+  }))
+  const compositionModeOptions: InspectorSelectOption[] = [
+    { value: 'none', label: 'None' },
+    ...(remotionEnabled
+      ? [
+          { value: 'overlay', label: 'Overlay' },
+          { value: 'native', label: 'Native' },
+        ]
+      : []),
+  ]
   const updateComposition = (patch: Partial<NonNullable<Scene['composition']>>) => {
     const currentScene = sceneDraftRef.current ?? scene
     const currentComposition = resolveCompositionState(currentScene)
@@ -944,6 +1199,61 @@ export function SceneInspector({
     onSceneChange(nextScene)
   }
 
+  const updateSceneType = (value: string) => {
+    const nextType = value as Scene['scene_type']
+    if (nextType === 'motion' && !remotionEnabled) {
+      return
+    }
+    const nextFamily = nextType === 'motion'
+      ? (
+          compositionState.family && defaultCompositionModeForFamily(compositionState.family) === 'native'
+            ? compositionState.family
+            : 'kinetic_statements'
+        )
+      : String(scene.composition?.family || 'static_media')
+    update({
+      scene_type: nextType,
+      composition: nextType === 'motion'
+        ? {
+            ...(scene.composition ?? {}),
+            family: nextFamily,
+            mode: 'native',
+            props: propsForCompositionFamily(
+              scene,
+              nextFamily,
+              (scene.composition?.props as Record<string, unknown> | undefined) ?? motionState.props,
+            ),
+            transition_after: scene.composition?.transition_after ?? null,
+            data: scene.composition?.data ?? {},
+            render_path: scene.composition?.render_path ?? null,
+            preview_path: scene.composition?.preview_path ?? null,
+            rationale: scene.composition?.rationale || motionState.rationale,
+          }
+        : {
+            ...(scene.composition ?? {}),
+            family: String(scene.composition?.family || 'static_media'),
+            mode: 'none',
+            props: (scene.composition?.props as Record<string, unknown> | undefined) ?? {},
+            transition_after: scene.composition?.transition_after ?? null,
+            data: scene.composition?.data ?? {},
+            render_path: scene.composition?.render_path ?? null,
+            preview_path: scene.composition?.preview_path ?? null,
+            rationale: scene.composition?.rationale || '',
+          },
+      motion: nextType === 'motion'
+        ? {
+            ...motionState,
+            template_id: nextFamily,
+            props: propsForCompositionFamily(
+              scene,
+              nextFamily,
+              (scene.composition?.props as Record<string, unknown> | undefined) ?? motionState.props,
+            ),
+          }
+        : null,
+    })
+  }
+
   const wordCount = scene.narration ? scene.narration.trim().split(/\s+/).filter(Boolean).length : 0
   const sceneType = scene.scene_type ?? 'image'
   const isVideoScene = sceneType === 'video'
@@ -962,16 +1272,16 @@ export function SceneInspector({
   const recentSceneImageHistory = imageActionHistory
     .filter((entry) => entry.scene_uid === scene.uid)
     .slice(0, 3)
-  const promptSectionTitle = nativeMotionScene ? 'Motion Direction' : isVideoScene ? 'Clip Notes / Shot Direction' : 'Visual Prompt'
+  const promptSectionTitle = nativeMotionScene ? 'Remotion Direction' : isVideoScene ? 'Clip Notes / Shot Direction' : 'Image Direction'
   const promptPlaceholder = nativeMotionScene
-    ? 'Describe the motion behavior, information hierarchy, and what should animate on this scene...'
+    ? 'Describe the Remotion behavior, information hierarchy, and what should animate on this scene...'
     : isVideoScene
     ? 'Describe the exact clip moment, camera move, and pacing you want for this scene...'
-    : 'Visual prompt for image generation...'
-  const promptFeedbackLabel = nativeMotionScene ? 'Refine Motion Notes' : isVideoScene ? 'Refine Notes' : 'Refine Prompt'
+    : 'Describe the image content, framing, style, and important details...'
+  const promptFeedbackLabel = nativeMotionScene ? 'Improve Remotion Notes' : isVideoScene ? 'Improve Notes' : 'Improve Direction'
   const promptFeedbackPlaceholder = nativeMotionScene
-    ? 'How should the motion direction change?'
-    : isVideoScene ? 'How should the clip notes change?' : 'How should the prompt change?'
+    ? 'How should the Remotion direction change?'
+    : isVideoScene ? 'How should the clip notes change?' : 'How should the image direction change?'
   const visualMeta = nativeMotionScene
     ? (
         scene.motion?.preview_exists || scene.preview_exists
@@ -2866,70 +3176,27 @@ export function SceneInspector({
               }}
               aria-label="Scene title"
             />
-            <select
-              value={!remotionEnabled && (scene.scene_type ?? 'image') === 'motion' ? 'image' : scene.scene_type ?? 'image'}
-              onChange={(e) => {
-                const nextType = e.target.value as Scene['scene_type']
-                if (nextType === 'motion' && !remotionEnabled) {
-                  return
-                }
-                const nextFamily = nextType === 'motion'
-                  ? (
-                      compositionState.family && defaultCompositionModeForFamily(compositionState.family) === 'native'
-                        ? compositionState.family
-                        : 'kinetic_statements'
-                    )
-                  : String(scene.composition?.family || 'static_media')
-                update({
-                  scene_type: nextType,
-                  composition: nextType === 'motion'
-                    ? {
-                        ...(scene.composition ?? {}),
-                        family: nextFamily,
-                        mode: 'native',
-                        props: propsForCompositionFamily(
-                          scene,
-                          nextFamily,
-                          (scene.composition?.props as Record<string, unknown> | undefined) ?? motionState.props,
-                        ),
-                        transition_after: scene.composition?.transition_after ?? null,
-                        data: scene.composition?.data ?? {},
-                        render_path: scene.composition?.render_path ?? null,
-                        preview_path: scene.composition?.preview_path ?? null,
-                        rationale: scene.composition?.rationale || motionState.rationale,
-                      }
-                    : {
-                        ...(scene.composition ?? {}),
-                        family: String(scene.composition?.family || 'static_media'),
-                        mode: 'none',
-                        props: (scene.composition?.props as Record<string, unknown> | undefined) ?? {},
-                        transition_after: scene.composition?.transition_after ?? null,
-                        data: scene.composition?.data ?? {},
-                        render_path: scene.composition?.render_path ?? null,
-                        preview_path: scene.composition?.preview_path ?? null,
-                        rationale: scene.composition?.rationale || '',
-                      },
-                  motion: nextType === 'motion'
-                    ? {
-                        ...motionState,
-                        template_id: nextFamily,
-                        props: propsForCompositionFamily(
-                          scene,
-                          nextFamily,
-                          (scene.composition?.props as Record<string, unknown> | undefined) ?? motionState.props,
-                        ),
-                      }
-                    : null,
-                })
-              }}
-              className="scene-inspector__type-select rounded-[var(--radius-sm)] border border-[var(--border-subtle)] bg-[var(--surface-panel-glass)] text-[var(--text-secondary)] outline-none focus-visible:shadow-[var(--focus-ring)]"
-              style={{ fontSize: 'var(--text-xs)', padding: '4px 8px' }}
-              aria-label="Scene type"
+            <InspectorSelect
+              label="Scene type"
+              value={sceneTypeValue}
+              options={sceneTypeOptions}
+              onChange={updateSceneType}
+              compact
+              className="scene-inspector__type-select min-w-[7rem]"
+            />
+            <button
+              type="button"
+              aria-label={remotionEnabled
+                ? 'Remotion is enabled. Advanced Remotion scenes and previews can be generated/rendered locally.'
+                : 'Remotion is the optional React-based renderer for advanced animated/template scenes. It is not installed in this build, so Remotion scenes are disabled.'}
+              title={remotionEnabled
+                ? 'Remotion is enabled. Advanced Remotion scenes and previews can be generated/rendered locally.'
+                : 'Remotion is the optional React-based renderer for advanced animated/template scenes. It is not installed in this build, so Remotion scenes are disabled.'}
+              className="scene-inspector__remotion-info inline-flex h-[16px] w-[16px] shrink-0 cursor-help select-none items-center justify-center rounded-full border border-[var(--border-subtle)] bg-transparent text-[var(--text-tertiary)] outline-none focus-visible:shadow-[var(--focus-ring)]"
+              style={{ fontSize: '10px', fontFamily: 'var(--font-mono)', fontStyle: 'italic' }}
             >
-              <option value="image">Image</option>
-              <option value="video">Video</option>
-              {remotionEnabled && <option value="motion">Motion</option>}
-            </select>
+              i
+            </button>
           </div>
         </GlassPanel>
 
@@ -2941,7 +3208,7 @@ export function SceneInspector({
                   Project actions
                 </div>
                 <div className="text-[var(--text-tertiary)]" style={{ fontSize: 'var(--text-xs)' }}>
-                  Run the whole asset pass or kick off the heavier agent-demo pass from the same control stack where you manage scene media.
+                  Run the whole asset pass or kick off the heavier demo capture pass from the same control stack where you manage scene media.
                 </div>
               </div>
               <div className="flex flex-wrap items-center gap-[var(--space-2)]">
@@ -2952,7 +3219,7 @@ export function SceneInspector({
                 )}
                 {onRunAgentDemoPass && (
                   <ActionButton onClick={onRunAgentDemoPass} disabled={agentDemoPending}>
-                    {agentDemoPending ? 'Agent Demo Running…' : 'Agent Demo Pass'}
+                    {agentDemoPending ? 'Demo Capture Running…' : 'Demo Capture Pass'}
                   </ActionButton>
                 )}
                 {onRenderVideo && (
@@ -3005,49 +3272,30 @@ export function SceneInspector({
               </div>
 
               <div className="grid gap-[var(--space-3)] xl:grid-cols-3">
+                <InspectorSelect
+                  label="Composition family"
+                  value={compositionState.family}
+                  options={nativeMotionFamilySelectOptions}
+                  onChange={(family) => updateComposition({ family, mode: 'native' })}
+                />
+                <InspectorSelect
+                  label="Transition after"
+                  value={compositionTransitionKind}
+                  options={TRANSITION_OPTIONS}
+                  onChange={(transition) => updateComposition({
+                    transition_after: transition
+                      ? { kind: transition, duration_in_frames: 20 }
+                      : null,
+                  })}
+                />
                 <label className="flex flex-col gap-[var(--space-1)] text-[var(--text-secondary)]" style={{ fontSize: 'var(--text-xs)' }}>
-                  <span>Composition family</span>
-                  <select
-                    value={compositionState.family}
-                    onChange={(event) => updateComposition({
-                      family: event.target.value,
-                      mode: 'native',
-                    })}
-                    className="rounded-[var(--radius-md)] border border-[var(--border-subtle)] bg-[var(--surface-stage)] px-[var(--space-2)] py-[var(--space-2)] text-[var(--text-primary)] outline-none focus-visible:shadow-[var(--focus-ring)]"
-                    aria-label="Composition family"
-                  >
-                    {COMPOSITION_FAMILY_OPTIONS.map((option) => (
-                      <option key={option.value} value={option.value} disabled={!option.motionAllowed}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="flex flex-col gap-[var(--space-1)] text-[var(--text-secondary)]" style={{ fontSize: 'var(--text-xs)' }}>
-                  <span>Transition after</span>
-                  <select
-                    value={compositionTransitionKind}
-                    onChange={(event) => updateComposition({
-                      transition_after: event.target.value
-                        ? { kind: event.target.value, duration_in_frames: 20 }
-                        : null,
-                    })}
-                    className="rounded-[var(--radius-md)] border border-[var(--border-subtle)] bg-[var(--surface-stage)] px-[var(--space-2)] py-[var(--space-2)] text-[var(--text-primary)] outline-none focus-visible:shadow-[var(--focus-ring)]"
-                    aria-label="Transition after"
-                  >
-                    <option value="">None</option>
-                    <option value="fade">Fade</option>
-                    <option value="wipe">Wipe</option>
-                  </select>
-                </label>
-                <label className="flex flex-col gap-[var(--space-1)] text-[var(--text-secondary)]" style={{ fontSize: 'var(--text-xs)' }}>
-                  <span>Composition mode</span>
+                  <span>Composition behavior</span>
                   <input
                     type="text"
                     value="native"
                     readOnly
                     className="rounded-[var(--radius-md)] border border-[var(--border-subtle)] bg-[var(--surface-stage)] px-[var(--space-2)] py-[var(--space-2)] text-[var(--text-tertiary)] outline-none"
-                    aria-label="Composition mode"
+                    aria-label="Composition behavior"
                   />
                 </label>
               </div>
@@ -3261,7 +3509,7 @@ export function SceneInspector({
               </label>
 
               <p className="m-0 text-[var(--text-tertiary)]" style={{ fontSize: 'var(--text-xs)' }}>
-                Motion scenes now author the canonical composition contract directly. Preview here before the final render so the family, staging, and timing all stay aligned.
+                Remotion scenes now author the canonical composition contract directly. Preview here before the final render so the family, staging, and timing all stay aligned.
               </p>
             </div>
           ) : isVideoScene ? (
@@ -3284,58 +3532,37 @@ export function SceneInspector({
                 </ActionButton>
                 {onRunAgentDemo && (
                   <ActionButton onClick={onRunAgentDemo} disabled={agentDemoPending}>
-                    {agentDemoPending ? 'Agent Demo Running…' : 'Agent Demo Scene'}
+                    {agentDemoPending ? 'Demo Capture Running…' : 'Capture Demo Scene'}
                   </ActionButton>
                 )}
               </div>
 
               <div className="grid gap-[var(--space-3)] xl:grid-cols-3">
-                <label className="flex flex-col gap-[var(--space-1)] text-[var(--text-secondary)]" style={{ fontSize: 'var(--text-xs)' }}>
-                  <span>Composition family</span>
-                  <select
-                    value={compositionFamilyValue}
-                    onChange={(event) => updateComposition({
-                      family: event.target.value,
-                      mode: remotionEnabled ? defaultCompositionModeForFamily(event.target.value) : 'none',
-                    })}
-                    className="rounded-[var(--radius-md)] border border-[var(--border-subtle)] bg-[var(--surface-stage)] px-[var(--space-2)] py-[var(--space-2)] text-[var(--text-primary)] outline-none focus-visible:shadow-[var(--focus-ring)]"
-                    aria-label="Composition family"
-                  >
-                    {compositionFamilyOptions.map((option) => (
-                      <option key={option.value} value={option.value}>{option.label}</option>
-                    ))}
-                  </select>
-                </label>
-                <label className="flex flex-col gap-[var(--space-1)] text-[var(--text-secondary)]" style={{ fontSize: 'var(--text-xs)' }}>
-                  <span>Composition mode</span>
-                  <select
-                    value={compositionModeValue}
-                    onChange={(event) => updateComposition({ mode: event.target.value as NonNullable<Scene['composition']>['mode'] })}
-                    className="rounded-[var(--radius-md)] border border-[var(--border-subtle)] bg-[var(--surface-stage)] px-[var(--space-2)] py-[var(--space-2)] text-[var(--text-primary)] outline-none focus-visible:shadow-[var(--focus-ring)]"
-                    aria-label="Composition mode"
-                  >
-                    <option value="none">None</option>
-                    {remotionEnabled && <option value="overlay">Overlay</option>}
-                    {remotionEnabled && <option value="native">Native</option>}
-                  </select>
-                </label>
-                <label className="flex flex-col gap-[var(--space-1)] text-[var(--text-secondary)]" style={{ fontSize: 'var(--text-xs)' }}>
-                  <span>Transition after</span>
-                  <select
-                    value={compositionTransitionKind}
-                    onChange={(event) => updateComposition({
-                      transition_after: event.target.value
-                        ? { kind: event.target.value, duration_in_frames: 20 }
-                        : null,
-                    })}
-                    className="rounded-[var(--radius-md)] border border-[var(--border-subtle)] bg-[var(--surface-stage)] px-[var(--space-2)] py-[var(--space-2)] text-[var(--text-primary)] outline-none focus-visible:shadow-[var(--focus-ring)]"
-                    aria-label="Transition after"
-                  >
-                    <option value="">None</option>
-                    <option value="fade">Fade</option>
-                    <option value="wipe">Wipe</option>
-                  </select>
-                </label>
+                <InspectorSelect
+                  label="Composition family"
+                  value={compositionFamilyValue}
+                  options={compositionFamilySelectOptions}
+                  onChange={(family) => updateComposition({
+                    family,
+                    mode: remotionEnabled ? defaultCompositionModeForFamily(family) : 'none',
+                  })}
+                />
+                <InspectorSelect
+                  label="Composition behavior"
+                  value={compositionModeValue}
+                  options={compositionModeOptions}
+                  onChange={(mode) => updateComposition({ mode: mode as NonNullable<Scene['composition']>['mode'] })}
+                />
+                <InspectorSelect
+                  label="Transition after"
+                  value={compositionTransitionKind}
+                  options={TRANSITION_OPTIONS}
+                  onChange={(transition) => updateComposition({
+                    transition_after: transition
+                      ? { kind: transition, duration_in_frames: 20 }
+                      : null,
+                  })}
+                />
               </div>
               <label className="flex flex-col gap-[var(--space-1)] text-[var(--text-secondary)]" style={{ fontSize: 'var(--text-xs)' }}>
                 <span>Composition rationale</span>
@@ -3416,10 +3643,10 @@ export function SceneInspector({
                           onChange={(event) => {
                             const nextValue = event.target.value
                             if (nextValue === CUSTOM_REPLICATE_VIDEO_MODEL) {
-                              setReplicateCustomModelOpen(true)
+                              setReplicateCustomModelOverride({ model: videoGenerationModel ?? '', open: true })
                               return
                             }
-                            setReplicateCustomModelOpen(false)
+                            setReplicateCustomModelOverride({ model: nextValue, open: false })
                             onVideoProfileChange?.({ generation_model: nextValue })
                           }}
                           className="rounded-[var(--radius-md)] border border-[var(--border-subtle)] bg-[var(--surface-stage)] px-[var(--space-2)] py-[var(--space-2)] text-[var(--text-primary)] outline-none focus-visible:shadow-[var(--focus-ring)]"
@@ -3492,8 +3719,8 @@ export function SceneInspector({
                 {videoGenerationProvider === 'local'
                   ? 'Local video generation uses clip notes plus narration context. Generate audio first if you want exact duration matching.'
                   : videoGenerationProvider === 'replicate'
-                  ? 'Cloud video generation creates a real scene clip from your shot direction. Automatic mode picks the cinematic or speaking lane based on clip audio plus the scene clip style. Use the scene audio source control below to choose between clip audio and separate narration.'
-                  : 'Manual video mode is upload-first. Use Agent Demo when you want betTube Studio to run the heavier capture and review workflow in the background.'}
+                  ? 'Cloud video generation creates a real scene clip from your shot direction. Automatic routing picks the cinematic or speaking lane based on clip audio plus the scene clip style. Use the scene audio source control below to choose between clip audio and separate narration.'
+                  : 'Manual video is upload-first. Use Demo Capture when you want betTube Studio to run the heavier capture and review workflow in the background.'}
               </p>
 
               <div className="grid gap-[var(--space-3)] xl:grid-cols-2">
@@ -3603,52 +3830,31 @@ export function SceneInspector({
                 </ActionButton>
               </div>
               <div className="grid gap-[var(--space-3)] xl:grid-cols-3">
-                <label className="flex flex-col gap-[var(--space-1)] text-[var(--text-secondary)]" style={{ fontSize: 'var(--text-xs)' }}>
-                  <span>Composition family</span>
-                  <select
-                    value={compositionFamilyValue}
-                    onChange={(event) => updateComposition({
-                      family: event.target.value,
-                      mode: remotionEnabled ? defaultCompositionModeForFamily(event.target.value) : 'none',
-                    })}
-                    className="rounded-[var(--radius-md)] border border-[var(--border-subtle)] bg-[var(--surface-stage)] px-[var(--space-2)] py-[var(--space-2)] text-[var(--text-primary)] outline-none focus-visible:shadow-[var(--focus-ring)]"
-                    aria-label="Composition family"
-                  >
-                    {compositionFamilyOptions.map((option) => (
-                      <option key={option.value} value={option.value}>{option.label}</option>
-                    ))}
-                  </select>
-                </label>
-                <label className="flex flex-col gap-[var(--space-1)] text-[var(--text-secondary)]" style={{ fontSize: 'var(--text-xs)' }}>
-                  <span>Composition mode</span>
-                  <select
-                    value={compositionModeValue}
-                    onChange={(event) => updateComposition({ mode: event.target.value as NonNullable<Scene['composition']>['mode'] })}
-                    className="rounded-[var(--radius-md)] border border-[var(--border-subtle)] bg-[var(--surface-stage)] px-[var(--space-2)] py-[var(--space-2)] text-[var(--text-primary)] outline-none focus-visible:shadow-[var(--focus-ring)]"
-                    aria-label="Composition mode"
-                  >
-                    <option value="none">None</option>
-                    {remotionEnabled && <option value="overlay">Overlay</option>}
-                    {remotionEnabled && <option value="native">Native</option>}
-                  </select>
-                </label>
-                <label className="flex flex-col gap-[var(--space-1)] text-[var(--text-secondary)]" style={{ fontSize: 'var(--text-xs)' }}>
-                  <span>Transition after</span>
-                  <select
-                    value={compositionTransitionKind}
-                    onChange={(event) => updateComposition({
-                      transition_after: event.target.value
-                        ? { kind: event.target.value, duration_in_frames: 20 }
-                        : null,
-                    })}
-                    className="rounded-[var(--radius-md)] border border-[var(--border-subtle)] bg-[var(--surface-stage)] px-[var(--space-2)] py-[var(--space-2)] text-[var(--text-primary)] outline-none focus-visible:shadow-[var(--focus-ring)]"
-                    aria-label="Transition after"
-                  >
-                    <option value="">None</option>
-                    <option value="fade">Fade</option>
-                    <option value="wipe">Wipe</option>
-                  </select>
-                </label>
+                <InspectorSelect
+                  label="Composition family"
+                  value={compositionFamilyValue}
+                  options={compositionFamilySelectOptions}
+                  onChange={(family) => updateComposition({
+                    family,
+                    mode: remotionEnabled ? defaultCompositionModeForFamily(family) : 'none',
+                  })}
+                />
+                <InspectorSelect
+                  label="Composition behavior"
+                  value={compositionModeValue}
+                  options={compositionModeOptions}
+                  onChange={(mode) => updateComposition({ mode: mode as NonNullable<Scene['composition']>['mode'] })}
+                />
+                <InspectorSelect
+                  label="Transition after"
+                  value={compositionTransitionKind}
+                  options={TRANSITION_OPTIONS}
+                  onChange={(transition) => updateComposition({
+                    transition_after: transition
+                      ? { kind: transition, duration_in_frames: 20 }
+                      : null,
+                  })}
+                />
               </div>
               <label className="flex flex-col gap-[var(--space-1)] text-[var(--text-secondary)]" style={{ fontSize: 'var(--text-xs)' }}>
                 <span>Composition rationale</span>
@@ -3663,31 +3869,29 @@ export function SceneInspector({
               {isThreeDataStage ? renderThreeDataStageEditor() : isClinicalTemplate ? renderClinicalTemplateEditor() : null}
               {imageGenerationProvider === 'manual' && (
                 <p className="m-0 text-[var(--text-tertiary)]" style={{ fontSize: 'var(--text-xs)', marginTop: 'var(--space-2)' }}>
-                  Manual image mode is upload-first. Upload a still here or switch the project image provider in Settings before generating.
+                  Manual image generation is upload-first. Upload a still here or switch the project image provider in Settings before generating.
                 </p>
               )}
-              {imageEditModel && (
-                <p className="m-0 text-[var(--text-tertiary)]" style={{ fontSize: 'var(--text-xs)', marginTop: 'var(--space-2)' }}>
-                  Editor: {imageEditModel}
-                </p>
-              )}
-              {imageEditModels.length > 0 && onImageEditModelChange && (
+              {imageEditModels.length > 0 && onImageEditModelChange ? (
+                <InspectorSelect
+                  label="Image editor"
+                  value={imageEditModel ?? ''}
+                  options={imageEditModels.map((model) => ({ value: model, label: model }))}
+                  onChange={onImageEditModelChange}
+                  className="mt-[var(--space-3)]"
+                />
+              ) : imageEditModel ? (
                 <label className="mt-[var(--space-3)] flex flex-col gap-[var(--space-1)] text-[var(--text-secondary)]" style={{ fontSize: 'var(--text-xs)' }}>
                   <span>Image editor</span>
-                  <select
-                    value={imageEditModel ?? ''}
-                    onChange={(event) => onImageEditModelChange(event.target.value)}
-                    className="rounded-[var(--radius-md)] border border-[var(--border-subtle)] bg-[var(--surface-stage)] px-[var(--space-2)] py-[var(--space-2)] text-[var(--text-primary)] outline-none focus-visible:shadow-[var(--focus-ring)]"
+                  <input
+                    type="text"
+                    value={imageEditModel}
+                    readOnly
+                    className="rounded-[var(--radius-md)] border border-[var(--border-subtle)] bg-[var(--surface-stage)] px-[var(--space-2)] py-[var(--space-2)] text-[var(--text-tertiary)] outline-none"
                     aria-label="Image editor"
-                  >
-                    {imageEditModels.map((model) => (
-                      <option key={model} value={model}>
-                        {model}
-                      </option>
-                    ))}
-                  </select>
+                  />
                 </label>
-              )}
+              ) : null}
               {imageEditOpen && (
                 <div className="mt-[var(--space-3)] flex flex-col gap-[var(--space-2)]">
                   <input
@@ -3842,7 +4046,7 @@ export function SceneInspector({
                 padding: `var(--space-2) var(--space-3)`,
               }}
               placeholder={promptPlaceholder}
-              aria-label={nativeMotionScene ? 'Motion direction' : isVideoScene ? 'Clip notes / shot direction' : 'Visual prompt'}
+              aria-label={nativeMotionScene ? 'Remotion notes' : isVideoScene ? 'Clip notes / shot direction' : 'Image direction'}
             />
             <div className="scene-inspector__action-row">
               <ActionButton onClick={() => setPromptFeedbackOpen((value) => !value)}>{promptFeedbackLabel}</ActionButton>
@@ -3866,7 +4070,7 @@ export function SceneInspector({
                     fontFamily: 'var(--font-body)',
                     padding: `var(--space-2) var(--space-3)`,
                   }}
-                  aria-label={nativeMotionScene ? 'Motion refine feedback' : isVideoScene ? 'Clip notes refine feedback' : 'Prompt refine feedback'}
+                  aria-label={nativeMotionScene ? 'Remotion refine feedback' : isVideoScene ? 'Clip notes refine feedback' : 'Image direction feedback'}
                 />
                 <div className="scene-inspector__action-row scene-inspector__action-row--compact">
                   <ActionButton onClick={submitPromptFeedback} variant="primary" disabled={!promptFeedback.trim()}>
@@ -4101,7 +4305,7 @@ export function SceneInspector({
 
         <InspectorSection
           id="scene-operator"
-          title="Operator"
+          title="Activity"
           meta={actionTrace?.status ?? 'idle'}
           open={sectionOpen.operator}
           onToggle={() => toggleSection('operator')}
@@ -4109,7 +4313,7 @@ export function SceneInspector({
           <div className="flex flex-col gap-[var(--space-3)]">
             <div className="rounded-[var(--radius-md)] border border-[var(--border-subtle)] bg-[var(--surface-stage)] px-[var(--space-3)] py-[var(--space-2)]">
               <div className="text-[var(--text-secondary)]" style={{ fontSize: 'var(--text-xs)' }}>
-                {nativeMotionScene ? 'Render motion preview' : isVideoScene ? 'Generate video clip' : 'Generate image'}
+                {nativeMotionScene ? 'Render Remotion preview' : isVideoScene ? 'Generate video clip' : 'Generate image'}
               </div>
               <div className="mt-[var(--space-1)] text-[var(--text-primary)]" style={{ fontSize: 'var(--text-sm)', fontFamily: 'var(--font-mono)' }}>
                 {nativeMotionScene
@@ -4120,12 +4324,7 @@ export function SceneInspector({
               </div>
             </div>
             {requestPreview && (
-              <pre
-                className="m-0 overflow-x-auto rounded-[var(--radius-md)] border border-[var(--border-subtle)] bg-[var(--surface-stage)] p-[var(--space-3)] text-[var(--text-tertiary)]"
-                style={{ fontSize: '10px', fontFamily: 'var(--font-mono)' }}
-              >
-                {JSON.stringify(requestPreview, null, 2)}
-              </pre>
+              <DetailGrid items={requestPreviewItems(requestPreview)} />
             )}
             {actionTrace && (
               <div className="flex flex-col gap-[var(--space-2)] rounded-[var(--radius-md)] border border-[var(--border-subtle)] bg-[var(--surface-stage)] p-[var(--space-3)]">
@@ -4146,15 +4345,7 @@ export function SceneInspector({
                     {actionTrace.status}
                   </span>
                 </div>
-                <div className="text-[var(--text-tertiary)]" style={{ fontSize: '10px', fontFamily: 'var(--font-mono)' }}>
-                  {actionTrace.endpoint}
-                </div>
-                <pre
-                  className="m-0 overflow-x-auto rounded-[var(--radius-sm)] border border-[var(--border-subtle)] bg-[var(--surface-void)] p-[var(--space-2)] text-[var(--text-tertiary)]"
-                  style={{ fontSize: '10px', fontFamily: 'var(--font-mono)' }}
-                >
-                  {JSON.stringify(actionTrace.request, null, 2)}
-                </pre>
+                <DetailGrid items={actionTraceItems(actionTrace.request)} />
                 {actionTrace.error && (
                   <div className="text-[var(--signal-danger)]" role="alert" style={{ fontSize: 'var(--text-xs)' }}>
                     {actionTrace.error}
@@ -4166,7 +4357,7 @@ export function SceneInspector({
               <div className="flex flex-col gap-[var(--space-2)] rounded-[var(--radius-md)] border border-[var(--border-subtle)] bg-[var(--surface-stage)] p-[var(--space-3)]">
                 <div className="flex items-center justify-between gap-[var(--space-3)]">
                   <div className="text-[var(--text-primary)]" style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--weight-medium)' }}>
-                    Agent demo
+                    Demo capture
                   </div>
                   <span className={clsx(
                     'rounded-full border px-[var(--space-2)] py-[2px] font-[family-name:var(--font-mono)] text-[10px]',
@@ -4180,7 +4371,7 @@ export function SceneInspector({
                   </span>
                 </div>
                 <div className="text-[var(--text-secondary)]" style={{ fontSize: 'var(--text-xs)' }}>
-                  {agentDemoJob.progress_label || 'Background agent demo run'}
+                  {agentDemoJob.progress_label || 'Background demo capture run'}
                 </div>
                 {agentDemoJob.progress_detail && (
                   <div className="text-[var(--text-tertiary)]" style={{ fontSize: '10px', fontFamily: 'var(--font-mono)' }}>

@@ -4,15 +4,25 @@ import { IntentDeck } from '../components/composed/IntentDeck'
 import { BackgroundMesh } from '../components/primitives/BackgroundMesh'
 import { Badge } from '../components/primitives/Badge'
 import { WorkspaceCanvas, WorkspacePanel } from '../design-system/recipes'
+import { useProjects } from '../lib/api/hooks.ts'
+import { useGlobalQueueSummary } from '../lib/api/global-queue.ts'
 
 export function WorkspaceHome() {
   const navigate = useNavigate()
+  const { data: projects } = useProjects()
+  const { activeCount, jobsLoading } = useGlobalQueueSummary()
+  const projectCount = projects?.length ?? 0
+  const renderedCount = (projects ?? []).filter((project) => project.has_video).length
+  const projectBadge = projectCount > 0 ? `${projectCount} project${projectCount === 1 ? '' : 's'}` : undefined
+  const queueBadge = !jobsLoading && activeCount > 0
+    ? `${activeCount} active`
+    : undefined
 
   const cards = [
     {
       id: 'new-video',
       title: 'Start a new video',
-      description: 'Create an explainer video from a brief, source material, or a quick prompt.',
+      description: 'Create an explainer video from a brief, source material, or a rough idea.',
       icon: (
         <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
           <circle cx="10" cy="10" r="8" />
@@ -45,7 +55,7 @@ export function WorkspaceHome() {
           <path d="M4 12L8 8L11 11L16 6" />
         </svg>
       ),
-      badge: '3 projects',
+      badge: projectBadge,
       onClick: () => navigate('/projects'),
     },
     {
@@ -82,7 +92,7 @@ export function WorkspaceHome() {
           <rect x="3" y="15" width="8" height="2" rx="1" />
         </svg>
       ),
-      badge: '2 queued',
+      badge: queueBadge,
       onClick: () => navigate('/queue'),
     },
   ]
@@ -99,8 +109,8 @@ export function WorkspaceHome() {
           <div className="workspace-hero-grid">
             <WorkspacePanel
               title="Choose the next move"
-              eyebrow="Intent Deck"
-              copy="Move between planning, scene editing, rendering, and queue monitoring without changing mental models. The shell stays consistent while the workspace shifts underneath you."
+              eyebrow="Start"
+              copy="Create a new video, continue an existing project, review scenes, render, or check background jobs."
               variant="floating"
             >
               <IntentDeck cards={cards} columns={3} />
@@ -108,36 +118,35 @@ export function WorkspaceHome() {
 
             <div className="workspace-panel-stack">
               <WorkspacePanel
-                title="Active modes"
-                eyebrow="Multimodal flow"
-                copy="betTube Studio should feel fluid across typing, drag and drop, media scrubbing, keyboard navigation, and live asset review."
+                title="Workspace status"
+                eyebrow="Overview"
+                copy="Current project and queue totals across this workspace."
               >
                 <div className="flex flex-wrap gap-[var(--space-2)]">
-                  <Badge variant="active">Brief editing</Badge>
-                  <Badge variant="active">Drag/drop media</Badge>
-                  <Badge variant="active">Keyboard-first</Badge>
-                  <Badge variant="active">Timeline review</Badge>
-                  <Badge variant="default">Command palette</Badge>
+                  <Badge variant={projectCount > 0 ? 'active' : 'default'}>{projectCount} projects</Badge>
+                  <Badge variant={activeCount > 0 ? 'active' : 'default'}>{activeCount} active jobs</Badge>
+                  <Badge variant={renderedCount > 0 ? 'success' : 'default'}>{renderedCount} rendered</Badge>
+                  <Badge variant="default">9:16 shorts</Badge>
                 </div>
               </WorkspacePanel>
 
               <WorkspacePanel
-                title="Control room principles"
-                eyebrow="Design system"
-                copy="Glass layers, warm technical type, visible system state, and clear route-to-route continuity should shape every workspace rather than being special-case styling."
+                title="Quick totals"
+                eyebrow="Library"
+                copy="Open Projects to pick a timeline, or Queue when background jobs are active."
               >
                 <div className="workspace-kpi-grid">
                   <div>
-                    <p className="workspace-eyebrow">Surface</p>
-                    <div className="workspace-panel-title text-[var(--text-2xl)]">Glass</div>
+                    <p className="workspace-eyebrow">Projects</p>
+                    <div className="workspace-panel-title text-[var(--text-2xl)]">{projectCount}</div>
                   </div>
                   <div>
-                    <p className="workspace-eyebrow">Feedback</p>
-                    <div className="workspace-panel-title text-[var(--text-2xl)]">Visible</div>
+                    <p className="workspace-eyebrow">Active jobs</p>
+                    <div className="workspace-panel-title text-[var(--text-2xl)]">{activeCount}</div>
                   </div>
                   <div>
-                    <p className="workspace-eyebrow">Layout</p>
-                    <div className="workspace-panel-title text-[var(--text-2xl)]">Modular</div>
+                    <p className="workspace-eyebrow">Rendered</p>
+                    <div className="workspace-panel-title text-[var(--text-2xl)]">{renderedCount}</div>
                   </div>
                 </div>
               </WorkspacePanel>
