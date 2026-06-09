@@ -1,5 +1,4 @@
-import { useForm, Controller } from 'react-hook-form'
-import { zodResolver } from '@hookform/resolvers/zod'
+import { useForm, Controller, type FieldErrors, type Resolver } from 'react-hook-form'
 import { BriefSchema, type Brief } from '../../lib/schemas/plan.ts'
 import type { ShortFormOption, ShortFormOptions } from '../../lib/api/hooks.ts'
 import { TextInput } from '../../components/primitives/TextInput.tsx'
@@ -73,6 +72,27 @@ const TEXT_RENDER_MODE_OPTIONS = [
   { value: 'deterministic_overlay', label: 'Deterministic Overlay' },
 ]
 
+// The approved ProGet feed does not serve @hookform/resolvers, so the zod resolver is
+// inlined here (functionally equivalent to zodResolver(BriefSchema)) to keep the build
+// installable from the feed without an extra dependency.
+const briefResolver: Resolver<Brief> = async (values) => {
+  const result = BriefSchema.safeParse(values)
+  if (result.success) {
+    return { values: result.data, errors: {} }
+  }
+
+  const errors = {} as FieldErrors<Brief>
+  for (const issue of result.error.issues) {
+    const path = issue.path.join('.')
+    if (!path) continue
+    ;(errors as Record<string, { type: string; message: string }>)[path] = {
+      type: issue.code,
+      message: issue.message,
+    }
+  }
+  return { values: {}, errors }
+}
+
 interface BriefFormProps {
   defaults?: Partial<Brief>
   onSubmit: (data: Brief, action: 'video' | 'storyboard') => void
@@ -124,7 +144,7 @@ export function BriefForm({
     setValue,
     formState: { errors },
   } = useForm<Brief>({
-    resolver: zodResolver(BriefSchema),
+    resolver: briefResolver,
     defaultValues: {
       project_name: '',
       source_mode: 'ideas_notes',

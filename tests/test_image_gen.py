@@ -202,6 +202,8 @@ def test_generate_scene_image_uses_codex_backend(monkeypatch, tmp_path):
         return Path(output_path)
 
     monkeypatch.setattr(image_gen, "generate_image_codex_exec", fake_generate_image_codex_exec)
+    # Codex CLI present -> the GPT Image lane uses the codex exec sub-lane.
+    monkeypatch.setattr(image_gen.shutil, "which", lambda value: "/usr/local/bin/codex" if value == "codex" else None)
 
     result = generate_scene_image(
         {"id": 0, "visual_prompt": "A precise editorial still."},
@@ -349,6 +351,37 @@ def test_edit_image_gpt_image_falls_back_to_openai_api_without_codex(monkeypatch
     assert output_path.read_bytes() == b"openai-edited"
     assert captured["model"] == "gpt-image-2"
     assert captured["size"] == image_gen.TARGET_SIZE_OPENAI
+    assert captured["output_format"] == "png"
+
+
+def test_generate_scene_image_uses_openai_api_without_codex(monkeypatch, tmp_path):
+    """GPT Image generation works via the OpenAI Images API alone (proxy key, no Codex CLI)."""
+    captured: dict[str, object] = {}
+
+    class FakeImages:
+        def generate(self, **kwargs):
+            captured.update(kwargs)
+            return types.SimpleNamespace(
+                data=[types.SimpleNamespace(b64_json=base64.b64encode(b"openai-generated").decode("ascii"))]
+            )
+
+    class FakeClient:
+        images = FakeImages()
+
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    monkeypatch.setattr(image_gen.shutil, "which", lambda value: None)  # no Codex CLI
+    monkeypatch.setitem(sys.modules, "openai", types.SimpleNamespace(OpenAI=lambda: FakeClient()))
+    monkeypatch.setattr(image_gen.image_limiter, "call_with_retry", lambda callback: callback())
+
+    result = generate_scene_image(
+        {"id": 0, "visual_prompt": "A precise editorial still."},
+        tmp_path,
+        provider="codex",
+        model="gpt-image-2",
+    )
+
+    assert result.read_bytes() == b"openai-generated"
+    assert captured["model"] == "gpt-image-2"
     assert captured["output_format"] == "png"
 
 

@@ -280,7 +280,7 @@ def create_plan_from_brief(
     provider: str,
     storyboard_provider: str | None = None,
     treatment_provider: str | None = None,
-    image_model: str = "qwen/qwen-image-2512",
+    image_model: str = "",
     image_profile: dict[str, Any] | None = None,
     video_profile: dict[str, Any] | None = None,
     tts_profile: dict[str, Any] | None = None,
@@ -293,7 +293,7 @@ def create_plan_from_brief(
     normalized_brief["project_name"] = sanitize_project_name(project_name)
     resolved_image_profile = dict(image_profile or default_image_profile())
     resolved_image_profile["generation_model"] = str(
-        resolved_image_profile.get("generation_model") or image_model
+        resolved_image_profile.get("generation_model") or image_model or default_image_profile()["generation_model"]
     )
     resolved_video_profile = dict(video_profile or default_video_profile())
     resolved_tts_profile = dict(tts_profile or default_tts_profile())

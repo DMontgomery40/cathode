@@ -870,6 +870,7 @@ def test_motion_preview_runs_in_threadpool(mock_manifest, mock_render, client, t
     with (
         patch("server.routers.scenes.PROJECTS_DIR", tmp_path),
         patch("server.routers.scenes.load_plan", return_value=plan),
+        patch("server.routers.scenes.remotion_available", return_value=True),
         patch("server.routers.scenes.run_in_threadpool", side_effect=fake_run_in_threadpool),
         patch("server.routers.scenes.save_plan", side_effect=lambda d, p: p),
     ):
@@ -883,22 +884,53 @@ def test_motion_preview_runs_in_threadpool(mock_manifest, mock_render, client, t
     assert saved_scene["composition"]["preview_path"] == "/tmp/previews/preview_motion_scene.mp4"
 
 
-def test_motion_preview_requires_explicit_remotion_opt_in(client, tmp_path):
+def test_motion_preview_without_remotion_errors_when_no_still(client, tmp_path):
+    """Without the Remotion toolchain and without an authored still, motion preview 400s
+    with an actionable hint rather than silently failing."""
     (tmp_path / "demo").mkdir()
     plan = _fresh_plan()
     plan["meta"]["render_profile"] = {"render_strategy": "auto", "render_backend": "ffmpeg"}
     plan["scenes"][0]["scene_type"] = "motion"
+    plan["scenes"][0]["image_path"] = None
     plan["scenes"][0]["motion"] = {"template_id": "kinetic_title", "props": {"headline": "Prompts"}}
     plan["scenes"][0]["composition"] = {"family": "kinetic_title", "mode": "native", "props": {}}
 
     with (
         patch("server.routers.scenes.PROJECTS_DIR", tmp_path),
         patch("server.routers.scenes.load_plan", return_value=plan),
+        patch("server.routers.scenes.remotion_available", return_value=False),
     ):
         resp = client.post("/api/projects/demo/scenes/abc1/preview")
 
     assert resp.status_code == 400
-    assert "render_strategy=force_remotion" in resp.json()["detail"]
+    assert "Remotion toolchain" in resp.json()["detail"]
+
+
+@patch("server.routers.scenes.preview_scene", return_value=Path("/tmp/previews/preview_still.mp4"))
+def test_motion_preview_falls_back_to_ffmpeg_still_without_remotion(mock_preview, client, tmp_path):
+    """When Remotion is unavailable but the motion scene has an authored still, the preview
+    degrades to an ffmpeg still render so the scene can still be previewed."""
+    (tmp_path / "demo").mkdir()
+    plan = _fresh_plan()
+    plan["meta"]["render_profile"] = {"render_strategy": "force_remotion", "render_backend": "remotion"}
+    plan["scenes"][0]["scene_type"] = "motion"
+    plan["scenes"][0]["image_path"] = "images/scene_001.png"
+    plan["scenes"][0]["motion"] = {"template_id": "kinetic_title", "props": {"headline": "Prompts"}}
+    plan["scenes"][0]["composition"] = {"family": "kinetic_title", "mode": "native", "props": {}}
+
+    with (
+        patch("server.routers.scenes.PROJECTS_DIR", tmp_path),
+        patch("server.routers.scenes.load_plan", return_value=plan),
+        patch("server.routers.scenes.remotion_available", return_value=False),
+        patch("server.routers.scenes.save_plan", side_effect=lambda d, p: p),
+    ):
+        resp = client.post("/api/projects/demo/scenes/abc1/preview")
+
+    assert resp.status_code == 200
+    assert mock_preview.called
+    # The motion scene is previewed as a still image via the ffmpeg path.
+    still_scene = mock_preview.call_args.args[0]
+    assert still_scene["scene_type"] == "image"
 
 
 def test_preview_project_not_found(client, tmp_path):

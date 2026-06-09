@@ -6,9 +6,24 @@ from __future__ import annotations
 import argparse
 import base64
 import json
+import os
 from pathlib import Path
 
 import openai
+
+# Env var NAMES only (no endpoint/key VALUES). Resolver is inlined rather than
+# imported from core.runtime because this helper runs as a standalone subprocess
+# (codex exec) where the package may not be importable. Matched-pair rule: a
+# shared/proxy key is only paired with an explicit base_url, never the public default.
+_OPENAI_KEY_ENV_NAMES = ("OPENAI_API_KEY", "BETTUBE_STUDIO_OPENAI_API_KEY", "LITELLM_API_KEY", "AIPROXY_API_KEY")
+_OPENAI_BASE_URL_ENV_NAMES = ("OPENAI_BASE_URL", "BETTUBE_STUDIO_OPENAI_BASE_URL")
+
+
+def _make_openai_client() -> "openai.OpenAI":
+    key = next((os.environ[name] for name in _OPENAI_KEY_ENV_NAMES if os.environ.get(name)), None)
+    base_url = next((os.environ[name] for name in _OPENAI_BASE_URL_ENV_NAMES if os.environ.get(name)), None)
+    kwargs = {"api_key": key, "base_url": base_url} if (base_url and key) else {}
+    return openai.OpenAI(**kwargs)
 
 
 def parse_args() -> argparse.Namespace:
@@ -32,7 +47,7 @@ def main() -> int:
     if not prompt.strip():
         raise SystemExit("Prompt file is empty.")
 
-    client = openai.OpenAI()
+    client = _make_openai_client()
     result = client.images.generate(
         model=str(args.model or "gpt-image-2").strip() or "gpt-image-2",
         prompt=prompt,

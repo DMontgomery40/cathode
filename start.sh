@@ -6,7 +6,8 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PYTHON="/opt/homebrew/bin/python3.10"
+PYTHON="${BETTUBE_STUDIO_PYTHON:-$ROOT_DIR/.venv/bin/python3.10}"
+FALLBACK_PYTHON="/opt/homebrew/bin/python3.10"
 
 STREAMLIT_PORT="${STREAMLIT_PORT:-8517}"
 BETTUBE_STUDIO_API_PORT="${BETTUBE_STUDIO_API_PORT:-9321}"
@@ -58,9 +59,13 @@ while [[ $# -gt 0 ]]; do
 done
 
 require_python() {
-  if [[ ! -f "$PYTHON" ]]; then
-    echo "Error: Python 3.10 not found at $PYTHON"
-    echo "Install with: brew install python@3.10"
+  if [[ ! -x "$PYTHON" ]] && [[ -x "$FALLBACK_PYTHON" ]]; then
+    PYTHON="$FALLBACK_PYTHON"
+  fi
+
+  if [[ ! -x "$PYTHON" ]]; then
+    echo "Error: Python 3.10 not found at $PYTHON or $FALLBACK_PYTHON"
+    echo "Install with: uv python install 3.10 && uv venv --python 3.10 .venv"
     exit 1
   fi
 }
@@ -85,15 +90,23 @@ load_env() {
 install_python_requirements_if_missing() {
   local imports="$1"
   shift
-  local requirement_files=("$@")
+  local extras=("$@")
 
   if ! "$PYTHON" -c "$imports" >/dev/null 2>&1; then
-    echo "Missing Python dependencies. Installing..."
-    local pip_args=()
-    for requirement_file in "${requirement_files[@]}"; do
-      pip_args+=(-r "$requirement_file")
-    done
-    "$PYTHON" -m pip install "${pip_args[@]}"
+    echo "Missing Python dependencies. Installing from pyproject.toml..."
+    local target="$ROOT_DIR"
+    if [[ ${#extras[@]} -gt 0 ]]; then
+      local joined
+      joined=$(IFS=,; echo "${extras[*]}")
+      target="${ROOT_DIR}[${joined}]"
+    fi
+    # No index URL is baked in; uv/pip read UV_INDEX_URL / PIP_INDEX_URL /
+    # PIP_EXTRA_INDEX_URL from the environment for approved-mirror corp installs.
+    if command -v uv >/dev/null 2>&1; then
+      uv pip install --python "$PYTHON" -e "$target"
+    else
+      "$PYTHON" -m pip install -e "$target"
+    fi
   fi
 }
 
@@ -129,8 +142,7 @@ wait_for_http() {
 
 run_streamlit() {
   install_python_requirements_if_missing \
-    "import streamlit, kokoro, anthropic, openai, replicate" \
-    "$ROOT_DIR/requirements.txt"
+    "import streamlit, kokoro, anthropic, openai, replicate"
 
   echo "Starting betTube Studio Streamlit app..."
   echo "Opening http://127.0.0.1:${STREAMLIT_PORT}"
@@ -154,8 +166,7 @@ run_react_stack() {
   require_npm
   install_python_requirements_if_missing \
     "import fastapi, uvicorn; import streamlit, kokoro, anthropic, openai, replicate" \
-    "$ROOT_DIR/requirements.txt" \
-    "$ROOT_DIR/server/requirements.txt"
+    server
   install_frontend_requirements_if_missing
 
   trap cleanup EXIT INT TERM

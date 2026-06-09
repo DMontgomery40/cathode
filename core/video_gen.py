@@ -38,7 +38,9 @@ from .voice_gen import generate_scene_audio_result
 DEFAULT_VIDEO_DURATION_SECONDS = 5.0
 DEFAULT_VIDEO_TIMEOUT_SECONDS = 900
 MAX_REPLICATE_VIDEO_DURATION_SECONDS = 15
-DEFAULT_REPLICATE_SPEAKING_VIDEO_MODEL = "kwaivgi/kling-avatar-v2"
+DEFAULT_REPLICATE_SPEAKING_VIDEO_MODEL = (
+    os.getenv("BETTUBE_STUDIO_REPLICATE_SPEAKING_VIDEO_MODEL") or "kwaivgi/kling-avatar-v2"
+)
 
 
 def _log(message: str) -> None:

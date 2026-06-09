@@ -51,13 +51,15 @@ export function ProviderMatrix() {
   }
 
   const { providers } = bootstrap
+  const apiKeys = providers.api_keys ?? {}
+  const ttsProviders = providers.tts_providers ?? {}
 
   const llmItems = [
-    providers.api_keys.anthropic ? {
+    apiKeys.anthropic ? {
       name: 'anthropic',
       available: true,
     } : null,
-    providers.api_keys.openai ? {
+    apiKeys.openai ? {
       name: 'openai',
       available: true,
     } : null,
@@ -77,7 +79,7 @@ export function ProviderMatrix() {
     },
     {
       label: 'Audio',
-      items: Object.entries(providers.tts_providers).map(([name, voice]) => ({
+      items: Object.entries(ttsProviders).map(([name, voice]) => ({
         name: `${name} (${voice})`,
         available: true,
       })),
@@ -94,7 +96,7 @@ export function ProviderMatrix() {
   const summary = [
     { label: 'Text Models', value: providers.llm_provider ? 1 : 0, note: providers.llm_provider || 'Unavailable' },
     { label: 'Image Engines', value: providers.image_providers.length, note: displayProviderName(providers.image_providers[0] || 'Unavailable') },
-    { label: 'Audio Voices', value: Object.keys(providers.tts_providers).length, note: Object.keys(providers.tts_providers)[0] || 'Unavailable' },
+    { label: 'Audio Voices', value: Object.keys(ttsProviders).length, note: Object.keys(ttsProviders)[0] || 'Unavailable' },
     { label: 'Video Engines', value: providers.video_providers.length, note: providers.video_providers[0] || 'Unavailable' },
   ]
 
@@ -167,7 +169,7 @@ export function ProviderMatrix() {
           className="flex flex-wrap gap-[var(--space-2)]"
           style={{ marginTop: 'var(--space-2)' }}
         >
-          {Object.entries(providers.api_keys).map(([key, present]) => (
+          {Object.entries(apiKeys).map(([key, present]) => (
             <Badge key={key} variant={present ? 'success' : 'danger'} size="sm">
               {key}
             </Badge>

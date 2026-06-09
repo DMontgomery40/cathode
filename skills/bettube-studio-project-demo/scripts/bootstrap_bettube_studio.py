@@ -60,7 +60,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--reinstall",
         action="store_true",
-        help="Force pip install -r requirements.txt even when the virtualenv already exists.",
+        help="Force pip install -e .[server] even when the virtualenv already exists.",
     )
     parser.add_argument(
         "--streamlit-port",
@@ -124,7 +124,7 @@ def find_python(explicit: str | None) -> Path:
 
 
 def validate_repo(repo_path: Path) -> None:
-    required = ("app.py", "bettube_studio_mcp_server.py", "requirements.txt")
+    required = ("app.py", "bettube_studio_mcp_server.py", "pyproject.toml")
     missing = [name for name in required if not (repo_path / name).exists()]
     if missing:
         joined = ", ".join(missing)
@@ -174,7 +174,7 @@ def ensure_venv(repo_path: Path, python_bin: Path, *, skip_install: bool, reinst
     should_install = not skip_install and (venv_created or reinstall)
     if should_install:
         _run([str(venv_python), "-m", "pip", "install", "--upgrade", "pip"], cwd=repo_path)
-        _run([str(venv_python), "-m", "pip", "install", "-r", "requirements.txt"], cwd=repo_path)
+        _run([str(venv_python), "-m", "pip", "install", "-e", ".[server]"], cwd=repo_path)
 
     return venv_python, venv_created, should_install
 

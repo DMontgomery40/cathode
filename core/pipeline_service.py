@@ -38,7 +38,7 @@ from .project_schema import (
 from .project_store import copy_external_files, ensure_project_dir, load_plan, save_plan
 from .remotion_render import build_remotion_manifest, render_manifest_with_remotion, scene_has_renderable_visual
 from .scene_review import default_scene_review_candidates, review_project_scenes
-from .runtime import resolve_workflow_llm_roles, resolve_image_profile, resolve_tts_profile, resolve_video_profile
+from .runtime import resolve_workflow_llm_roles, resolve_image_profile, resolve_tts_profile, resolve_video_profile, remotion_available
 from .video_assembly import (
     assemble_video,
     compress_video_if_oversized,
@@ -1284,6 +1284,12 @@ def render_project_service(
         meta["render_profile"] = render_profile
 
     render_backend = str(render_profile.get("render_backend") or "ffmpeg").strip().lower() or "ffmpeg"
+    if render_backend == "remotion" and not remotion_available():
+        print(
+            "Remotion backend requested but the toolchain is unavailable; "
+            "falling back to ffmpeg assembly so the render still completes."
+        )
+        render_backend = "ffmpeg"
     missing_visuals = [
         int(scene.get("id", 0))
         for scene in scenes

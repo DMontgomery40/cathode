@@ -59,15 +59,20 @@ COPY --from=frontend-build /usr/local/bin/npm /usr/local/bin/npm
 COPY --from=frontend-build /usr/local/bin/npx /usr/local/bin/npx
 COPY --from=frontend-build /usr/local/lib/node_modules /usr/local/lib/node_modules
 
-COPY requirements.txt ./requirements.txt
-COPY server/requirements.txt ./server-requirements.txt
+# Dependency install from pyproject.toml. core/ + server/ + README.md are copied
+# first (the build backend needs the packages and readme) so this layer is cached
+# independently of app.py / prompts / scripts churn. No registry URL is baked in:
+# PIP_INDEX_URL / PIP_EXTRA_INDEX_URL are build args for approved-mirror corp builds.
+COPY pyproject.toml README.md ./
+COPY core ./core
+COPY server ./server
 ARG PIP_INDEX_URL=""
 ARG PIP_EXTRA_INDEX_URL=""
 RUN python -m pip install --upgrade pip setuptools wheel \
     && set -- \
     && if [ -n "${PIP_INDEX_URL}" ]; then set -- "$@" --index-url "${PIP_INDEX_URL}"; fi \
     && if [ -n "${PIP_EXTRA_INDEX_URL}" ]; then set -- "$@" --extra-index-url "${PIP_EXTRA_INDEX_URL}"; fi \
-    && python -m pip install "$@" -r requirements.txt -r server-requirements.txt
+    && python -m pip install "$@" .[server]
 
 COPY . .
 COPY --from=frontend-build /build/frontend/dist ./frontend/dist

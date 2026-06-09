@@ -56,7 +56,9 @@ export interface SceneMotion {
   template_id?: string | null
   props?: Record<string, unknown>
   render_path?: string | null
+  render_exists?: boolean
   preview_path?: string | null
+  preview_exists?: boolean
   rationale?: string | null
 }
 
@@ -98,8 +100,9 @@ export interface ThreeDataStagePanel {
   referenceBands?: ThreeDataStageReferenceBand[]
 }
 
-export interface ThreeDataStageCompositionData {
+export interface ThreeDataStageCompositionData extends Record<string, unknown> {
   series: ThreeDataStageSeries[]
+  data_points?: string[]
   referenceBands?: ThreeDataStageReferenceBand[]
   callouts?: ThreeDataStageCallout[]
   panels?: ThreeDataStagePanel[]

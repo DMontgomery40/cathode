@@ -4,7 +4,7 @@ import type { Scene } from '../../lib/schemas/plan.ts'
 import { scenePreviewUrl, sceneVisualUrl } from '../../lib/scene-media.ts'
 import { GlassPanel } from '../../components/primitives/GlassPanel.tsx'
 import { Button } from '../../components/primitives/Button.tsx'
-import { describeRejectedFiles, splitAcceptedFiles } from '../../lib/uploads.ts'
+import { getAcceptedFileTypes, describeRejectedFiles, splitAcceptedFiles } from '../../lib/uploads.ts'
 import { PlayerSurface } from '../../remotion/PlayerSurface.tsx'
 
 interface MediaStageProps {
@@ -28,14 +28,15 @@ export function MediaStage({ scene, project, remotionEnabled = false, remotionMa
   const [speed, setSpeed] = useState(1)
   const [dragOver, setDragOver] = useState(false)
   const [localUploadError, setLocalUploadError] = useState<string | null>(null)
+  const acceptedMediaTypes = getAcceptedFileTypes('image/*,video/*')
 
   const commitFiles = useCallback((incoming: File[]) => {
     const { accepted, rejected } = splitAcceptedFiles(incoming, 'image/*,video/*', { multiple: false })
-    setLocalUploadError(describeRejectedFiles(rejected, 'image/*,video/*'))
+    setLocalUploadError(describeRejectedFiles(rejected, acceptedMediaTypes))
     if (accepted[0]) {
       onUpload(accepted[0])
     }
-  }, [onUpload])
+  }, [acceptedMediaTypes, onUpload])
 
   const handleDrop = useCallback(
     (e: React.DragEvent) => {
@@ -87,8 +88,8 @@ export function MediaStage({ scene, project, remotionEnabled = false, remotionMa
     return `${m}:${s.toString().padStart(2, '0')}`
   }
 
-  const visualUrl = sceneVisualUrl(project, scene)
-  const previewUrl = scenePreviewUrl(project, scene)
+  const visualUrl = scene ? sceneVisualUrl(project, scene) : null
+  const previewUrl = scene ? scenePreviewUrl(project, scene) : null
   const hasVideoVisual = scene
     ? (typeof scene.video_exists === 'boolean' ? scene.video_exists : Boolean(scene.video_path))
     : false
@@ -215,7 +216,7 @@ export function MediaStage({ scene, project, remotionEnabled = false, remotionMa
           </div>
         )}
 
-        {scene && !visualUrl && (
+        {scene && !visualUrl && !(remotionEnabled && remotionManifest) && (
           <div className="flex h-full cursor-pointer flex-col items-center justify-center gap-[var(--space-3)] px-[var(--space-6)] text-center">
             <svg
               width="40"
@@ -243,12 +244,6 @@ export function MediaStage({ scene, project, remotionEnabled = false, remotionMa
           </div>
         )}
 
-        {scene && remotionManifest && (
-          <div className="flex min-h-0 flex-1 p-[var(--space-4)]">
-            <PlayerSurface manifest={remotionManifest} className="flex-1" height={420} />
-          </div>
-        )}
-
         {activeUploadError && (
           <div
             className="absolute left-[var(--space-4)] right-[var(--space-4)] top-[var(--space-4)] z-10 rounded-[var(--radius-md)] border border-[rgba(200,90,90,0.25)] bg-[rgba(200,90,90,0.12)] px-[var(--space-3)] py-[var(--space-2)] text-[var(--signal-danger)]"
@@ -259,7 +254,7 @@ export function MediaStage({ scene, project, remotionEnabled = false, remotionMa
           </div>
         )}
 
-        {scene && hasImageVisual && !hasVideoVisual && visualUrl && !remotionManifest && (
+        {scene && hasImageVisual && !hasVideoVisual && visualUrl && (
           <div className="flex min-h-0 flex-1 items-center justify-center p-[var(--space-4)]">
             <img
               src={visualUrl ?? undefined}
@@ -269,7 +264,7 @@ export function MediaStage({ scene, project, remotionEnabled = false, remotionMa
           </div>
         )}
 
-        {scene && (hasVideoVisual || previewUrl) && !remotionManifest && (
+        {scene && (hasVideoVisual || previewUrl) && (
           <div className="flex min-h-0 flex-1 flex-col">
             <div className="flex min-h-0 flex-1 items-center justify-center p-[var(--space-4)] pb-[var(--space-3)]">
               <video
@@ -331,6 +326,12 @@ export function MediaStage({ scene, project, remotionEnabled = false, remotionMa
                 <option value={2}>2x</option>
               </select>
             </div>
+          </div>
+        )}
+
+        {scene && remotionEnabled && remotionManifest && (
+          <div className="flex min-h-0 shrink-0 border-t border-[var(--border-subtle)] p-[var(--space-4)]">
+            <PlayerSurface manifest={remotionManifest} className="flex-1" height={320} />
           </div>
         )}
 

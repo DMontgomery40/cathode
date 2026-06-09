@@ -88,9 +88,9 @@ export function RenderProgress({ job, logContent, onCancel }: RenderProgressProp
           >
             {stageLabel(job.status)}
           </span>
-          {(job.requested_stage || job.current_stage || job.type) && (
+          {(job.requested_stage || job.current_stage || job.kind) && (
             <span className="text-[var(--text-tertiary)]" style={{ fontSize: 'var(--text-xs)' }}>
-              ({job.requested_stage || job.current_stage || job.type})
+              ({job.requested_stage || job.current_stage || job.kind})
             </span>
           )}
         </div>

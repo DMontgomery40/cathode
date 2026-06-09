@@ -478,6 +478,10 @@ function numberInputValue(value: unknown): string {
   return parsed === null ? '' : String(parsed)
 }
 
+function normalizeSeriesType(value: unknown): ThreeDataStageSeries['type'] {
+  return String(value || '').trim() === 'line' ? 'line' : 'bar'
+}
+
 function fallbackThreeDataStageLabels(scene: Scene): string[] {
   if (Array.isArray(scene.data_points) && scene.data_points.length > 0) {
     return scene.data_points.map((item) => String(item).trim()).filter(Boolean)
@@ -985,7 +989,10 @@ export function SceneInspector({
   const clipEnd = scene.video_trim_end == null ? '' : String(scene.video_trim_end)
   const holdLastFrame = Boolean(scene.video_hold_last_frame ?? true)
   const videoAudioSource = String(scene.video_audio_source || 'narration')
-  const compositionTransitionKind = String(scene.composition?.transition_after?.kind || '')
+  const transitionAfter = scene.composition?.transition_after && typeof scene.composition.transition_after === 'object'
+    ? scene.composition.transition_after as Record<string, unknown>
+    : null
+  const compositionTransitionKind = String(transitionAfter?.kind || '')
   const projectTtsProvider = String(ttsProfile?.provider || 'kokoro')
   const projectTtsVoice = String(ttsProfile?.voice || '')
   const projectTtsSpeed = typeof ttsProfile?.speed === 'number' ? ttsProfile.speed : 1.1
@@ -1013,7 +1020,7 @@ export function SceneInspector({
   const resolvedReplicateVideoRoute = videoGenerationProvider === 'replicate'
     ? resolveReplicateVideoRoute({
         modelSelectionMode: videoModelSelectionMode,
-        generationModel: videoGenerationModel,
+        generationModel: videoGenerationModel || undefined,
         generateAudio: videoGenerateAudio,
         sceneKind: rawVideoSceneKind,
       })
@@ -1173,7 +1180,7 @@ export function SceneInspector({
                         <select
                           value={String(entry.type || 'bar')}
                           onChange={(event) => updatePanelSeries(panelIndex, panelSeries.map((s, idx) => (
-                            idx === seriesIndex ? { ...s, type: event.target.value } : s
+                            idx === seriesIndex ? { ...s, type: normalizeSeriesType(event.target.value) } : s
                           )))}
                           className="rounded-[var(--radius-sm)] border border-[var(--border-subtle)] bg-[var(--surface-panel-glass)] px-[var(--space-2)] py-[var(--space-2)] text-[var(--text-primary)] outline-none focus-visible:shadow-[var(--focus-ring)]"
                           aria-label={`Panel ${panelIndex + 1} series ${seriesIndex + 1} type`}
@@ -1456,7 +1463,7 @@ export function SceneInspector({
                     value={String(entry.type || 'bar')}
                     onChange={(event) => updateSeries(series.map((seriesEntry, index) => (
                       index === seriesIndex
-                        ? { ...seriesEntry, type: event.target.value }
+                        ? { ...seriesEntry, type: normalizeSeriesType(event.target.value) }
                         : seriesEntry
                     )))}
                     className="rounded-[var(--radius-sm)] border border-[var(--border-subtle)] bg-[var(--surface-panel-glass)] px-[var(--space-2)] py-[var(--space-2)] text-[var(--text-primary)] outline-none focus-visible:shadow-[var(--focus-ring)]"

@@ -8,7 +8,11 @@ export function readLastProjectId(): string {
 }
 
 export function writeLastProjectId(projectId: string) {
-  if (typeof window === 'undefined' || !projectId.trim()) {
+  if (typeof window === 'undefined') {
+    return
+  }
+  if (!projectId.trim()) {
+    window.localStorage.removeItem(LAST_PROJECT_KEY)
     return
   }
   window.localStorage.setItem(LAST_PROJECT_KEY, projectId.trim())

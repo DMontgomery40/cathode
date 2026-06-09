@@ -4,15 +4,23 @@
 from __future__ import annotations
 
 import argparse
+import os
 from pathlib import Path
 
 from core.director_golden import harvest_scenario, materialize_run, promote_example
+
+# Public default; a corp proxy retargets via env (same knobs as the product path).
+_DEFAULT_GOLDEN_MODEL = (
+    os.getenv("BETTUBE_STUDIO_DIRECTOR_GOLDEN_MODEL")
+    or os.getenv("BETTUBE_STUDIO_ANTHROPIC_DIRECTOR_MODEL")
+    or "claude-sonnet-4-6"
+)
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("scenario_ids", nargs="+", help="Scenario ids from prompts/director_example_scenarios/")
-    parser.add_argument("--model", default="claude-sonnet-4-6", help="Anthropic model to use")
+    parser.add_argument("--model", default=_DEFAULT_GOLDEN_MODEL, help="Anthropic model to use")
     parser.add_argument("--skip-judge", action="store_true", help="Skip the Anthropic judge pass")
     parser.add_argument("--skip-preview", action="store_true", help="Skip Remotion preview rendering")
     parser.add_argument(

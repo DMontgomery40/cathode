@@ -926,7 +926,7 @@ export function SceneTimeline() {
                     }
                     runWithCommittedPlan(trace, () => {
                       editImage.mutate(
-                        { sceneUid: selectedScene.uid, feedback, opts: imageEditModel ? { model: imageEditModel } : undefined },
+                        { sceneUid: selectedScene.uid, feedback, model: imageEditModel || undefined },
                         {
                           onSuccess: () => {
                             setLiveMsg('Image edit completed')
@@ -956,7 +956,7 @@ export function SceneTimeline() {
                       error: null,
                     }
                     runWithCommittedPlan(trace, () => {
-                      genImage.mutate({ sceneUid: selectedScene.uid, opts: { provider: imageGenerationProvider, model: imageGenerationModel } }, {
+                      genImage.mutate({ sceneUid: selectedScene.uid, provider: imageGenerationProvider || undefined, model: imageGenerationModel || undefined }, {
                         onSuccess: () => {
                           setLiveMsg('Scene image generated')
                           setActionTrace((current) => current ? { ...current, status: 'succeeded', error: null } : current)
@@ -998,13 +998,11 @@ export function SceneTimeline() {
                       genVideo.mutate(
                         {
                           sceneUid: selectedScene.uid,
-                          opts: {
-                            provider: videoGenerationProvider,
-                            model: videoGenerationModel || undefined,
-                            model_selection_mode: videoModelSelectionMode,
-                            quality_mode: videoQualityMode,
-                            generate_audio: videoGenerateAudio,
-                          },
+                          provider: videoGenerationProvider || undefined,
+                          model: videoGenerationModel || undefined,
+                          model_selection_mode: videoModelSelectionMode,
+                          quality_mode: videoQualityMode || undefined,
+                          generate_audio: videoGenerateAudio,
                         },
                         {
                           onSuccess: () => {
@@ -1234,7 +1232,7 @@ export function SceneTimeline() {
                       error: null,
                     }
                     runWithCommittedPlan(trace, () => {
-                      genPreview.mutate(selectedScene.uid, {
+                      genPreview.mutate({ sceneUid: selectedScene.uid }, {
                         onSuccess: () => {
                           setLiveMsg('Preview generated')
                           setActionTrace((current) => current ? { ...current, status: 'succeeded', error: null } : current)

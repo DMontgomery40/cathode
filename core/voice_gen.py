@@ -26,7 +26,7 @@ except ImportError:  # SoundFile is optional until local Kokoro/Chatterbox audio
     sf = None  # type: ignore[assignment]
 
 from core.rate_limiter import NonRetryableError, elevenlabs_limiter, openai_limiter, image_limiter
-from core.runtime import available_tts_providers
+from core.runtime import available_tts_providers, make_openai_client, resolve_openai_credentials
 
 # ElevenLabs voices - curated selection for narration
 # Full library at: https://elevenlabs.io/voice-library
@@ -46,7 +46,7 @@ ELEVENLABS_VOICES = {
 }
 
 DEFAULT_ELEVENLABS_VOICE = "Bella"
-DEFAULT_ELEVENLABS_MODEL = "eleven_multilingual_v2"  # Higher-fidelity default for polished narrated videos
+DEFAULT_ELEVENLABS_MODEL = os.getenv("BETTUBE_STUDIO_ELEVENLABS_MODEL") or "eleven_multilingual_v2"
 
 # Default ElevenLabs voice settings for a richer, more deliberate explainer voice
 DEFAULT_ELEVENLABS_STABILITY = 0.38
@@ -54,7 +54,8 @@ DEFAULT_ELEVENLABS_SIMILARITY_BOOST = 0.8
 DEFAULT_ELEVENLABS_STYLE = 0.65
 DEFAULT_ELEVENLABS_SPEED = 1.0
 DEFAULT_ELEVENLABS_USE_SPEAKER_BOOST = True
-DEFAULT_REPLICATE_ELEVENLABS_MODEL = "elevenlabs/turbo-v2.5"
+DEFAULT_REPLICATE_ELEVENLABS_MODEL = os.getenv("BETTUBE_STUDIO_REPLICATE_ELEVENLABS_MODEL") or "elevenlabs/turbo-v2.5"
+DEFAULT_CHATTERBOX_MODEL = os.getenv("BETTUBE_STUDIO_CHATTERBOX_MODEL") or "resemble-ai/chatterbox"
 
 REPLICATE_ELEVENLABS_VOICE_MAP = {
     "Rachel": "Rachel",
@@ -108,9 +109,9 @@ KOKORO_VOICES = {
 DEFAULT_VOICE = "af_bella"  # More upbeat than af_heart
 DEFAULT_SPEED = 1.1  # Slightly faster than normal
 DEFAULT_EXAGGERATION = 0.6  # Slightly more expressive than neutral (0.5)
-DEFAULT_OPENAI_TTS_MODEL = "gpt-4o-mini-tts"
-DEFAULT_OPENAI_REALTIME_MODEL = "gpt-realtime-2"
-DEFAULT_OPENAI_TTS_VOICE = "marin"
+DEFAULT_OPENAI_TTS_MODEL = os.getenv("BETTUBE_STUDIO_OPENAI_TTS_MODEL") or "gpt-4o-mini-tts"
+DEFAULT_OPENAI_REALTIME_MODEL = os.getenv("BETTUBE_STUDIO_OPENAI_REALTIME_MODEL") or "gpt-realtime-2"
+DEFAULT_OPENAI_TTS_VOICE = os.getenv("BETTUBE_STUDIO_OPENAI_TTS_VOICE") or "marin"
 OPENAI_TTS_VOICES = {
     "alloy",
     "ash",
@@ -349,7 +350,7 @@ def generate_audio_result(
                 return {"path": path, "provider": "kokoro", "model": "kokoro-local", "voice": DEFAULT_VOICE}
     if tts_provider == "chatterbox":
         path = _generate_with_chatterbox(text, output_path, exaggeration)
-        return {"path": path, "provider": "replicate", "model": "resemble-ai/chatterbox", "voice": voice}
+        return {"path": path, "provider": "replicate", "model": DEFAULT_CHATTERBOX_MODEL, "voice": voice}
     if tts_provider == "openai":
         resolved_voice = _normalize_voice_for_provider("openai", voice)
         path = _generate_with_openai(text, output_path, voice=resolved_voice, model_id=openai_model_id)
@@ -422,7 +423,7 @@ def _generate_with_chatterbox(
 
     def _call_chatterbox():
         return replicate_client.run(
-            "resemble-ai/chatterbox",
+            DEFAULT_CHATTERBOX_MODEL,
             input={
                 "prompt": text,
                 "exaggeration": exaggeration,
@@ -587,9 +588,7 @@ def _generate_with_openai(
     model_id: str = DEFAULT_OPENAI_TTS_MODEL,
 ) -> Path:
     """Generate audio using OpenAI TTS with rate limiting."""
-    import openai
-
-    client = openai.OpenAI()
+    client = make_openai_client()
 
     def _call_openai():
         return client.audio.speech.create(
@@ -614,6 +613,32 @@ def _generate_with_openai(
     return mp3_path
 
 
+def _resolve_openai_realtime_url(model: str, base_url: str | None) -> str:
+    """Resolve the Realtime websocket URL from env without baking a single endpoint.
+
+    Precedence: ``BETTUBE_STUDIO_OPENAI_REALTIME_URL`` (full base) > derived from the
+    resolved OpenAI ``base_url`` (https->wss / http->ws, ending in ``/realtime``) >
+    the public default. The model is always carried as a query parameter.
+    """
+    override = (os.getenv("BETTUBE_STUDIO_OPENAI_REALTIME_URL") or "").strip()
+    if override:
+        base = override
+    elif base_url:
+        ws = base_url.strip()
+        if ws.startswith("https://"):
+            ws = "wss://" + ws[len("https://") :]
+        elif ws.startswith("http://"):
+            ws = "ws://" + ws[len("http://") :]
+        ws = ws.rstrip("/")
+        if not ws.endswith("/realtime"):
+            ws = f"{ws}/realtime"
+        base = ws
+    else:
+        base = "wss://api.openai.com/v1/realtime"
+    separator = "&" if "?" in base else "?"
+    return f"{base}{separator}model={model}"
+
+
 def _generate_with_openai_realtime(
     text: str,
     output_path: Path,
@@ -623,9 +648,13 @@ def _generate_with_openai_realtime(
     """Generate narration audio through a server-side Realtime voice session."""
     from websockets.sync.client import connect
 
-    api_key = (os.getenv("OPENAI_API_KEY") or "").strip()
+    creds = resolve_openai_credentials()
+    api_key = (creds["api_key"] or "").strip() if creds["available"] else ""
     if not api_key:
-        raise RuntimeError("OPENAI_API_KEY is not set. Add it to your .env to use OpenAI Realtime Voice.")
+        raise RuntimeError(
+            "OpenAI Realtime Voice needs an OpenAI credential. Set OPENAI_API_KEY, or a proxy key "
+            "(LITELLM_API_KEY/AIPROXY_API_KEY) together with OPENAI_BASE_URL."
+        )
 
     resolved_voice = _normalize_voice_for_provider("openai_realtime", voice)
     resolved_model = str(model_id or DEFAULT_OPENAI_REALTIME_MODEL).strip()
@@ -633,7 +662,7 @@ def _generate_with_openai_realtime(
         resolved_model = DEFAULT_OPENAI_REALTIME_MODEL
 
     audio_chunks: list[bytes] = []
-    url = f"wss://api.openai.com/v1/realtime?model={resolved_model}"
+    url = _resolve_openai_realtime_url(resolved_model, creds["base_url"])
     headers = {"Authorization": f"Bearer {api_key}"}
 
     def _call_realtime() -> Path:

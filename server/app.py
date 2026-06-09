@@ -51,7 +51,7 @@ def _mount_frontend(application: FastAPI) -> None:
     if assets_dir.exists():
         application.mount("/assets", StaticFiles(directory=assets_dir), name="frontend-assets")
 
-    @application.get("/{full_path:path}", include_in_schema=False)
+    @application.get("/{full_path:path}", include_in_schema=False, response_model=None)
     async def serve_frontend(full_path: str) -> FileResponse | JSONResponse:
         if full_path == "api" or full_path.startswith("api/"):
             return JSONResponse(

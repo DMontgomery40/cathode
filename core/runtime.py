@@ -15,8 +15,8 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 PROJECTS_DIR = REPO_ROOT / "projects"
 PROJECTS_DIR.mkdir(exist_ok=True)
 _KOKORO_VOICE_PATTERN = re.compile(r"^[ab][fm]_[a-z0-9]+$")
-_OPENAI_TTS_DEFAULT_VOICE = "marin"
-_OPENAI_REALTIME_DEFAULT_MODEL = "gpt-realtime-2"
+_OPENAI_TTS_DEFAULT_VOICE = os.getenv("BETTUBE_STUDIO_OPENAI_TTS_VOICE") or "marin"
+_OPENAI_REALTIME_DEFAULT_MODEL = os.getenv("BETTUBE_STUDIO_OPENAI_REALTIME_MODEL") or "gpt-realtime-2"
 _OPENAI_TTS_VOICES = {
     "alloy",
     "ash",
@@ -44,7 +44,7 @@ _OPENAI_REALTIME_VOICES = {
     "shimmer",
     "verse",
 }
-DEFAULT_REPLICATE_VIDEO_MODEL = "kwaivgi/kling-v3-video"
+DEFAULT_REPLICATE_VIDEO_MODEL = os.getenv("BETTUBE_STUDIO_REPLICATE_VIDEO_MODEL") or "kwaivgi/kling-v3-video"
 
 
 def load_repo_env(*, override: bool = False, env_path: Path | None = None) -> Path | None:
@@ -70,11 +70,119 @@ def load_repo_env(*, override: bool = False, env_path: Path | None = None) -> Pa
 load_repo_env()
 
 
+# --- Env-driven provider credentials (corp LiteLLM/AIProxy drop-in, leak-safe) ---
+#
+# Only env var NAMES and safe public defaults live here; no endpoint URL, key, or
+# token VALUE is ever baked in. A provider-native key (OPENAI_API_KEY /
+# ANTHROPIC_API_KEY|ANTHROPIC_AUTH_TOKEN / their BETTUBE_STUDIO_* twins) enables a
+# provider against its base_url (public default if unset) for exact back-compat. A
+# SHARED proxy key (LITELLM_API_KEY / AIPROXY_API_KEY) only counts toward a
+# provider AND is only ever sent when that provider's *_BASE_URL is also set, so a
+# corp key is never delivered to the public endpoint and an OpenAI-only proxy key
+# never leaks to Anthropic (or vice-versa).
+_OPENAI_NATIVE_KEY_ENV_NAMES = ("OPENAI_API_KEY", "BETTUBE_STUDIO_OPENAI_API_KEY")
+_OPENAI_KEY_ENV_NAMES = (*_OPENAI_NATIVE_KEY_ENV_NAMES, "LITELLM_API_KEY", "AIPROXY_API_KEY")
+_OPENAI_BASE_URL_ENV_NAMES = ("OPENAI_BASE_URL", "BETTUBE_STUDIO_OPENAI_BASE_URL")
+_ANTHROPIC_AUTH_TOKEN_ENV_NAMES = ("ANTHROPIC_AUTH_TOKEN",)
+_ANTHROPIC_NATIVE_KEY_ENV_NAMES = (
+    "ANTHROPIC_API_KEY",
+    "ANTHROPIC_AUTH_TOKEN",
+    "BETTUBE_STUDIO_ANTHROPIC_API_KEY",
+)
+_ANTHROPIC_KEY_ENV_NAMES = (*_ANTHROPIC_NATIVE_KEY_ENV_NAMES, "LITELLM_API_KEY", "AIPROXY_API_KEY")
+_ANTHROPIC_BASE_URL_ENV_NAMES = ("ANTHROPIC_BASE_URL", "BETTUBE_STUDIO_ANTHROPIC_BASE_URL")
+
+
+def _first_env(names: tuple[str, ...], env=None) -> tuple[str | None, str | None]:
+    """Return the first (value, name) pair that resolves to a non-empty env value."""
+    source = env if env is not None else os.environ
+    for name in names:
+        value = source.get(name)
+        if value and str(value).strip():
+            return str(value).strip(), name
+    return None, None
+
+
+def resolve_openai_credentials(env=None) -> dict:
+    """Resolve OpenAI key + base_url from env with leak-safe availability."""
+    key, key_name = _first_env(_OPENAI_KEY_ENV_NAMES, env)
+    base_url, _ = _first_env(_OPENAI_BASE_URL_ENV_NAMES, env)
+    is_native = bool(key_name) and key_name in _OPENAI_NATIVE_KEY_ENV_NAMES
+    return {
+        "api_key": key,
+        "api_key_source": key_name,
+        "base_url": base_url,
+        "is_native": is_native,
+        "available": bool(key) and (is_native or bool(base_url)),
+    }
+
+
+def resolve_anthropic_credentials(env=None) -> dict:
+    """Resolve Anthropic key + base_url from env with leak-safe availability."""
+    key, key_name = _first_env(_ANTHROPIC_KEY_ENV_NAMES, env)
+    base_url, _ = _first_env(_ANTHROPIC_BASE_URL_ENV_NAMES, env)
+    is_native = bool(key_name) and key_name in _ANTHROPIC_NATIVE_KEY_ENV_NAMES
+    return {
+        "api_key": key,
+        "api_key_source": key_name,
+        "base_url": base_url,
+        "is_native": is_native,
+        "use_auth_token": bool(key_name) and key_name in _ANTHROPIC_AUTH_TOKEN_ENV_NAMES,
+        "available": bool(key) and (is_native or bool(base_url)),
+    }
+
+
+def openai_client_kwargs(env=None) -> dict:
+    """Return matched api_key+base_url kwargs for an OpenAI client, or {}.
+
+    Kwargs are only returned when a base_url is configured (proxy/custom endpoint),
+    so a native-key-only setup stays a bare ``openai.OpenAI()`` that reads
+    ``OPENAI_API_KEY`` itself (exact back-compat) and a shared proxy key is never
+    paired with the public default endpoint.
+    """
+    creds = resolve_openai_credentials(env)
+    if creds["base_url"] and creds["api_key"]:
+        return {"api_key": creds["api_key"], "base_url": creds["base_url"]}
+    return {}
+
+
+def anthropic_client_kwargs(env=None) -> dict:
+    """Return matched key+base_url kwargs for an Anthropic client, or {}.
+
+    Mirrors :func:`openai_client_kwargs`: only injected when a base_url is set. A key
+    resolved from ``ANTHROPIC_AUTH_TOKEN`` is sent as a Bearer ``auth_token`` (the
+    correct slot for a LiteLLM/AIProxy bearer key); otherwise as ``api_key``.
+    """
+    creds = resolve_anthropic_credentials(env)
+    if creds["base_url"] and creds["api_key"]:
+        key_kwarg = "auth_token" if creds["use_auth_token"] else "api_key"
+        return {key_kwarg: creds["api_key"], "base_url": creds["base_url"]}
+    return {}
+
+
+def make_openai_client(**caller_kwargs):
+    """Construct an ``openai.OpenAI`` client wired for the current env (leak-safe)."""
+    import openai
+
+    kwargs = openai_client_kwargs()
+    kwargs.update(caller_kwargs)
+    return openai.OpenAI(**kwargs)
+
+
+def make_anthropic_client(**caller_kwargs):
+    """Construct an ``anthropic.Anthropic`` client wired for the current env (leak-safe)."""
+    import anthropic
+
+    kwargs = anthropic_client_kwargs()
+    kwargs.update(caller_kwargs)
+    return anthropic.Anthropic(**kwargs)
+
+
 def check_api_keys() -> dict[str, bool]:
     """Return which external providers are configured in the current environment."""
     return {
-        "openai": bool(os.getenv("OPENAI_API_KEY")),
-        "anthropic": bool(os.getenv("ANTHROPIC_API_KEY")),
+        "openai": resolve_openai_credentials()["available"],
+        "anthropic": resolve_anthropic_credentials()["available"],
         "replicate": bool(os.getenv("REPLICATE_API_TOKEN")),
         "dashscope": bool(os.getenv("DASHSCOPE_API_KEY") or os.getenv("ALIBABA_API_KEY")),
         "elevenlabs": bool(os.getenv("ELEVENLABS_API_KEY")),
@@ -114,9 +222,15 @@ def available_image_generation_providers(keys: dict[str, bool] | None = None) ->
 
 
 def codex_image_generation_available(keys: dict[str, bool] | None = None) -> bool:
-    """Return whether the local Codex image-generation lane can run here."""
+    """Return whether the GPT Image lane (OpenAI Images API, or local Codex CLI) can run.
+
+    Available whenever OpenAI credentials resolve — a native key, or a proxy key
+    (LITELLM_API_KEY/AIPROXY_API_KEY) paired with OPENAI_BASE_URL. The OpenAI Images
+    API serves gpt-image-2 generation/editing directly; the local Codex CLI is an
+    optional accelerator used when present, not a requirement.
+    """
     keys = keys or check_api_keys()
-    return bool(keys.get("openai")) and bool(shutil.which("codex"))
+    return bool(keys.get("openai"))
 
 
 def _module_available(module_name: str) -> bool:
@@ -251,7 +365,11 @@ def choose_llm_provider(preferred: str | None = None) -> str:
     for provider in ("anthropic", "openai"):
         if keys.get(provider):
             return provider
-    raise ValueError("No LLM API keys configured. Set ANTHROPIC_API_KEY or OPENAI_API_KEY.")
+    raise ValueError(
+        "No LLM API keys configured. Set ANTHROPIC_API_KEY/ANTHROPIC_AUTH_TOKEN or OPENAI_API_KEY, "
+        "or a proxy key (LITELLM_API_KEY/AIPROXY_API_KEY) together with the matching "
+        "ANTHROPIC_BASE_URL/OPENAI_BASE_URL."
+    )
 
 
 def resolve_workflow_llm_roles(preferred: str | None = None) -> tuple[str, str]:
@@ -269,7 +387,9 @@ def resolve_workflow_llm_roles(preferred: str | None = None) -> tuple[str, str]:
     keys = check_api_keys()
     if not keys.get("anthropic"):
         raise ValueError(
-            "betTube Studio's creative workflow now requires ANTHROPIC_API_KEY because Claude writes every scene."
+            "betTube Studio's creative workflow now requires Anthropic access because Claude writes every scene. "
+            "Set ANTHROPIC_API_KEY or ANTHROPIC_AUTH_TOKEN, or set a proxy key "
+            "(LITELLM_API_KEY/AIPROXY_API_KEY) together with ANTHROPIC_BASE_URL."
         )
 
     creative_provider = "anthropic"
@@ -305,8 +425,9 @@ def resolve_image_profile(profile: dict | None = None) -> dict:
     if provider == "local":
         resolved["generation_model"] = local_model
     elif provider == "replicate":
+        replicate_default = os.getenv("BETTUBE_STUDIO_REPLICATE_IMAGE_MODEL") or "qwen/qwen-image-2512"
         resolved["generation_model"] = (
-            raw_generation_model if requested_provider == "replicate" and raw_generation_model else "qwen/qwen-image-2512"
+            raw_generation_model if requested_provider == "replicate" and raw_generation_model else replicate_default
         )
     else:
         resolved["generation_model"] = str(
@@ -321,11 +442,11 @@ def resolve_image_profile(profile: dict | None = None) -> dict:
         edit_model = ""
     if not edit_model:
         if keys.get("openai"):
-            edit_model = "gpt-image-2"
+            edit_model = os.getenv("BETTUBE_STUDIO_OPENAI_IMAGE_EDIT_MODEL") or "gpt-image-2"
         elif keys.get("replicate"):
-            edit_model = "qwen/qwen-image-edit-2511"
+            edit_model = os.getenv("BETTUBE_STUDIO_REPLICATE_IMAGE_EDIT_MODEL") or "qwen/qwen-image-edit-2511"
         elif keys.get("dashscope"):
-            edit_model = "qwen-image-edit-plus"
+            edit_model = os.getenv("BETTUBE_STUDIO_DASHSCOPE_IMAGE_EDIT_MODEL") or "qwen-image-edit-plus"
     resolved["edit_model"] = edit_model
     return resolved
 
@@ -348,11 +469,12 @@ def resolve_tts_profile(profile: dict | None = None) -> dict:
         resolved["voice"] = "Bella" if not voice or _KOKORO_VOICE_PATTERN.match(voice) else voice
         model_id = str(resolved.get("model_id") or "").strip()
         if not model_id or model_id.startswith("tts-") or model_id.startswith("gpt-"):
-            resolved["model_id"] = "eleven_multilingual_v2"
+            resolved["model_id"] = os.getenv("BETTUBE_STUDIO_ELEVENLABS_MODEL") or "eleven_multilingual_v2"
     elif provider == "openai":
         resolved["voice"] = voice if voice in _OPENAI_TTS_VOICES else _OPENAI_TTS_DEFAULT_VOICE
         model_id = str(resolved.get("model_id") or "").strip()
-        resolved["model_id"] = model_id if model_id.startswith(("gpt-", "tts-")) else "gpt-4o-mini-tts"
+        openai_tts_default = os.getenv("BETTUBE_STUDIO_OPENAI_TTS_MODEL") or "gpt-4o-mini-tts"
+        resolved["model_id"] = model_id if model_id.startswith(("gpt-", "tts-")) else openai_tts_default
     elif provider == "openai_realtime":
         resolved["voice"] = voice if voice in _OPENAI_REALTIME_VOICES else _OPENAI_TTS_DEFAULT_VOICE
         model_id = str(resolved.get("model_id") or "").strip()

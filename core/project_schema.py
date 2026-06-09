@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import copy
+import os
 import re
 import uuid
 from pathlib import Path
@@ -192,7 +193,7 @@ def apply_short_form_render_profile(profile: dict[str, Any] | None = None) -> di
             "width": 928,
             "height": 1664,
             "fps": 30,
-            "scene_types": ["image", "video", "motion"],
+            "scene_types": ["image", "video"],
             "render_strategy": "force_ffmpeg",
             "render_backend": "ffmpeg",
             "render_backend_reason": "Vertical short-form brief selected 9:16 ffmpeg assembly.",
@@ -212,7 +213,7 @@ def default_render_profile() -> dict[str, Any]:
         "width": 1664,
         "height": 928,
         "fps": 24,
-        "scene_types": ["image", "video", "motion"],
+        "scene_types": ["image", "video"],
         "render_strategy": "auto",
         "render_backend": "ffmpeg",
         "render_backend_reason": "Classic image/video assembly has no Remotion-only requirements.",
@@ -226,11 +227,18 @@ def default_render_profile() -> dict[str, Any]:
 
 
 def default_image_profile() -> dict[str, Any]:
-    """Default image generation/edit settings persisted in plan metadata."""
+    """Default image generation/edit settings persisted in plan metadata.
+
+    The default provider is GPT Image (gpt-image-2), which handles BOTH generation
+    and editing. Both model ids are env-overridable so a corp proxy can alias
+    gpt-image-2; the default stays gpt-image-2 when nothing is set.
+    """
+    gen_model = os.getenv("BETTUBE_STUDIO_OPENAI_IMAGE_MODEL") or "gpt-image-2"
+    edit_model = os.getenv("BETTUBE_STUDIO_OPENAI_IMAGE_EDIT_MODEL") or gen_model
     return {
         "provider": "codex",
-        "generation_model": "gpt-image-2",
-        "edit_model": "gpt-image-2",
+        "generation_model": gen_model,
+        "edit_model": edit_model,
         "dashscope_edit_n": 1,
         "dashscope_edit_seed": "",
         "dashscope_edit_negative_prompt": "",
@@ -255,7 +263,7 @@ def default_tts_profile() -> dict[str, Any]:
         "provider": "kokoro",
         "voice": "af_bella",
         "speed": 1.1,
-        "model_id": "gpt-4o-mini-tts",
+        "model_id": os.getenv("BETTUBE_STUDIO_OPENAI_TTS_MODEL") or "gpt-4o-mini-tts",
         "text_normalization": "auto",
         "stability": 0.38,
         "similarity_boost": 0.8,
@@ -1471,14 +1479,14 @@ def backfill_plan(
         render_strategy_input = render_profile.get("render_strategy")
     render_profile["render_strategy"] = resolve_render_strategy(render_strategy_input)
     if not isinstance(render_profile.get("scene_types"), list):
-        render_profile["scene_types"] = ["image", "video", "motion"]
+        render_profile["scene_types"] = ["image", "video"]
     else:
         normalized_scene_types = [
             str(scene_type).strip().lower()
             for scene_type in render_profile["scene_types"]
             if str(scene_type).strip().lower() in SCENE_TYPES
         ]
-        render_profile["scene_types"] = normalized_scene_types or ["image", "video", "motion"]
+        render_profile["scene_types"] = normalized_scene_types or ["image", "video"]
     render_backend_input = render_profile if render_profile["render_strategy"] != "auto" else raw_render_profile
     render_profile["render_backend"] = resolve_render_backend(
         render_backend_input,

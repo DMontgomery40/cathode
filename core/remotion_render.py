@@ -16,7 +16,7 @@ from .project_schema import (
     scene_primary_manifestation,
     scene_requires_remotion,
 )
-from .runtime import REPO_ROOT
+from .runtime import REPO_ROOT, remotion_available
 from .video_assembly import (
     DEFAULT_FPS,
     get_media_duration,
@@ -458,6 +458,10 @@ def _progress_payload_from_remotion_event(event: dict[str, Any]) -> dict[str, An
     return None
 
 
+class RemotionUnavailableError(RuntimeError):
+    """Raised when a Remotion render is requested but the toolchain is not installed."""
+
+
 def render_manifest_with_remotion(
     manifest: dict[str, Any],
     *,
@@ -465,6 +469,13 @@ def render_manifest_with_remotion(
     progress_callback: Callable[[dict[str, Any]], None] | None = None,
 ) -> Path:
     """Render a manifest to MP4 via the frontend Remotion bundle."""
+    if not remotion_available():
+        raise RemotionUnavailableError(
+            "Remotion render requested but the local Remotion toolchain is not installed "
+            "(frontend/node_modules/remotion + @remotion/renderer). Install the optional "
+            "Remotion packages to enable motion rendering, or render with the ffmpeg backend."
+        )
+
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
 

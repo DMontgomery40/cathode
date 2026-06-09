@@ -15,7 +15,7 @@ from core.image_gen import canonicalize_exact_text_edit_prompt, edit_image, gene
 from core.project_store import annotate_plan_asset_existence, load_plan, save_plan
 from core.project_schema import remotion_explicitly_enabled
 from core.remotion_render import build_remotion_manifest, render_manifest_with_remotion
-from core.runtime import PROJECTS_DIR, choose_llm_provider, resolve_image_profile, resolve_tts_profile, resolve_video_profile
+from core.runtime import PROJECTS_DIR, choose_llm_provider, remotion_available, resolve_image_profile, resolve_tts_profile, resolve_video_profile
 from core.video_gen import generate_scene_video_result
 from core.video_assembly import preview_scene
 from core.voice_gen import generate_scene_audio_result
@@ -80,26 +80,35 @@ def _render_preview_asset(
     render_profile: dict[str, Any],
 ) -> tuple[Path | None, dict[str, Any] | None]:
     if str(scene.get("scene_type") or "image").strip().lower() == "motion":
-        if not remotion_explicitly_enabled(render_profile):
-            raise HTTPException(
-                status_code=400,
-                detail="Motion preview requires render_strategy=force_remotion.",
+        if remotion_explicitly_enabled(render_profile) and remotion_available():
+            output_path = project_dir / "previews" / f"preview_{scene_uid}.mp4"
+            manifest = build_remotion_manifest(
+                project_dir=project_dir,
+                plan=plan,
+                output_path=output_path,
+                render_profile=render_profile,
+                preview_scene_uid=scene_uid,
             )
-        output_path = project_dir / "previews" / f"preview_{scene_uid}.mp4"
-        manifest = build_remotion_manifest(
-            project_dir=project_dir,
-            plan=plan,
-            output_path=output_path,
-            render_profile=render_profile,
-            preview_scene_uid=scene_uid,
+            preview_path = render_manifest_with_remotion(manifest, output_path=output_path)
+            motion = scene.get("motion") if isinstance(scene.get("motion"), dict) else {}
+            motion["preview_path"] = str(preview_path)
+            composition = scene.get("composition") if isinstance(scene.get("composition"), dict) else {}
+            composition["preview_path"] = str(preview_path)
+            scene["composition"] = composition
+            return preview_path, motion
+
+        # Remotion is not available (or not opted in): fall back to an ffmpeg still preview
+        # from the authored image so the scene can still be previewed without Remotion.
+        if scene.get("image_path"):
+            still_scene = {**scene, "scene_type": "image"}
+            return preview_scene(still_scene, project_dir, render_profile=render_profile), None
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Motion preview requires the optional Remotion toolchain, or an authored "
+                "still image to preview without it."
+            ),
         )
-        preview_path = render_manifest_with_remotion(manifest, output_path=output_path)
-        motion = scene.get("motion") if isinstance(scene.get("motion"), dict) else {}
-        motion["preview_path"] = str(preview_path)
-        composition = scene.get("composition") if isinstance(scene.get("composition"), dict) else {}
-        composition["preview_path"] = str(preview_path)
-        scene["composition"] = composition
-        return preview_path, motion
 
     return preview_scene(scene, project_dir, render_profile=render_profile), None
 

@@ -203,7 +203,7 @@ betTube Studio can run Qwen Image locally in two ways:
 Typical CUDA / generic torch setup:
 
 ```bash
-/opt/homebrew/bin/python3.10 -m pip install -r requirements-local-image.txt
+/opt/homebrew/bin/python3.10 -m pip install -e '.[local-image]'
 export BETTUBE_STUDIO_LOCAL_IMAGE_RUNTIME=torch
 export BETTUBE_STUDIO_LOCAL_IMAGE_MODEL=Qwen/Qwen-Image-2512
 ```
@@ -389,7 +389,10 @@ sudo apt-get install python3.10 ffmpeg espeak-ng
 ### Python Dependencies
 
 ```bash
-/opt/homebrew/bin/python3.10 -m pip install -r requirements.txt
+# Streamlit app only:
+/opt/homebrew/bin/python3.10 -m pip install -e .
+# React/FastAPI stack (adds fastapi/uvicorn/httpx):
+/opt/homebrew/bin/python3.10 -m pip install -e '.[server]'
 ```
 
 ### Environment

@@ -19,7 +19,7 @@ from .image_gen import generate_scene_image
 from .remotion_render import build_remotion_manifest, render_manifest_with_remotion
 from .project_schema import scene_primary_manifestation
 from .project_store import load_plan, save_plan
-from .runtime import REPO_ROOT, check_api_keys
+from .runtime import REPO_ROOT, check_api_keys, make_openai_client
 from .runtime import resolve_image_profile
 from .video_assembly import get_media_duration
 
@@ -1007,9 +1007,7 @@ def _run_codex_scene_judge(provider: dict[str, Any], request: dict[str, Any]) ->
 
 
 def _run_openai_scene_judge(provider: dict[str, Any], request: dict[str, Any]) -> dict[str, Any]:
-    import openai
-
-    client = openai.OpenAI()
+    client = make_openai_client()
     content: list[dict[str, Any]] = [{"type": "input_text", "text": request["prompt"]}]
     for attachment in request["attachments"]:
         content.append(

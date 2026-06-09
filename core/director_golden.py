@@ -33,7 +33,16 @@ from .pipeline_service import generate_project_assets_service, render_project_se
 from .project_schema import backfill_plan, normalize_brief, normalize_scene
 from .project_store import save_plan
 from .remotion_render import build_remotion_manifest, render_manifest_with_remotion
-from .runtime import REPO_ROOT
+from .runtime import REPO_ROOT, resolve_anthropic_credentials
+
+# Single env knob retargets every Anthropic call in the golden tooling; the
+# golden-specific override wins, then the shared director model, then the public
+# default. No model VALUE is otherwise baked in.
+_GOLDEN_DIRECTOR_MODEL = (
+    os.getenv("BETTUBE_STUDIO_DIRECTOR_GOLDEN_MODEL")
+    or os.getenv("BETTUBE_STUDIO_ANTHROPIC_DIRECTOR_MODEL")
+    or "claude-sonnet-4-6"
+)
 
 DIRECTOR_GOLDEN_ROOT = REPO_ROOT / "experiments" / "director_golden"
 DIRECTOR_SCENARIOS_DIR = REPO_ROOT / "prompts" / "director_example_scenarios"
@@ -67,12 +76,18 @@ def repo_env_applied():
         os.environ.update(previous)
 
 
+_ANTHROPIC_ACCESS_HINT = (
+    "Anthropic access is required for director golden-harvest runs. Set ANTHROPIC_API_KEY or "
+    "ANTHROPIC_AUTH_TOKEN, or a proxy key (LITELLM_API_KEY/AIPROXY_API_KEY) together with ANTHROPIC_BASE_URL."
+)
+
+
 def _anthropic_api_key(env: dict[str, str] | None = None) -> str:
     merged = env or _repo_env()
-    api_key = str(merged.get("ANTHROPIC_API_KEY") or "").strip()
-    if not api_key:
-        raise RuntimeError("ANTHROPIC_API_KEY is required for director golden-harvest runs.")
-    return api_key
+    creds = resolve_anthropic_credentials(merged)
+    if not creds["api_key"]:
+        raise RuntimeError(_ANTHROPIC_ACCESS_HINT)
+    return creds["api_key"]
 
 
 def scenario_brief_paths() -> list[Path]:
@@ -99,7 +114,7 @@ def create_run_dir(*, scenario_id: str, model: str, root: Path | None = None) ->
 def build_storyboard_payload(
     brief: dict[str, Any],
     *,
-    model: str = "claude-sonnet-4-6",
+    model: str = _GOLDEN_DIRECTOR_MODEL,
 ) -> dict[str, Any]:
     normalized_brief = normalize_brief(brief)
     return {
@@ -121,7 +136,7 @@ def build_judge_payload(
     brief: dict[str, Any],
     storyboard: dict[str, Any] | list[dict[str, Any]],
     *,
-    model: str = "claude-sonnet-4-6",
+    model: str = _GOLDEN_DIRECTOR_MODEL,
 ) -> dict[str, Any]:
     normalized_brief = normalize_brief(brief)
     storyboard_json = json.dumps(storyboard, indent=2, ensure_ascii=False)
@@ -153,16 +168,27 @@ def run_anthropic_curl(payload: dict[str, Any], *, env: dict[str, str] | None = 
     merged_env = dict(_repo_env())
     if env:
         merged_env.update(env)
-    api_key = _anthropic_api_key(merged_env)
+    creds = resolve_anthropic_credentials(merged_env)
+    if not creds["available"]:
+        raise RuntimeError(_ANTHROPIC_ACCESS_HINT)
+    api_key = creds["api_key"]
+    base = (creds["base_url"] or "https://api.anthropic.com").rstrip("/")
+    endpoint = base if base.endswith("/v1/messages") else f"{base}/v1/messages"
+    version = merged_env.get("ANTHROPIC_VERSION") or os.getenv("ANTHROPIC_VERSION") or "2023-06-01"
+    # Native x-api-key for a provider key; Bearer for an auth-token or proxy key.
+    if creds["use_auth_token"] or not creds["is_native"]:
+        auth_header = f"Authorization: Bearer {api_key}"
+    else:
+        auth_header = f"x-api-key: {api_key}"
     response = subprocess.run(
         [
             "curl",
             "-sS",
-            "https://api.anthropic.com/v1/messages",
+            endpoint,
             "-H",
-            f"x-api-key: {api_key}",
+            auth_header,
             "-H",
-            "anthropic-version: 2023-06-01",
+            f"anthropic-version: {version}",
             "-H",
             "content-type: application/json",
             "-d",
@@ -450,7 +476,7 @@ def materialize_run(
 def harvest_scenario(
     *,
     scenario_id: str,
-    model: str = "claude-sonnet-4-6",
+    model: str = _GOLDEN_DIRECTOR_MODEL,
     run_dir: Path | None = None,
     judge: bool = True,
     render_preview: bool = True,

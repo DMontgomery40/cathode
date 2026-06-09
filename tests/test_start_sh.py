@@ -29,8 +29,8 @@ printf '%s\n' "$@" > "$FAKE_PYTHON_LOG"
 
     script_copy = tmp_path / "start.sh"
     script_text = START_SCRIPT.read_text().replace(
-        'PYTHON="/opt/homebrew/bin/python3.10"',
-        f'PYTHON="{fake_python}"',
+        'PYTHON="${BETTUBE_STUDIO_PYTHON:-$ROOT_DIR/.venv/bin/python3.10}"',
+        f'PYTHON="${{BETTUBE_STUDIO_PYTHON:-{fake_python}}}"',
         1,
     )
     _write_executable(script_copy, script_text)

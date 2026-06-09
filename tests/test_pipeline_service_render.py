@@ -82,6 +82,50 @@ def test_render_project_service_persists_video_compression_metadata(monkeypatch,
     assert saved_plans[-1]["meta"]["web_optimization"] == web_payload
 
 
+def test_render_project_service_falls_back_to_ffmpeg_when_remotion_unavailable(monkeypatch, tmp_path):
+    """A project pinned to the Remotion backend still renders via ffmpeg when the Remotion
+    toolchain is not installed, so the final video is always produced."""
+    project_dir = tmp_path / "render_project"
+    project_dir.mkdir(parents=True, exist_ok=True)
+    audio_path = project_dir / "audio" / "scene_000.wav"
+    audio_path.parent.mkdir(parents=True, exist_ok=True)
+    audio_path.write_bytes(b"wav")
+
+    plan = {
+        "meta": {"render_profile": {"render_backend": "remotion", "fps": 24}},
+        "scenes": [{"id": 1, "scene_type": "image", "audio_path": str(audio_path)}],
+    }
+    rendered_video_path = project_dir / "rendered.mp4"
+    rendered_video_path.write_bytes(b"mp4")
+
+    def _must_not_run(*_args, **_kwargs):
+        raise AssertionError("Remotion render must not run when the toolchain is unavailable")
+
+    monkeypatch.setattr("core.pipeline_service.load_plan", lambda _: plan)
+    monkeypatch.setattr("core.pipeline_service.remotion_available", lambda: False)
+    monkeypatch.setattr("core.pipeline_service._scene_has_primary_visual", lambda *a, **k: True)
+    monkeypatch.setattr("core.pipeline_service.assemble_video", lambda *a, **k: rendered_video_path)
+    monkeypatch.setattr("core.pipeline_service.render_manifest_with_remotion", _must_not_run)
+    monkeypatch.setattr(
+        "core.pipeline_service.compress_video_if_oversized",
+        lambda *a, **k: {"path": str(rendered_video_path), "compressed": False},
+    )
+    monkeypatch.setattr(
+        "core.pipeline_service.optimize_video_for_web_in_place",
+        lambda *a, **k: {"path": str(rendered_video_path), "optimized": False},
+    )
+    monkeypatch.setattr("core.pipeline_service.save_plan", lambda _d, p: p)
+    monkeypatch.setattr(
+        "core.pipeline_service.review_project_scenes",
+        lambda *a, **k: {"provider": "codex", "scene_count": 1, "review_dir": "/tmp/review"},
+    )
+
+    result = render_project_service(project_dir)
+
+    assert result["status"] == "succeeded"
+    assert result["video_path"] == str(rendered_video_path)
+
+
 def test_render_project_service_allows_clip_audio_video_without_audio_path(monkeypatch, tmp_path):
     project_dir = tmp_path / "render_project"
     project_dir.mkdir(parents=True, exist_ok=True)

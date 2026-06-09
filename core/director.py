@@ -39,6 +39,7 @@ else:
 
 from .costs import llm_actual_entry, llm_preflight_entry
 from .project_schema import normalize_brief
+from .runtime import anthropic_client_kwargs, openai_client_kwargs
 
 # Singleton LLM clients
 _openai_client = None
@@ -51,7 +52,7 @@ def _get_openai_client():
         raise RuntimeError("The openai package is not installed. Select another LLM provider or install openai.")
     global _openai_client
     if _openai_client is None:
-        _openai_client = openai.OpenAI()
+        _openai_client = openai.OpenAI(**openai_client_kwargs())
     return _openai_client
 
 
@@ -64,6 +65,7 @@ def _get_anthropic_client():
         _anthropic_client = anthropic.Anthropic(
             timeout=_anthropic_timeout_seconds(),
             max_retries=_DEFAULT_ANTHROPIC_MAX_RETRIES,
+            **anthropic_client_kwargs(),
         )
     return _anthropic_client
 
@@ -90,9 +92,9 @@ _DIRECTOR_EXAMPLES_INDEX = Path(__file__).parent.parent / "prompts" / "director_
 _TRANSITION_HINTS = {"fade", "wipe"}
 _MANIFESTATION_PATHS = {"authored_image", "native_remotion", "source_video"}
 _MANIFESTATION_RISK_LEVELS = {"low", "medium", "high"}
-_OPENAI_DIRECTOR_MODEL = "gpt-5.4"
-_OPENAI_DIRECTOR_REASONING_EFFORT = "xhigh"
-_ANTHROPIC_DIRECTOR_MODEL = "claude-sonnet-4-6"
+_OPENAI_DIRECTOR_MODEL = os.getenv("BETTUBE_STUDIO_OPENAI_DIRECTOR_MODEL") or "gpt-5.4"
+_OPENAI_DIRECTOR_REASONING_EFFORT = os.getenv("BETTUBE_STUDIO_OPENAI_DIRECTOR_REASONING_EFFORT") or "xhigh"
+_ANTHROPIC_DIRECTOR_MODEL = os.getenv("BETTUBE_STUDIO_ANTHROPIC_DIRECTOR_MODEL") or "claude-sonnet-4-6"
 _CLAUDE_PRINT_DIRECTOR_MODEL = os.getenv("BETTUBE_STUDIO_CLAUDE_PRINT_MODEL", "claude-sonnet-4-6")
 _CLAUDE_PRINT_TOOLS = os.getenv("BETTUBE_STUDIO_CLAUDE_PRINT_TOOLS", "Read,Grep,Glob")
 _DEFAULT_ANTHROPIC_TIMEOUT_SECONDS = 45.0

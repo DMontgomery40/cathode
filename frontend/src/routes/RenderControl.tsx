@@ -222,16 +222,16 @@ export function RenderControl() {
                 eyebrow="Output"
                 copy="The final render should stay front and center, with settings and gating details acting like a sidecar instead of overwhelming the canvas."
               >
-                {remotionManifest.data && (
-                  <div style={{ marginBottom: 'var(--space-4)' }}>
-                    <PlayerSurface manifest={remotionManifest.data} height={420} />
-                  </div>
-                )}
                 <ArtifactShelf
                   videoPath={plan?.meta?.video_path}
                   videoExists={typeof plan?.meta?.video_exists === 'boolean' ? plan.meta.video_exists : undefined}
                   project={projectId}
                 />
+                {remotionManifest.data && (
+                  <div style={{ marginTop: 'var(--space-4)' }}>
+                    <PlayerSurface manifest={remotionManifest.data} height={420} />
+                  </div>
+                )}
               </WorkspacePanel>
 
               <RenderProgress

@@ -33,6 +33,7 @@ else:
 
 from core.local_image_gen import DEFAULT_LOCAL_IMAGE_MODEL, generate_local_image
 from core.rate_limiter import image_limiter
+from core.runtime import make_openai_client, resolve_openai_credentials
 
 # Default target dimensions for generated/edited images.
 TARGET_WIDTH = 1664
@@ -59,12 +60,15 @@ SUPPORTED_IMAGE_TARGETS = {
         "replicate_aspect_ratio": "9:16",
     },
 }
-DEFAULT_IMAGE_MODEL = "qwen/qwen-image-2512"
-DEFAULT_CODEX_IMAGE_MODEL = "gpt-image-2"
+# Replicate-provider generation model (fallback path, NOT the default provider).
+DEFAULT_IMAGE_MODEL = os.getenv("BETTUBE_STUDIO_REPLICATE_IMAGE_MODEL") or "qwen/qwen-image-2512"
+# Default image provider is GPT Image (gpt-image-2), used for BOTH generation and
+# editing. Env-overridable so a corp proxy can alias it; default stays gpt-image-2.
+DEFAULT_CODEX_IMAGE_MODEL = os.getenv("BETTUBE_STUDIO_OPENAI_IMAGE_MODEL") or "gpt-image-2"
 DEFAULT_CODEX_IMAGE_QUALITY = "medium"
-DEFAULT_OPENAI_IMAGE_EDIT_MODEL = DEFAULT_CODEX_IMAGE_MODEL
+DEFAULT_OPENAI_IMAGE_EDIT_MODEL = os.getenv("BETTUBE_STUDIO_OPENAI_IMAGE_EDIT_MODEL") or DEFAULT_CODEX_IMAGE_MODEL
 OPENAI_IMAGE_EDIT_MODELS = (DEFAULT_OPENAI_IMAGE_EDIT_MODEL,)
-DEFAULT_REPLICATE_IMAGE_EDIT_MODEL = "qwen/qwen-image-edit-2511"
+DEFAULT_REPLICATE_IMAGE_EDIT_MODEL = os.getenv("BETTUBE_STUDIO_REPLICATE_IMAGE_EDIT_MODEL") or "qwen/qwen-image-edit-2511"
 DASHSCOPE_IMAGE_EDIT_MODELS = ("qwen-image-edit-plus", "qwen-image-edit")
 REPO_ROOT = Path(__file__).resolve().parents[1]
 CODEX_IMAGE_SCRIPT = REPO_ROOT / "scripts" / "generate_openai_image.py"
@@ -294,7 +298,7 @@ def default_image_edit_model() -> str:
         return env_model or DASHSCOPE_IMAGE_EDIT_MODELS[0]
     if env_model:
         return env_model
-    if os.getenv("OPENAI_API_KEY"):
+    if resolve_openai_credentials()["available"]:
         return DEFAULT_OPENAI_IMAGE_EDIT_MODEL
     if os.getenv("REPLICATE_API_TOKEN"):
         return DEFAULT_REPLICATE_IMAGE_EDIT_MODEL
@@ -321,7 +325,7 @@ def available_image_edit_models(
 
 
 def _openai_image_edit_api_available() -> bool:
-    return bool(os.getenv("OPENAI_API_KEY"))
+    return bool(resolve_openai_credentials()["available"])
 
 
 def _openai_image_edit_model(model: str | None) -> bool:
@@ -473,12 +477,13 @@ def _edit_image_openai_api(
     model: str,
 ) -> Path:
     if not _openai_image_edit_api_available():
-        raise ValueError("OPENAI_API_KEY is not set, so GPT Image editing cannot use the OpenAI API fallback.")
-
-    import openai
+        raise ValueError(
+            "OpenAI image editing needs an OpenAI credential. Set OPENAI_API_KEY, or a proxy key "
+            "(LITELLM_API_KEY/AIPROXY_API_KEY) together with OPENAI_BASE_URL."
+        )
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    client = openai.OpenAI()
+    client = make_openai_client()
 
     def _call_openai_edit():
         with ExitStack() as stack:
@@ -932,6 +937,78 @@ def edit_image(
     )
 
 
+def _generate_with_openai_api(
+    prompt: str,
+    output_path: str | Path,
+    model: str = DEFAULT_CODEX_IMAGE_MODEL,
+    brief: dict | None = None,
+) -> Path:
+    """Generate a GPT Image still directly via the OpenAI Images API (proxy-aware).
+
+    Uses make_openai_client(), so it works against a corp LiteLLM/AIProxy endpoint
+    when OPENAI_BASE_URL + a key are set, with no local Codex CLI required.
+    """
+    if not _openai_image_edit_api_available():
+        raise ValueError(
+            "OpenAI image generation needs an OpenAI credential. Set OPENAI_API_KEY, or a proxy key "
+            "(LITELLM_API_KEY/AIPROXY_API_KEY) together with OPENAI_BASE_URL."
+        )
+
+    output_path = Path(output_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    resolved_model = str(model or DEFAULT_CODEX_IMAGE_MODEL).strip() or DEFAULT_CODEX_IMAGE_MODEL
+    image_target = image_target_from_brief(brief)
+    openai_size = str(image_target["openai_size"])
+    client = make_openai_client()
+
+    def _call_openai_generate():
+        return client.images.generate(
+            model=resolved_model,
+            prompt=prompt,
+            size=openai_size,
+            quality=_codex_image_quality(),
+            output_format="png",
+        )
+
+    result = image_limiter.call_with_retry(_call_openai_generate)
+    image_base64 = result.data[0].b64_json if result.data else None
+    if image_base64:
+        output_path.write_bytes(base64.b64decode(image_base64))
+        return output_path
+
+    image_url = getattr(result.data[0], "url", None) if result.data else None
+    if image_url:
+        response = _requests_module().get(str(image_url), timeout=(5, 60))
+        response.raise_for_status()
+        output_path.write_bytes(response.content)
+        _ensure_png(output_path)
+        return output_path
+
+    raise ValueError("OpenAI image generation returned no image data.")
+
+
+def generate_image_openai_lane(
+    prompt: str,
+    output_path: str | Path,
+    model: str = DEFAULT_CODEX_IMAGE_MODEL,
+    brief: dict | None = None,
+) -> Path:
+    """GPT Image generation lane: prefer the local Codex CLI when present, else the OpenAI API.
+
+    Mirrors :func:`edit_image`'s codex-or-API behavior so gpt-image-2 generation works
+    either through the local Codex CLI or directly via the OpenAI Images API (which
+    routes through a corp proxy when configured).
+    """
+    if shutil.which("codex"):
+        try:
+            return generate_image_codex_exec(prompt, output_path, model=model, brief=brief)
+        except Exception:
+            if not _openai_image_edit_api_available():
+                raise
+            _log("Codex image generation failed; retrying with the OpenAI Images API fallback.")
+    return _generate_with_openai_api(prompt, output_path, model=model, brief=brief)
+
+
 def generate_scene_image(
     scene: dict,
     project_dir: Path,
@@ -978,7 +1055,7 @@ def generate_scene_image(
         if normalized_provider == "local":
             result = generate_image_local(prompt, output_path, model=model, brief=brief)
         elif normalized_provider == "codex":
-            result = generate_image_codex_exec(prompt, output_path, model=model, brief=brief)
+            result = generate_image_openai_lane(prompt, output_path, model=model, brief=brief)
         else:
             result = generate_image(prompt, output_path, model=model, brief=brief)
         _log(f"=== generate_scene_image() SUCCESS: {result} ===")

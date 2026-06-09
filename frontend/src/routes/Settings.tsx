@@ -11,6 +11,7 @@ import { useBootstrap, usePlan, useProjects } from '../lib/api/hooks.ts'
 import { useProjectJobs, useSavePlan } from '../lib/api/scene-hooks.ts'
 import { readLastProjectId, writeLastProjectId } from '../lib/project-context.ts'
 import type { ImageActionHistoryEntry, Plan } from '../lib/schemas/plan.ts'
+import type { CostCatalog } from '../lib/costs.ts'
 
 function mergeTtsProfile(defaults: Record<string, unknown> | undefined, persisted: Record<string, unknown> | undefined) {
   return {
@@ -52,7 +53,7 @@ export function Settings() {
     if (!projects || projects.length === 0) {
       if (selectedProject) {
         setSelectedProject('')
-        writeLastProjectId(null)
+        writeLastProjectId('')
       }
       return
     }
@@ -83,6 +84,7 @@ export function Settings() {
   const { data: plan } = usePlan(selectedProject)
   const { data: projectJobs } = useProjectJobs(selectedProject, { refetchInterval: 4000 })
   const savePlan = useSavePlan(selectedProject)
+  const costCatalog = (bootstrap?.providers?.cost_catalog ?? null) as CostCatalog | null
 
   const ttsProfile = useMemo(
     () => mergeTtsProfile(
@@ -217,7 +219,7 @@ export function Settings() {
                 profile={imageProfile}
                 imageProviders={bootstrap?.providers?.image_providers ?? []}
                 editModels={bootstrap?.providers?.image_edit_models ?? []}
-                costCatalog={bootstrap?.providers?.cost_catalog ?? null}
+                costCatalog={costCatalog}
                 saving={saving || savePlan.isPending}
                 disabled={!selectedProject || !plan}
                 onProfileChange={handleImageProfileChange}
@@ -233,7 +235,7 @@ export function Settings() {
                 profile={ttsProfile}
                 providers={bootstrap?.providers?.tts_providers ?? {}}
                 voiceOptions={bootstrap?.providers?.tts_voice_options ?? {}}
-                costCatalog={bootstrap?.providers?.cost_catalog ?? null}
+                costCatalog={costCatalog}
                 saving={saving || savePlan.isPending}
                 disabled={!selectedProject || !plan}
                 onProfileChange={handleTtsProfileChange}

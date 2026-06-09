@@ -9,7 +9,7 @@ function pathExists(scene: Scene, pathKey: keyof Scene, existsKey: keyof Scene):
   return typeof pathValue === 'string' && pathValue.trim().length > 0
 }
 
-export function sceneHasRenderableVisual(_project: string, scene: Scene, renderBackend = 'ffmpeg'): boolean {
+export function sceneHasRenderableVisual(_project: string, scene: Scene, renderBackend: string | null | undefined = 'ffmpeg'): boolean {
   if (String(scene.scene_type) === 'motion') {
     const motion = scene.motion ?? {}
     const composition = scene.composition ?? {}
@@ -33,7 +33,7 @@ export function sceneHasPreview(_project: string, scene: Scene): boolean {
   return pathExists(scene, 'preview_path', 'preview_exists')
 }
 
-export function sceneVisualUrl(project: string, scene: Scene, renderBackend = 'ffmpeg'): string | null {
+export function sceneVisualUrl(project: string, scene: Scene): string | null {
   if (String(scene.scene_type) === 'motion') {
     const motion = scene.motion ?? {}
     const composition = scene.composition ?? {}
@@ -42,7 +42,7 @@ export function sceneVisualUrl(project: string, scene: Scene, renderBackend = 'f
       ?? projectMediaUrl(project, composition.preview_path)
       ?? projectMediaUrl(project, composition.render_path)
       ?? projectMediaUrl(project, scene.preview_path)
-      ?? (renderBackend === 'remotion' ? null : projectMediaUrl(project, scene.image_path))
+      ?? projectMediaUrl(project, scene.image_path)
   }
   if (String(scene.scene_type) === 'video') {
     return projectMediaUrl(project, scene.video_path)
