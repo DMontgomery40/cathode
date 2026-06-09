@@ -638,7 +638,7 @@ def tts_entry(
                 "unit_amount": 0.06,
             }
     elif provider_name == "openai":
-        model_name = model_name or "gpt-4o-mini-tts"
+        model_name = model_name or "tts-1"
         entry = _find_entry(kind="tts", provider="openai", model=model_name)
     elif provider_name == "chatterbox":
         entry = _find_entry(kind="tts", provider="replicate", model="resemble-ai/chatterbox")

@@ -60,8 +60,20 @@ def test_resolve_tts_profile_repairs_openai_voice_and_model(monkeypatch):
 
     profile = resolve_tts_profile({"provider": "openai", "voice": "af_bella", "model_id": "eleven_multilingual_v2"})
 
-    assert profile["voice"] == "marin"
-    assert profile["model_id"] == "gpt-4o-mini-tts"
+    assert profile["voice"] == "alloy"
+    assert profile["model_id"] == "tts-1"
+
+
+def test_resolve_tts_profile_repairs_unsupported_tts_1_voice(monkeypatch):
+    monkeypatch.setattr(
+        "core.runtime.available_tts_providers",
+        lambda keys=None: {"kokoro": "Kokoro (Local)", "openai": "OpenAI TTS (Cloud)"},
+    )
+
+    profile = resolve_tts_profile({"provider": "openai", "voice": "marin", "model_id": "tts-1"})
+
+    assert profile["voice"] == "alloy"
+    assert profile["model_id"] == "tts-1"
 
 
 def test_available_tts_providers_exposes_openai_realtime_voice_when_openai_is_configured():
@@ -85,7 +97,7 @@ def test_resolve_tts_profile_repairs_openai_realtime_voice_and_model(monkeypatch
     profile = resolve_tts_profile({"provider": "openai_realtime", "voice": "nova", "model_id": "gpt-4o-mini-tts"})
 
     assert profile["provider"] == "openai_realtime"
-    assert profile["voice"] == "marin"
+    assert profile["voice"] == "alloy"
     assert profile["model_id"] == "gpt-realtime-2"
 
 

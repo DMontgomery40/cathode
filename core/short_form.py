@@ -33,6 +33,7 @@ CAPTION_STRATEGY_LABELS = {
 }
 RUN_UNTIL_VALUES = {"storyboard", "assets", "render"}
 DEFAULT_PLATFORM_TARGETS = ["tiktok", "instagram-reels", "youtube-shorts"]
+OPENAI_CLASSIC_TTS_VOICES = {"alloy", "echo", "fable", "nova", "onyx", "shimmer"}
 
 DEFAULT_RUNTIME_SECONDS = 42.0
 MIN_RUNTIME_SECONDS = 30.0
@@ -129,10 +130,14 @@ def _short_form_tts_profile(data: dict[str, Any]) -> dict[str, Any]:
         return {**profile, "speed": float(profile.get("speed") or 1.0)}
 
     if "openai" in available_tts_providers():
+        model_id = os.getenv("BETTUBE_STUDIO_OPENAI_TTS_MODEL") or "tts-1"
+        voice = os.getenv("BETTUBE_STUDIO_OPENAI_TTS_VOICE") or "alloy"
+        if str(model_id).startswith("tts-") and voice not in OPENAI_CLASSIC_TTS_VOICES:
+            voice = "alloy"
         return {
             "provider": "openai",
-            "voice": os.getenv("BETTUBE_STUDIO_OPENAI_TTS_VOICE") or "marin",
-            "model_id": os.getenv("BETTUBE_STUDIO_OPENAI_TTS_MODEL") or "gpt-4o-mini-tts",
+            "voice": voice,
+            "model_id": model_id,
             "speed": 1.0,
         }
 

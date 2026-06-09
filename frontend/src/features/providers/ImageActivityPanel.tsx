@@ -33,7 +33,7 @@ export function ImageActivityPanel({ project, entries, jobs }: ImageActivityPane
     <WorkspacePanel
       title="Image activity"
       eyebrow="Logs & history"
-      copy="Recent scene image actions and background asset job logs for the selected project."
+      copy="Recent scene image actions and background asset job status for the selected project."
     >
       <div className="flex flex-col gap-[var(--space-4)]">
         <div className="workspace-kpi-grid">
@@ -121,7 +121,7 @@ export function ImageActivityPanel({ project, entries, jobs }: ImageActivityPane
             <div className="flex items-end justify-between gap-[var(--space-3)]">
               <div>
                 <div className="workspace-eyebrow">Background image jobs</div>
-                <p className="workspace-panel-copy m-0">Asset passes keep their step trail here. Expand a job to inspect status, timing, and latest log output.</p>
+                <p className="workspace-panel-copy m-0">Asset passes keep their step trail here. Expand a job to inspect status and timing.</p>
               </div>
               {project && (
                 <a
@@ -136,7 +136,7 @@ export function ImageActivityPanel({ project, entries, jobs }: ImageActivityPane
 
             {recentJobs.length === 0 ? (
               <div className="rounded-[var(--radius-lg)] border border-[var(--border-subtle)] bg-[var(--surface-stage)] px-[var(--space-4)] py-[var(--space-4)] text-[var(--text-tertiary)]" style={{ fontSize: 'var(--text-sm)' }}>
-                No background asset jobs yet. Generate all assets and the latest job records and log tails will show up here.
+                No background asset jobs yet. Generate all assets and the latest job records will show up here.
               </div>
             ) : (
               recentJobs.map((job) => (

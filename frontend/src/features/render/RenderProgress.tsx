@@ -21,6 +21,13 @@ function stageLabel(status: string): string {
   }
 }
 
+function logLineCount(logContent?: string | null): number {
+  return String(logContent || '')
+    .split(/\r?\n/)
+    .filter((line) => line.trim().length > 0)
+    .length
+}
+
 export function RenderProgress({ job, logContent, onCancel }: RenderProgressProps) {
   if (!job) {
     return (
@@ -189,14 +196,14 @@ export function RenderProgress({ job, logContent, onCancel }: RenderProgressProp
         {logContent && (
           <div className="flex flex-col gap-[var(--space-2)]">
             <div className="text-[var(--text-secondary)]" style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--weight-medium)' }}>
-              Live log tail
+              Diagnostics
             </div>
-            <pre
-              className="max-h-[20rem] overflow-auto rounded-[var(--radius-md)] border border-[var(--border-subtle)] bg-[var(--surface-void)]"
-              style={{ fontSize: '10px', fontFamily: 'var(--font-mono)', margin: 0, padding: 'var(--space-2)' }}
+            <div
+              className="rounded-[var(--radius-md)] border border-[var(--border-subtle)] bg-[var(--surface-stage)] text-[var(--text-tertiary)]"
+              style={{ fontSize: 'var(--text-xs)', padding: 'var(--space-2) var(--space-3)' }}
             >
-              {logContent}
-            </pre>
+              Worker diagnostics captured ({logLineCount(logContent)} lines). Use the job record for detailed troubleshooting.
+            </div>
           </div>
         )}
 

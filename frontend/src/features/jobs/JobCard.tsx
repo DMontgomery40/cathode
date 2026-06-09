@@ -42,6 +42,13 @@ function errorMessage(error: Job['error']): string {
   return error.operatorHint || error.message || ''
 }
 
+function logLineCount(content?: string): number {
+  return String(content || '')
+    .split(/\r?\n/)
+    .filter((line) => line.trim().length > 0)
+    .length
+}
+
 export function JobCard({ job, project, onCancel }: JobCardProps) {
   const [expanded, setExpanded] = useState(false)
   const isActive = job.status === 'queued' || job.status === 'running'
@@ -192,12 +199,12 @@ export function JobCard({ job, project, onCancel }: JobCardProps) {
             ]}
           />
           {log.data?.content && (
-            <pre
-              className="max-h-[16rem] overflow-auto rounded-[var(--radius-md)] border border-[var(--border-subtle)] bg-[var(--surface-void)]"
-              style={{ fontSize: '10px', fontFamily: 'var(--font-mono)', margin: 0, padding: 'var(--space-2)' }}
+            <div
+              className="rounded-[var(--radius-md)] border border-[var(--border-subtle)] bg-[var(--surface-stage)] text-[var(--text-tertiary)]"
+              style={{ fontSize: 'var(--text-xs)', padding: 'var(--space-2) var(--space-3)' }}
             >
-              {log.data.content}
-            </pre>
+              Worker diagnostics captured ({logLineCount(log.data.content)} lines).
+            </div>
           )}
         </div>
       )}

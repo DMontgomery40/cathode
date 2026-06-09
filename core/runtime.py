@@ -15,8 +15,16 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 PROJECTS_DIR = REPO_ROOT / "projects"
 PROJECTS_DIR.mkdir(exist_ok=True)
 _KOKORO_VOICE_PATTERN = re.compile(r"^[ab][fm]_[a-z0-9]+$")
-_OPENAI_TTS_DEFAULT_VOICE = os.getenv("BETTUBE_STUDIO_OPENAI_TTS_VOICE") or "marin"
+_OPENAI_TTS_DEFAULT_VOICE = os.getenv("BETTUBE_STUDIO_OPENAI_TTS_VOICE") or "alloy"
 _OPENAI_REALTIME_DEFAULT_MODEL = os.getenv("BETTUBE_STUDIO_OPENAI_REALTIME_MODEL") or "gpt-realtime-2"
+_OPENAI_CLASSIC_TTS_VOICES = {
+    "alloy",
+    "echo",
+    "fable",
+    "nova",
+    "onyx",
+    "shimmer",
+}
 _OPENAI_TTS_VOICES = {
     "alloy",
     "ash",
@@ -486,10 +494,12 @@ def resolve_tts_profile(profile: dict | None = None) -> dict:
         if not model_id or model_id.startswith("tts-") or model_id.startswith("gpt-"):
             resolved["model_id"] = os.getenv("BETTUBE_STUDIO_ELEVENLABS_MODEL") or "eleven_multilingual_v2"
     elif provider == "openai":
-        resolved["voice"] = voice if voice in _OPENAI_TTS_VOICES else _OPENAI_TTS_DEFAULT_VOICE
         model_id = str(resolved.get("model_id") or "").strip()
-        openai_tts_default = os.getenv("BETTUBE_STUDIO_OPENAI_TTS_MODEL") or "gpt-4o-mini-tts"
+        openai_tts_default = os.getenv("BETTUBE_STUDIO_OPENAI_TTS_MODEL") or "tts-1"
         resolved["model_id"] = model_id if model_id.startswith(("gpt-", "tts-")) else openai_tts_default
+        allowed_voices = _OPENAI_CLASSIC_TTS_VOICES if str(resolved["model_id"]).startswith("tts-") else _OPENAI_TTS_VOICES
+        default_voice = _OPENAI_TTS_DEFAULT_VOICE if _OPENAI_TTS_DEFAULT_VOICE in allowed_voices else "alloy"
+        resolved["voice"] = voice if voice in allowed_voices else default_voice
     elif provider == "openai_realtime":
         resolved["voice"] = voice if voice in _OPENAI_REALTIME_VOICES else _OPENAI_TTS_DEFAULT_VOICE
         model_id = str(resolved.get("model_id") or "").strip()

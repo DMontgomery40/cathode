@@ -143,7 +143,7 @@ test.describe('Render Control', () => {
     await expect(page.getByText('No active render', { exact: true })).toBeVisible()
   })
 
-  test('render progress shows live job detail and log tail in the GUI', async ({ page }) => {
+  test('render progress shows live job detail and safe diagnostics in the GUI', async ({ page }) => {
     await page.route(`**/api/projects/${PROJECT}/jobs`, async (route) => {
       await route.fulfill({
         status: 200,
@@ -185,8 +185,9 @@ test.describe('Render Control', () => {
     await page.goto(`/projects/${PROJECT}/render`)
     await expect(page.getByText('Encoding video', { exact: true })).toBeVisible()
     await expect(page.getByText('rendered 120 frames, encoded 98', { exact: true })).toBeVisible()
-    await expect(page.getByText('Live log tail', { exact: true })).toBeVisible()
-    await expect(page.getByText('hwaccel=required')).toBeVisible()
+    await expect(page.getByText('Diagnostics', { exact: true })).toBeVisible()
+    await expect(page.getByText('Worker diagnostics captured (2 lines).', { exact: true })).toBeVisible()
+    await expect(page.getByText('hwaccel=required')).not.toBeVisible()
   })
 
   test('software demo overlay manifests keep the media layer and do not duplicate the headline chip', async ({ page }) => {

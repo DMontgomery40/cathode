@@ -242,7 +242,7 @@ export function QueueMonitor() {
         }
         status={activeCount > 0 ? 'generating' : 'idle'}
       />
-      {projectId && <ProjectWorkspaceNav projectId={projectId} plan={plan} />}
+      {projectId && <ProjectWorkspaceNav projectId={projectId} plan={plan} jobs={jobs} />}
       <WorkspaceCanvas>
         <WorkspaceGrid
           asideWidth={320}

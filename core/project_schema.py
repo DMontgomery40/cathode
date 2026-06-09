@@ -263,7 +263,7 @@ def default_tts_profile() -> dict[str, Any]:
         "provider": "kokoro",
         "voice": "af_bella",
         "speed": 1.1,
-        "model_id": os.getenv("BETTUBE_STUDIO_OPENAI_TTS_MODEL") or "gpt-4o-mini-tts",
+        "model_id": os.getenv("BETTUBE_STUDIO_OPENAI_TTS_MODEL") or "tts-1",
         "text_normalization": "auto",
         "stability": 0.38,
         "similarity_boost": 0.8,

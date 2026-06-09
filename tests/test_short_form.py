@@ -66,7 +66,7 @@ def test_short_form_payload_uses_openai_voice_when_available(monkeypatch):
         },
     )
     monkeypatch.setenv("BETTUBE_STUDIO_OPENAI_TTS_VOICE", "nova")
-    monkeypatch.setenv("BETTUBE_STUDIO_OPENAI_TTS_MODEL", "gpt-4o-mini-tts")
+    monkeypatch.setenv("BETTUBE_STUDIO_OPENAI_TTS_MODEL", "tts-1")
 
     payload = build_short_form_payload(
         {
@@ -78,9 +78,31 @@ def test_short_form_payload_uses_openai_voice_when_available(monkeypatch):
     assert payload["tts_profile"] == {
         "provider": "openai",
         "voice": "nova",
-        "model_id": "gpt-4o-mini-tts",
+        "model_id": "tts-1",
         "speed": 1.0,
     }
+
+
+def test_short_form_payload_repairs_unsupported_tts_1_voice(monkeypatch):
+    monkeypatch.setattr(
+        "core.short_form.available_tts_providers",
+        lambda: {
+            "kokoro": "Kokoro (Local)",
+            "openai": "OpenAI TTS (Cloud)",
+        },
+    )
+    monkeypatch.setenv("BETTUBE_STUDIO_OPENAI_TTS_VOICE", "marin")
+    monkeypatch.setenv("BETTUBE_STUDIO_OPENAI_TTS_MODEL", "tts-1")
+
+    payload = build_short_form_payload(
+        {
+            "project_name": "openai_voice_short",
+            "source_material": "Source notes.",
+        }
+    )
+
+    assert payload["tts_profile"]["voice"] == "alloy"
+    assert payload["tts_profile"]["model_id"] == "tts-1"
 
 
 def test_short_form_payload_clamps_runtime_and_defaults_platforms():

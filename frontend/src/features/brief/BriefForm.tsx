@@ -1,3 +1,4 @@
+import { useEffect, useMemo } from 'react'
 import { useForm, useWatch, Controller, type FieldErrors, type Resolver } from 'react-hook-form'
 import { BriefSchema, type Brief } from '../../lib/schemas/plan.ts'
 import type { ShortFormOption, ShortFormOptions } from '../../lib/api/hooks.ts'
@@ -139,49 +140,58 @@ export function BriefForm({
   paidMediaGenerationAvailable = false,
   shortFormOptions,
 }: BriefFormProps) {
+  const defaultValues = useMemo<Partial<Brief>>(() => ({
+    project_name: '',
+    source_mode: 'ideas_notes',
+    video_goal: '',
+    audience: '',
+    source_material: '',
+    target_length_minutes: 2,
+    tone: '',
+    visual_style: '',
+    must_include: '',
+    must_avoid: '',
+    ending_cta: '',
+    paid_media_budget_usd: '',
+    composition_mode: 'auto',
+    visual_source_strategy: 'images_only',
+    video_scene_style: 'auto',
+    text_render_mode: 'visual_authored',
+    short_form_format: '',
+    short_form_tier: '',
+    short_form_approach: '',
+    short_form_duration_seconds: 0,
+    platform_targets: [],
+    hook_promise: '',
+    payoff: '',
+    source_anchor_card: '',
+    source_context_lock: '',
+    caption_strategy: '',
+    caption_timing_source: '',
+    caption_renderer: '',
+    voice_direction: '',
+    motion_intensity: '',
+    ...defaults,
+  }), [defaults])
+
   const {
     register,
     handleSubmit,
     control,
     setValue,
     getValues,
-    formState: { errors },
+    reset,
+    formState: { errors, isDirty },
   } = useForm<Brief>({
     resolver: briefResolver,
-    defaultValues: {
-      project_name: '',
-      source_mode: 'ideas_notes',
-      video_goal: '',
-      audience: '',
-      source_material: '',
-      target_length_minutes: 2,
-      tone: '',
-      visual_style: '',
-      must_include: '',
-      must_avoid: '',
-      ending_cta: '',
-      paid_media_budget_usd: '',
-      composition_mode: 'auto',
-      visual_source_strategy: 'images_only',
-      video_scene_style: 'auto',
-      text_render_mode: 'visual_authored',
-      short_form_format: '',
-      short_form_tier: '',
-      short_form_approach: '',
-      short_form_duration_seconds: 0,
-      platform_targets: [],
-      hook_promise: '',
-      payoff: '',
-      source_anchor_card: '',
-      source_context_lock: '',
-      caption_strategy: '',
-      caption_timing_source: '',
-      caption_renderer: '',
-      voice_direction: '',
-      motion_intensity: '',
-      ...defaults,
-    },
+    defaultValues,
   })
+
+  useEffect(() => {
+    if (!isDirty) {
+      reset(defaultValues)
+    }
+  }, [defaultValues, isDirty, reset])
 
   const targetLength = useWatch({ control, name: 'target_length_minutes' })
   const visualSourceStrategy = useWatch({ control, name: 'visual_source_strategy' })

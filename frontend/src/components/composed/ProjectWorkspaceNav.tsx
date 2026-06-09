@@ -1,12 +1,14 @@
 import { NavLink } from 'react-router-dom'
 import { clsx } from 'clsx'
 import { Badge } from '../primitives/Badge.tsx'
-import { projectModeFromPlan } from '../../lib/project-mode.ts'
+import { projectModeFromJob, projectModeFromPlan } from '../../lib/project-mode.ts'
+import type { Job } from '../../lib/api/jobs.ts'
 import type { Plan } from '../../lib/schemas/plan.ts'
 
 interface ProjectWorkspaceNavProps {
   projectId: string
   plan?: Plan | null
+  jobs?: Job[] | null
 }
 
 const tabs = [
@@ -16,9 +18,9 @@ const tabs = [
   { label: 'Queue', segment: 'queue' },
 ] as const
 
-export function ProjectWorkspaceNav({ projectId, plan }: ProjectWorkspaceNavProps) {
+export function ProjectWorkspaceNav({ projectId, plan, jobs }: ProjectWorkspaceNavProps) {
   const encodedProjectId = encodeURIComponent(projectId)
-  const mode = projectModeFromPlan(plan)
+  const mode = plan ? projectModeFromPlan(plan) : projectModeFromJob(jobs?.[0]) ?? projectModeFromPlan(plan)
 
   return (
     <nav

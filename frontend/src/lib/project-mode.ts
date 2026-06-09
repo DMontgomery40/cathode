@@ -25,11 +25,12 @@ function renderFrame(renderProfile: Record<string, unknown>, fallbackAspect: str
   return { aspect, frame }
 }
 
-export function projectModeFromPlan(plan: Plan | null | undefined): ProjectModeSummary {
-  const meta = recordValue(plan?.meta)
-  const brief = recordValue(meta.brief)
-  const renderProfile = recordValue(meta.render_profile)
-  const isVerticalShort = brief.short_form_format === 'vertical_short' || meta.pipeline_mode === 'short_form_vertical_v1'
+function modeFromBriefAndRender(
+  brief: Record<string, unknown>,
+  renderProfile: Record<string, unknown>,
+  pipelineMode?: unknown,
+): ProjectModeSummary {
+  const isVerticalShort = brief.short_form_format === 'vertical_short' || pipelineMode === 'short_form_vertical_v1'
   const { aspect, frame } = renderFrame(renderProfile, isVerticalShort ? '9:16' : '16:9')
 
   if (isVerticalShort) {
@@ -53,6 +54,23 @@ export function projectModeFromPlan(plan: Plan | null | undefined): ProjectModeS
     frame,
     locksFps: false,
   }
+}
+
+export function projectModeFromPlan(plan: Plan | null | undefined): ProjectModeSummary {
+  const meta = recordValue(plan?.meta)
+  const brief = recordValue(meta.brief)
+  const renderProfile = recordValue(meta.render_profile)
+  return modeFromBriefAndRender(brief, renderProfile, meta.pipeline_mode)
+}
+
+export function projectModeFromJob(job: { request?: unknown } | null | undefined): ProjectModeSummary | null {
+  const request = recordValue(job?.request)
+  const brief = recordValue(request.brief)
+  const renderProfile = recordValue(request.render_profile)
+  if (Object.keys(brief).length === 0 && Object.keys(renderProfile).length === 0) {
+    return null
+  }
+  return modeFromBriefAndRender(brief, renderProfile)
 }
 
 export function projectModeFromSummary(project: ProjectSummary): ProjectModeSummary {

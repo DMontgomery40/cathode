@@ -109,9 +109,17 @@ KOKORO_VOICES = {
 DEFAULT_VOICE = "af_bella"  # More upbeat than af_heart
 DEFAULT_SPEED = 1.1  # Slightly faster than normal
 DEFAULT_EXAGGERATION = 0.6  # Slightly more expressive than neutral (0.5)
-DEFAULT_OPENAI_TTS_MODEL = os.getenv("BETTUBE_STUDIO_OPENAI_TTS_MODEL") or "gpt-4o-mini-tts"
+DEFAULT_OPENAI_TTS_MODEL = os.getenv("BETTUBE_STUDIO_OPENAI_TTS_MODEL") or "tts-1"
 DEFAULT_OPENAI_REALTIME_MODEL = os.getenv("BETTUBE_STUDIO_OPENAI_REALTIME_MODEL") or "gpt-realtime-2"
-DEFAULT_OPENAI_TTS_VOICE = os.getenv("BETTUBE_STUDIO_OPENAI_TTS_VOICE") or "marin"
+DEFAULT_OPENAI_TTS_VOICE = os.getenv("BETTUBE_STUDIO_OPENAI_TTS_VOICE") or "alloy"
+OPENAI_CLASSIC_TTS_VOICES = {
+    "alloy",
+    "echo",
+    "fable",
+    "nova",
+    "onyx",
+    "shimmer",
+}
 OPENAI_TTS_VOICES = {
     "alloy",
     "ash",
@@ -181,6 +189,15 @@ def _normalize_voice_for_provider(provider: str, voice: str) -> str:
     if provider_name == "openai_realtime":
         return voice_name if voice_name in OPENAI_REALTIME_VOICES else DEFAULT_OPENAI_TTS_VOICE
     return voice_name
+
+
+def _normalize_openai_tts_voice(model_id: str, voice: str) -> str:
+    model_name = str(model_id or DEFAULT_OPENAI_TTS_MODEL).strip()
+    voice_name = str(voice or "").strip()
+    if model_name.startswith("tts-"):
+        default_voice = DEFAULT_OPENAI_TTS_VOICE if DEFAULT_OPENAI_TTS_VOICE in OPENAI_CLASSIC_TTS_VOICES else "alloy"
+        return voice_name if voice_name in OPENAI_CLASSIC_TTS_VOICES else default_voice
+    return voice_name if voice_name in OPENAI_TTS_VOICES else DEFAULT_OPENAI_TTS_VOICE
 
 
 def _normalize_voice_for_replicate_elevenlabs(voice: str) -> str:
@@ -352,7 +369,7 @@ def generate_audio_result(
         path = _generate_with_chatterbox(text, output_path, exaggeration)
         return {"path": path, "provider": "replicate", "model": DEFAULT_CHATTERBOX_MODEL, "voice": voice}
     if tts_provider == "openai":
-        resolved_voice = _normalize_voice_for_provider("openai", voice)
+        resolved_voice = _normalize_openai_tts_voice(openai_model_id, voice)
         path = _generate_with_openai(text, output_path, voice=resolved_voice, model_id=openai_model_id)
         return {"path": path, "provider": "openai", "model": openai_model_id, "voice": resolved_voice}
     if tts_provider == "openai_realtime":
@@ -589,11 +606,13 @@ def _generate_with_openai(
 ) -> Path:
     """Generate audio using OpenAI TTS with rate limiting."""
     client = make_openai_client()
+    resolved_model = str(model_id or DEFAULT_OPENAI_TTS_MODEL)
+    resolved_voice = _normalize_openai_tts_voice(resolved_model, voice)
 
     def _call_openai():
         return client.audio.speech.create(
-            model=str(model_id or DEFAULT_OPENAI_TTS_MODEL),
-            voice=voice,
+            model=resolved_model,
+            voice=resolved_voice,
             input=text,
             response_format="mp3",
         )

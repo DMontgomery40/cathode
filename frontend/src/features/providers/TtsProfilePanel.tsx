@@ -33,7 +33,7 @@ function asBool(value: unknown, fallback = false): boolean {
 function providerModelHint(provider: string, currentModelId: unknown): string {
   const value = typeof currentModelId === 'string' ? currentModelId.trim() : ''
   if (provider === 'openai') {
-    return value.startsWith('gpt-') || value.startsWith('tts-') ? value : 'gpt-4o-mini-tts'
+    return value.startsWith('gpt-') || value.startsWith('tts-') ? value : 'tts-1'
   }
   if (provider === 'openai_realtime') {
     return value.startsWith('gpt-realtime') ? value : 'gpt-realtime-2'
@@ -290,7 +290,7 @@ export function TtsProfilePanel({
             />
             <TextInput
               label="Model"
-              value={asString(currentProfile.model_id, 'gpt-4o-mini-tts')}
+              value={asString(currentProfile.model_id, 'tts-1')}
               onChange={(event) => onProfileChange({ model_id: event.target.value })}
               disabled={disabled}
               hint={providerExactCost ? `Optional override if you want a specific OpenAI TTS model. Est. list rate: ~${providerExactCost} est.` : 'Optional override if you want a specific OpenAI TTS model.'}

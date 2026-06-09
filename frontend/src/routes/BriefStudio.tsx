@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { WorkspaceHeader } from '../components/composed/WorkspaceHeader.tsx'
 import { ProjectWorkspaceNav } from '../components/composed/ProjectWorkspaceNav.tsx'
@@ -16,8 +16,10 @@ import {
   useShortFormOptions,
   useStartMakeVideoJob,
 } from '../lib/api/hooks.ts'
+import { useProjectJobs } from '../lib/api/scene-hooks.ts'
 import { getApiErrorMessage } from '../lib/api/errors.ts'
 import type { Brief } from '../lib/schemas/plan.ts'
+import type { Job } from '../lib/api/jobs.ts'
 import { GlassPanel } from '../components/primitives/GlassPanel.tsx'
 import { Select } from '../components/primitives/Select.tsx'
 import { TextInput } from '../components/primitives/TextInput.tsx'
@@ -47,6 +49,22 @@ function demoTargetFromProfile(agentDemoProfile: Record<string, unknown>): DemoT
   }
 }
 
+function latestJobRequestBrief(jobs: Job[] | undefined): Partial<Brief> {
+  const job = jobs?.find((item) => {
+    const request = item.request
+    return request && typeof request === 'object' && (request as Record<string, unknown>).brief
+  })
+  const request = job?.request as Record<string, unknown> | undefined
+  const brief = request?.brief
+  if (!brief || typeof brief !== 'object') {
+    return {}
+  }
+  return {
+    ...(brief as Partial<Brief>),
+    project_name: String(job?.project_name || (brief as Record<string, unknown>).project_name || ''),
+  }
+}
+
 export function BriefStudio() {
   const { projectId = 'new' } = useParams<{ projectId: string }>()
   const navigate = useNavigate()
@@ -55,6 +73,7 @@ export function BriefStudio() {
   const { data: bootstrap } = useBootstrap()
   const { data: shortFormOptions } = useShortFormOptions()
   const { data: plan, isLoading: planLoading } = usePlan(projectId)
+  const { data: jobs } = useProjectJobs(projectId, { enabled: !isNew, refetchInterval: plan ? undefined : 3000 })
 
   const createProject = useCreateProject()
   const rebuildStoryboard = useRebuildStoryboard(projectId)
@@ -70,15 +89,20 @@ export function BriefStudio() {
       : rebuildStoryboard.error
         ? getApiErrorMessage(rebuildStoryboard.error, 'Storyboard rebuild failed.')
         : null
-  const briefMeta = (plan?.meta?.brief as Record<string, unknown> | undefined) ?? {}
+  const jobBrief = useMemo(() => latestJobRequestBrief(jobs), [jobs])
+  const briefMeta = (plan?.meta?.brief as Record<string, unknown> | undefined) ?? jobBrief
   const agentDemoProfile = (plan?.meta?.agent_demo_profile as Record<string, unknown> | undefined) ?? {}
 
   // Build defaults from bootstrap + existing plan
-  const defaults: Partial<Brief> = {
+  const defaults: Partial<Brief> = useMemo(() => ({
     ...(bootstrap?.defaults?.brief as Partial<Brief> | undefined),
+    ...jobBrief,
     ...(plan?.meta?.brief as Partial<Brief> | undefined),
     ...(plan?.meta?.project_name ? { project_name: plan.meta.project_name as string } : {}),
-  }
+    ...(!plan?.meta?.project_name && !jobBrief.project_name && !isNew ? { project_name: projectId } : {}),
+  }), [bootstrap, isNew, jobBrief, plan, projectId])
+  const usingJobBriefFallback = !plan && Object.keys(jobBrief).length > 0
+  const isShortFormBrief = defaults.short_form_format === 'vertical_short'
 
   const styleRefs = briefMeta.style_reference_paths as string[] | undefined
   const styleSummary = briefMeta.style_reference_summary as string | null | undefined
@@ -199,7 +223,7 @@ export function BriefStudio() {
     { label: isNew ? 'New Project' : projectId },
   ]
 
-  if (!isNew && planLoading) {
+  if (!isNew && planLoading && !usingJobBriefFallback) {
     return (
       <div className="flex flex-col h-full">
         <WorkspaceHeader
@@ -222,21 +246,35 @@ export function BriefStudio() {
     <div className="flex flex-col h-full">
       <WorkspaceHeader
         title="Brief Studio"
-        subtitle={isNew ? 'New project' : projectId}
+        subtitle={isNew ? 'New project' : isShortFormBrief ? 'Vertical short' : projectId}
         breadcrumbs={breadcrumbs}
         status={loading ? 'generating' : 'idle'}
       />
-      {!isNew && <ProjectWorkspaceNav projectId={projectId} plan={plan} />}
+      {!isNew && <ProjectWorkspaceNav projectId={projectId} plan={plan} jobs={jobs} />}
       <WorkspaceCanvas>
         <WorkspaceGrid
           asideWidth={312}
           main={(
             <div className="workspace-panel-stack">
               <WorkspacePanel
-                title={isNew ? 'Shape the brief' : 'Retune the project brief'}
+                title={isShortFormBrief ? 'Short-form brief' : isNew ? 'Shape the brief' : 'Retune the project brief'}
                 eyebrow="Project setup"
-                copy="Define the outcome, source material, and clip preferences here so betTube Studio can plan the storyboard, assets, and final render."
+                copy={isShortFormBrief
+                  ? 'Review the short-form request that launched this project, including hook, platform targets, caption plan, and source boundaries.'
+                  : 'Define the outcome, source material, and clip preferences here so betTube Studio can plan the storyboard, assets, and final render.'}
               >
+                {usingJobBriefFallback && (
+                  <div
+                    className="rounded-[var(--radius-md)] border border-[var(--border-accent)] bg-[var(--accent-primary-muted)] text-[var(--text-secondary)]"
+                    style={{
+                      padding: 'var(--space-3)',
+                      marginBottom: 'var(--space-4)',
+                      fontSize: 'var(--text-sm)',
+                    }}
+                  >
+                    Showing the launch brief from the active job until the project plan finishes writing.
+                  </div>
+                )}
                 {actionError && (
                   <div
                     className="rounded-[var(--radius-md)] border border-[rgba(200,90,90,0.3)] bg-[rgba(200,90,90,0.12)] text-[var(--signal-danger)]"

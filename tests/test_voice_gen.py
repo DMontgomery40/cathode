@@ -220,8 +220,8 @@ def test_openai_tts_defaults_to_current_model_and_recommended_voice(monkeypatch,
     )
 
     assert path.exists()
-    assert captured["model"] == "gpt-4o-mini-tts"
-    assert captured["voice"] == "marin"
+    assert captured["model"] == "tts-1"
+    assert captured["voice"] == "alloy"
     assert captured["response_format"] == "mp3"
 
 
@@ -269,12 +269,12 @@ def test_openai_realtime_voice_uses_gpt_realtime_2_websocket(monkeypatch, tmp_pa
 
     assert result["provider"] == "openai"
     assert result["model"] == "gpt-realtime-2"
-    assert result["voice"] == "marin"
+    assert result["voice"] == "alloy"
     assert "model=gpt-realtime-2" in captured_connect["url"]
     assert captured_connect["kwargs"]["additional_headers"]["Authorization"] == "Bearer test-key"
     assert sent_events[0]["type"] == "session.update"
     assert sent_events[0]["session"]["model"] == "gpt-realtime-2"
-    assert sent_events[0]["session"]["audio"]["output"]["voice"] == "marin"
+    assert sent_events[0]["session"]["audio"]["output"]["voice"] == "alloy"
     assert sent_events[0]["session"]["audio"]["output"]["format"] == {"type": "audio/pcm", "rate": 24000}
     assert sent_events[1]["type"] == "conversation.item.create"
     assert sent_events[2]["response"]["output_modalities"] == ["audio"]

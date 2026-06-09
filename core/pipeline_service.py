@@ -1584,6 +1584,16 @@ def render_project_service(
 
     video_path, compression_result, web_optimization = _render_video(plan)
     plan = _persist_render_result(plan, video_path, compression_result, web_optimization)
+    if progress_callback is not None:
+        progress_callback(
+            {
+                "progress": 0.97,
+                "progress_kind": "review",
+                "progress_label": "Reviewing rendered scenes",
+                "progress_detail": "Checking final frames after render.",
+                "progress_status": "running",
+            }
+        )
     try:
         scene_review = _run_review("post_render_review")
     except Exception as exc:
@@ -1591,8 +1601,8 @@ def render_project_service(
             progress_callback(
                 {
                     "progress": 1.0,
-                    "progress_kind": "render",
-                    "progress_label": "Render complete, scene review failed",
+                    "progress_kind": "review",
+                    "progress_label": "Scene review failed",
                     "progress_detail": str(exc),
                     "progress_status": "error",
                 }
@@ -1610,6 +1620,16 @@ def render_project_service(
             "render_backend_warning": fallback_warning,
             "scene_review_error": str(exc),
         }
+    if progress_callback is not None:
+        progress_callback(
+            {
+                "progress": 0.98,
+                "progress_kind": "review",
+                "progress_label": "Rendered scenes reviewed",
+                "progress_detail": f"{scene_review.get('scene_count', 0)} scene(s) checked",
+                "progress_status": "done",
+            }
+        )
     plan = load_plan(project_dir) or plan
     plan, repairs_applied = _attempt_text_repairs(
         project_dir,
@@ -1624,7 +1644,27 @@ def render_project_service(
     if repairs_applied:
         video_path, compression_result, web_optimization = _render_video(plan)
         plan = _persist_render_result(plan, video_path, compression_result, web_optimization)
+        if progress_callback is not None:
+            progress_callback(
+                {
+                    "progress": 0.98,
+                    "progress_kind": "review",
+                    "progress_label": "Reviewing repaired scenes",
+                    "progress_detail": "Checking final frames after repair render.",
+                    "progress_status": "running",
+                }
+            )
         scene_review = _run_review("post_render_review_after_repairs")
+        if progress_callback is not None:
+            progress_callback(
+                {
+                    "progress": 0.99,
+                    "progress_kind": "review",
+                    "progress_label": "Repaired scenes reviewed",
+                    "progress_detail": f"{scene_review.get('scene_count', 0)} scene(s) checked",
+                    "progress_status": "done",
+                }
+            )
     if progress_callback is not None:
         progress_callback(
             {
