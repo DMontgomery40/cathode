@@ -1,4 +1,0 @@
-interface:
-  display_name: "Vertical Shorts"
-  short_description: "Make hook-first 30-50s vertical shorts"
-  default_prompt: "Use $bettube-studio-short-form-vertical-video to turn this source material or footage into a hook-first 30-50 second vertical short. Choose one tier, extract a source anchor card, prompt-lint visuals before generation, choose a caption mode and timing path from final audio, then calibrate the hook, voice, visuals, and motion. Reject/regenerate actual visuals that drift from the source context."

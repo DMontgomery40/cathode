@@ -30,7 +30,7 @@ betTube Studio now has four practical lanes:
 If you only remember one thing, remember this:
 
 - most users only need the React/FastAPI app or MCP path
-- the packaged live-demo skill is for cases where real UI footage is the story
+- the live-demo workflow is for cases where real UI footage is the story
 - the scene editor is there for surgical fixes, not because the happy path should feel heavy
 
 ## What It Does
@@ -91,39 +91,11 @@ The core tool is `make_video`. It can inspect a bounded workspace, accept explic
 The React GUI and the MCP path now converge on the same persisted background-job model instead of maintaining separate orchestration logic.
 The web stack also exposes the same job model through `POST /api/jobs/make-video`.
 
-### 4. Live Product Demo Skill
+### 4. Live Demo Workflow
 
-Use this when the video should prove a real running product.
-
-The packaged skill now lives in:
-
-- `skills/bettube-studio-project-demo/`
-- `.claude/skills/bettube-studio-project-demo/`
-
-Its flow is:
-
-1. bootstrap betTube Studio
-2. prepare a live capture session
-3. launch or attach to the target app
-4. capture fresh states in a real browser
-5. review the footage
-6. hand approved clips into betTube Studio
-7. render
+Use this when the video should prove a real running product. The workflow can launch or attach to a target app, capture fresh browser footage, review the clips, and feed approved footage back into betTube Studio through `footage_paths` or `footage_manifest`.
 
 This path is capture-first and review-first. It does not assume existing README screenshots are good enough.
-The QC pass is supposed to run inside Codex or Claude as a spawned reviewer sub-agent looking at extracted images only, not as some separate external “vision model” workflow. The reviewer prompt should stay tiny and human, more like “hey, check out my demo vid” than a schema dump.
-The parent agent should save that raw reviewer reply, translate it into betTube Studio’s structured `accept / warn / retry` observations, and then let the deterministic review rules decide retries and handoff safety.
-
-In practice, that review loop is:
-
-1. `extract_review_frames.py` creates the image bundle.
-2. A spawned worker sub-agent sees only those frames plus the short gut-check prompt.
-3. The parent agent saves the raw reply, seeds `review_observations.template.json` with `init_review_observations.py`, fills the structured observations, and runs `review_bundle.py`.
-
-The packaged live-demo lane now also has a real capture driver and retry-plan tool:
-
-- `capture_live_demo.py`: run a Playwright-backed walkthrough from a capture plan and keep raw browser video, trace, screenshots, and a step manifest.
-- `apply_retry_actions.py`: mutate the capture plan from bounded retry actions before rerunning capture.
 
 ## Remotion And Composition Modes
 
@@ -500,7 +472,6 @@ frontend/
 server/
 prompts/
 scripts/
-skills/
 tests/
 docs/assets/
 docs/examples/

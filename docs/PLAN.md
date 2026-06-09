@@ -91,7 +91,7 @@ Then add a second, optional Remotion treatment-planner stage that is informed by
   2. Fix planner classification so explicit 3D/tableau scenes stop becoming text cards.
   3. Rebuild `surreal_tableau_3d` into a semantic deterministic renderer.
   4. Unify motion-scene editing on canonical `scene.composition`.
-  5. Add a repo skill pack and handoff references so future agents have a zero-search betTube Studio/Remotion path.
+  5. Document the reusable Remotion path without relying on repo-local agent instruction files.
 - 2026-03-14: planner-side fix completed and verified.
   - `_apply_composition_mode_to_scenes()` now seeds motion scenes neutrally instead of pre-classifying them from narration length.
   - `core/composition_planner.py` now has explicit 3D/tableau/orbit heuristics and semantic `surreal_tableau_3d` props.
@@ -102,7 +102,7 @@ Then add a second, optional Remotion treatment-planner stage that is informed by
   - Rebuilt `surreal_tableau_3d` into a semantic deterministic scene family in `frontend/src/remotion/index.tsx`.
   - Unified motion-scene editing on canonical `scene.composition` in `frontend/src/features/scenes/SceneInspector.tsx`.
   - Added workflow role split so the product path uses Claude/Anthropic for scene writing and OpenAI for deterministic treatment/machinery when available.
-  - Added repo skill pack at `skills/bettube-studio-remotion-development/` plus Claude mirror.
+  - Added reusable Remotion architecture notes during development; repo-local agent mirrors were later removed from `master`.
 - 2026-03-14: live validation surfaced two real classifier false positives that unit tests had missed.
   - Software-demo hints were matching raw substrings (`screen` in `widescreen`, `form` in `performs`).
   - Bullet-stack hints were matching the generic word `sequence`.
@@ -129,7 +129,7 @@ Then add a second, optional Remotion treatment-planner stage that is informed by
   - The prompt target is a single full 1920x1080 60fps 3D video with a programmed camera journey from rank 20 to rank 1, not a small per-scene 3D treatment.
   - betTube Studio's current `three_data_stage` is not that. It is a four-item bar stage with overlay labels and a mild turntable camera.
   - betTube Studio currently lacks a reusable registry family for a full-video 3D ranking world with structured item records, environment components, and timeline-driven camera stops.
-- 2026-03-14: starting with guardrail updates in `AGENTS.md` and `prompts/AGENTS.md` before changing the planner pipeline.
+- 2026-03-14: started with planner/prompt guardrail updates before changing the planner pipeline.
 - 2026-03-15: completed repo/prompt guardrail updates.
 - 2026-03-15: completed director prompt reset plus intent-specific example selection, including a promoted `whimsical_storybook__v1` example harvested through the director-golden workflow.
 - 2026-03-15: completed initial treatment-planner stage and wired it into create/rebuild flows with registry-only composition overrides.

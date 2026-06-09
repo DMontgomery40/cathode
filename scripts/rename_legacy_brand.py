@@ -272,7 +272,7 @@ def iter_paths(root: Path, args: argparse.Namespace, include_root: bool = False)
 def looks_like_text(path: Path) -> bool:
     if path.suffix in TEXT_SUFFIXES:
         return True
-    if path.name in {"Dockerfile", "AGENTS.md", "CLAUDE.md", "README.md", ".gitignore", ".dockerignore"}:
+    if path.name in {"Dockerfile", "README.md", ".gitignore", ".dockerignore"}:
         return True
     return False
 

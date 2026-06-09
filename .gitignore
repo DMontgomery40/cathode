@@ -7,12 +7,6 @@ output/*
 batch_output.log
 reference_frames/
 .claude/
-!.claude/
-!.claude/launch.json
-!.claude/skills/
-!.claude/skills/bettube-studio-project-demo/
-!.claude/skills/bettube-studio-project-demo/**
-.claude/worktrees/
 .playwright-mcp/
 frontend/test-results/
 frontend/projects/
@@ -53,6 +47,13 @@ wheels/
 .installed.cfg
 *.egg
 .agents/
+AGENTS.md
+CLAUDE.md
+core/AGENTS.md
+prompts/AGENTS.md
+skills/**/agents/
+skills/**/references/
+skills/**/SKILL.md
 
 # Virtual environments
 venv/

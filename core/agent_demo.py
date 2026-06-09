@@ -12,7 +12,7 @@ from typing import Any
 from .project_store import load_plan
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-SKILL_PATH = REPO_ROOT / "skills" / "bettube-studio-project-demo" / "SKILL.md"
+LIVE_DEMO_SCRIPTS_PATH = REPO_ROOT / "skills" / "bettube-studio-project-demo" / "scripts"
 
 
 def available_agent_clis() -> dict[str, str]:
@@ -103,22 +103,22 @@ def build_agent_demo_prompt(
         "launch_command": str(launch_command or "").strip(),
         "expected_url": str(expected_url or "").strip(),
         "run_until": run_until,
-        "skill_path": str(SKILL_PATH),
+        "live_demo_scripts_path": str(LIVE_DEMO_SCRIPTS_PATH),
         "target_scenes": target_scenes,
     }
 
     return (
         "You are running as betTube Studio's explicit Agent Demo path.\n"
-        "This is separate from local video generation and should use the packaged live-demo workflow, not the image pipeline.\n\n"
+        "This is separate from local video generation and should use the live-demo capture workflow, not the image pipeline.\n\n"
         f"Repository root: {REPO_ROOT}\n"
-        f"Skill to use: {SKILL_PATH}\n"
+        f"Live-demo utility scripts: {LIVE_DEMO_SCRIPTS_PATH}\n"
         f"Existing betTube Studio project to update in place: {project_dir}\n"
         f"Demo target workspace: {resolved_workspace}\n"
         f"Target app URL (if already running): {str(app_url or '').strip() or '(infer or launch from workspace)'}\n"
         f"Launch command override: {str(launch_command or '').strip() or '(infer if possible)'}\n"
         f"Expected URL override: {str(expected_url or '').strip() or '(infer if possible)'}\n\n"
         "Goals:\n"
-        "1. Use the bettube-studio-project-demo workflow to capture fresh proof for the target video scenes.\n"
+        "1. Use the live-demo capture/review workflow to capture fresh proof for the target video scenes.\n"
         "2. Work scene-by-scene through the listed video scenes.\n"
         "3. For each target scene, ensure narration audio exists or generate it first so audio length becomes the timing source of truth.\n"
         "4. Capture/review/select footage, then trim or speed-adjust the chosen clip so it fits the narration intent.\n"
@@ -128,7 +128,7 @@ def build_agent_demo_prompt(
         "Important:\n"
         "- Treat projects/<project>/plan.json as the source of truth.\n"
         "- Do not create a brand new betTube Studio project; update the existing one in place.\n"
-        "- Prefer the packaged skill scripts and review loop over ad-hoc screenshots.\n"
+        "- Prefer the checked-in live-demo scripts and review loop over ad-hoc screenshots.\n"
         "- If a capture attempt looks weak, use the retry workflow instead of shipping it blindly.\n"
         "- Keep logs readable and explicit about what scene you are on and what command/script is running.\n\n"
         "Structured context:\n"

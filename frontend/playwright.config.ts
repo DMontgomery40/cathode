@@ -22,5 +22,5 @@ export default defineConfig({
       use: { ...devices['Desktop Chrome'] },
     },
   ],
-  // Servers are already running via .claude/launch.json -- no webServer config needed
+  // Servers are started outside Playwright for local e2e runs.
 })
