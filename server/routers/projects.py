@@ -133,7 +133,8 @@ def _project_asset_path(project_dir: Path, raw_path: Any) -> str | None:
 def _all_project_directory_names() -> list[str]:
     names = set(list_projects())
     for path in PROJECTS_DIR.iterdir():
-        if path.is_dir() and (path / ".bettube-studio" / "jobs").exists():
+        jobs_dir = path / ".bettube-studio" / "jobs"
+        if path.is_dir() and jobs_dir.exists() and any(jobs_dir.glob("*.json")):
             names.add(path.name)
     return sorted(names)
 
