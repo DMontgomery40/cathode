@@ -427,13 +427,16 @@ def _render_authored_image_fallback_candidate(
     candidate_dir.mkdir(parents=True, exist_ok=True)
     review_project_dir = candidate_dir / "project"
     review_project_dir.mkdir(parents=True, exist_ok=True)
-    image_profile = resolve_image_profile(plan.get("meta", {}).get("image_profile"))
-    provider = str(image_profile.get("provider") or "manual").strip().lower()
+    raw_image_profile = plan.get("meta", {}).get("image_profile")
+    raw_image_profile = raw_image_profile if isinstance(raw_image_profile, dict) else {}
+    image_profile = resolve_image_profile(raw_image_profile)
+    requested_provider = str(raw_image_profile.get("provider") or "").strip().lower()
+    provider = requested_provider if requested_provider in {"codex", "replicate", "local"} else str(image_profile.get("provider") or "manual").strip().lower()
     if provider == "manual":
         raise ValueError(
             f"Scene {scene.get('uid') or scene.get('id') or '(unknown)'} requested authored_image fallback but image generation is configured for manual visuals."
         )
-    model = str(image_profile.get("generation_model") or "").strip()
+    model = str(raw_image_profile.get("generation_model") or image_profile.get("generation_model") or "").strip()
     output_path = generate_scene_image(
         scene,
         review_project_dir,
@@ -486,7 +489,7 @@ def auto_scene_review_candidates(
             candidates.append(_render_native_fallback_candidate(project_dir, plan, scene, review_root=review_root_path))
         elif fallback == "authored_image":
             candidates.append(_render_authored_image_fallback_candidate(project_dir, plan, scene, review_root=review_root_path))
-    except (ValueError, FileNotFoundError):
+    except (RuntimeError, ValueError, FileNotFoundError):
         pass  # fallback not viable for this scene's family; proceed with primary only
     return candidates
 

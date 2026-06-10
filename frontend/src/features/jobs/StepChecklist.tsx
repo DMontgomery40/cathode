@@ -1,5 +1,5 @@
 import { clsx } from 'clsx'
-import type { JobStep, JobStepCategory, JobStepStatus } from '../../lib/api/jobs.ts'
+import { safeJobDetail, type JobStep, type JobStepCategory, type JobStepStatus } from '../../lib/api/jobs.ts'
 
 interface StepChecklistProps {
   steps: JobStep[]
@@ -132,6 +132,9 @@ function StepRow({ step }: { step: JobStep }) {
   const duration = formatDuration(step.duration_ms)
   const isFailed = step.status === 'failed'
   const isMuted = step.status === 'skipped' || step.status === 'cancelled' || step.status === 'pending'
+  const detail = safeJobDetail(step.detail)
+  const error = safeJobDetail(step.error || step.detail)
+  const hint = safeJobDetail(step.hint)
 
   return (
     <li
@@ -152,12 +155,12 @@ function StepRow({ step }: { step: JobStep }) {
           {step.label}
         </span>
 
-        {step.detail && !isFailed && (
+        {detail && !isFailed && (
           <span
             className="text-[var(--text-tertiary)] truncate"
             style={{ fontSize: 'var(--text-xs)' }}
           >
-            {step.detail}
+            {detail}
           </span>
         )}
 
@@ -171,7 +174,7 @@ function StepRow({ step }: { step: JobStep }) {
         )}
       </div>
 
-      {isFailed && (step.error || step.hint || step.detail) && (
+      {isFailed && (error || hint) && (
         <div
           className="flex flex-col gap-[2px] rounded-[var(--radius-md)] border border-[rgba(200,90,90,0.2)] bg-[rgba(200,90,90,0.08)]"
           style={{
@@ -179,17 +182,17 @@ function StepRow({ step }: { step: JobStep }) {
             padding: 'var(--space-2) var(--space-3)',
           }}
         >
-          {(step.error || step.detail) && (
+          {error && (
             <span
               className="text-[var(--signal-danger)] font-[family-name:var(--font-mono)]"
               style={{ fontSize: 'var(--text-xs)' }}
             >
-              {step.error || step.detail}
+              {error}
             </span>
           )}
-          {step.hint && (
+          {hint && (
             <span className="text-[var(--text-secondary)]" style={{ fontSize: 'var(--text-xs)' }}>
-              {step.hint}
+              {hint}
             </span>
           )}
         </div>

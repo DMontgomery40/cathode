@@ -79,6 +79,56 @@ export function jobStatusEmptyLabel(status: JobStatus | 'all' | 'active' | strin
   return `No ${jobStatusLabel(status).toLowerCase()} jobs`
 }
 
+export function safeJobDetail(value: string | null | undefined): string {
+  const text = String(value || '').trim()
+  if (!text) return ''
+
+  const withoutUrls = text
+    .replace(/\s*See\s+https?:\/\/\S+/gi, '')
+    .replace(/https?:\/\/\S+/gi, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+  const lower = withoutUrls.toLowerCase()
+
+  if (
+    lower.includes('request timed out')
+    || lower.includes('timed out')
+    || lower.includes('timeout')
+    || lower.includes('long request')
+    || lower.includes('long-request')
+    || lower.includes('interrupted')
+  ) {
+    return 'Provider request timed out or was interrupted. Retry after checking the network/proxy route.'
+  }
+
+  if (lower.includes('connection error') || lower.includes('connection reset') || lower.includes('dropped connection')) {
+    return 'Connection to the configured provider failed. Check the network/proxy route and retry.'
+  }
+
+  if (lower.includes('internalservererror') || lower.includes('status code: 500') || lower.includes(' 500 ')) {
+    return 'Configured provider returned an internal error. Retry or switch provider.'
+  }
+
+  if (lower.includes('rate limit') || lower.includes('too many requests') || lower.includes('status code: 429')) {
+    return 'Provider rate limit reached. Retry after the limit resets.'
+  }
+
+  if (lower.includes('authentication') || lower.includes('unauthorized') || lower.includes('status code: 401')) {
+    return 'Provider credentials were rejected. Check credentials and retry.'
+  }
+
+  const localPathMatch = text.match(/(?:\/Users|\/private|\/var|\/tmp)\/[^\s]+/i)
+  if (!localPathMatch) {
+    return withoutUrls.replace(/\bbackend=/gi, 'engine=')
+  }
+
+  const fileName = localPathMatch[0].split(/[\\/]/).filter(Boolean).pop()
+  if (fileName && /\.[A-Za-z0-9]{2,5}$/.test(fileName)) {
+    return `Saved artifact: ${fileName}`
+  }
+  return 'Local artifact saved.'
+}
+
 export interface JobLog {
   job_id: string
   project_name: string

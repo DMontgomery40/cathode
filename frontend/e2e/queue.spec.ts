@@ -189,6 +189,52 @@ test.describe('Queue Monitor', () => {
     await expect(page.getByText('agent-demo')).toHaveCount(0)
   })
 
+  test('provider failure details are operator-safe in job cards', async ({ page }) => {
+    const rawProviderError = 'Request timed out or interrupted. This could be due to a network timeout, dropped connection, or request cancellation. See https://docs.anthropic.com/en/api/errors#long-requests for more details.'
+    await page.route(`**/api/projects/${PROJECT}/jobs`, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([
+          {
+            status: 'failed',
+            job_id: 'provider-copy-regression-job',
+            project_name: PROJECT,
+            project_dir: `/tmp/${PROJECT}`,
+            kind: 'make_video',
+            current_stage: 'storyboard',
+            retryable: true,
+            suggestion: rawProviderError,
+            requested_stage: 'render',
+            created_utc: '2026-06-09T12:00:00Z',
+            updated_utc: '2026-06-09T12:05:00Z',
+            pid: null,
+            log_path: '',
+            request: { kind: 'make_video' },
+            result: {},
+            error: { message: rawProviderError },
+            steps: [
+              {
+                id: 'storyboard',
+                label: 'Storyboard',
+                category: 'storyboard',
+                status: 'failed',
+                detail: rawProviderError,
+                error: rawProviderError,
+              },
+            ],
+          },
+        ]),
+      })
+    })
+
+    await page.reload()
+    await expect(page.getByText('Provider request timed out or was interrupted. Retry after checking the network/proxy route.')).toBeVisible()
+    await expect(page.getByText('docs.anthropic.com')).toHaveCount(0)
+    await expect(page.getByText('long-requests')).toHaveCount(0)
+    await expect(page.getByText('Anthropic')).toHaveCount(0)
+  })
+
   // ── Filter keyboard focus ──────────────────────────────────────
   test('filter buttons are keyboard focusable', async ({ page }) => {
     const allBtn = page.locator('button:has-text("All")')

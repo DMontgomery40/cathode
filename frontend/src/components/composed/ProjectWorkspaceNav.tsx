@@ -20,7 +20,7 @@ const tabs = [
 
 export function ProjectWorkspaceNav({ projectId, plan, jobs }: ProjectWorkspaceNavProps) {
   const encodedProjectId = encodeURIComponent(projectId)
-  const mode = plan ? projectModeFromPlan(plan) : projectModeFromJob(jobs?.[0]) ?? projectModeFromPlan(plan)
+  const mode = plan ? projectModeFromPlan(plan) : projectModeFromJob(jobs?.[0])
 
   return (
     <nav
@@ -52,9 +52,11 @@ export function ProjectWorkspaceNav({ projectId, plan, jobs }: ProjectWorkspaceN
             </NavLink>
           ))}
         </div>
-        <Badge variant={mode.id === 'vertical_short' ? 'active' : 'default'} size="sm">
-          {mode.badge}
-        </Badge>
+        {mode && (
+          <Badge variant={mode.id === 'vertical_short' ? 'active' : 'default'} size="sm">
+            {mode.badge}
+          </Badge>
+        )}
       </div>
     </nav>
   )

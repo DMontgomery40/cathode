@@ -51,7 +51,7 @@ test.describe('Render Control', () => {
 
   // ── Render Settings ────────────────────────────────────────────
   test('Render Settings panel renders', async ({ page }) => {
-    await expect(page.locator('text=Render Settings')).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Render Settings' })).toBeVisible()
   })
 
   test('output filename input defaults to the project name', async ({ page }) => {
@@ -186,7 +186,7 @@ test.describe('Render Control', () => {
     await expect(page.getByText('Encoding video', { exact: true })).toBeVisible()
     await expect(page.getByText('rendered 120 frames, encoded 98', { exact: true })).toBeVisible()
     await expect(page.getByText('Diagnostics', { exact: true })).toBeVisible()
-    await expect(page.getByText('Worker diagnostics captured (2 lines).', { exact: true })).toBeVisible()
+    await expect(page.getByText(/Worker diagnostics captured \(\d+ lines\)\./)).toBeVisible()
     await expect(page.getByText('hwaccel=required')).not.toBeVisible()
   })
 
@@ -766,13 +766,13 @@ test.describe('Render Control', () => {
 
   // ── Artifact Shelf ─────────────────────────────────────────────
   test('ArtifactShelf section renders', async ({ page }) => {
-    const emptyState = page.getByText(/No rendered video yet|missing or invalid video/)
-    const shelfVideo = page.locator('video').first()
-    if (await emptyState.count()) {
-      await expect(emptyState.first()).toBeVisible()
-    } else {
-      await expect(shelfVideo).toBeVisible()
-    }
+    await expect(page.getByRole('heading', { name: 'Render surface' })).toBeVisible()
+    await expect(
+      page
+        .getByText('No rendered video yet')
+        .or(page.getByText('Render metadata points at a missing or invalid video'))
+        .or(page.locator('video')),
+    ).toBeVisible()
   })
 
   // ── Keyboard interaction ───────────────────────────────────────

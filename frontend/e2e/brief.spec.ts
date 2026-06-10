@@ -511,6 +511,120 @@ test.describe('Brief Studio', () => {
       await expect(page.getByRole('button', { name: 'Rebuild Storyboard' })).toBeVisible()
     })
 
+    test('job-only short-form projects wait for the launch brief instead of showing a blank standard form', async ({ page }) => {
+      const project = 'job_only_short_launch_brief'
+      let releaseJobs!: () => void
+      const jobsReady = new Promise<void>((resolve) => {
+        releaseJobs = resolve
+      })
+
+      await page.route('**/api/bootstrap', async (route) => {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify(MOCK_BOOTSTRAP),
+        })
+      })
+      await page.route('**/api/short-form/options', async (route) => {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            tiers: [
+              { value: 'dev-native-credible', label: 'Technical proof', description: 'Proof-first and technically credible.' },
+            ],
+            approaches: [
+              { value: 'public-reframe', label: 'Public reframe', description: 'Fresh vertical concept.' },
+            ],
+            caption_strategies: [
+              { value: 'meaning-card-captions', label: 'Meaning-card captions', description: 'Phrase-level cards.' },
+            ],
+            platform_targets: [
+              { value: 'tiktok', label: 'TikTok', description: 'Fast cold-feed watch.' },
+              { value: 'youtube-shorts', label: 'YouTube Shorts', description: 'Context and payoff clarity.' },
+            ],
+            run_until: [],
+            defaults: {
+              short_form_tier: 'dev-native-credible',
+              approach: 'public-reframe',
+              caption_strategy: 'meaning-card-captions',
+              platform_targets: ['tiktok', 'youtube-shorts'],
+              runtime_seconds: 42,
+              run_until: 'render',
+              render_profile: { aspect_ratio: '9:16', width: 928, height: 1664, fps: 30 },
+            },
+          }),
+        })
+      })
+      await page.route(`**/api/projects/${project}/plan`, async (route) => {
+        await route.fulfill({
+          status: 404,
+          contentType: 'application/json',
+          body: JSON.stringify({ detail: 'Project plan not found.' }),
+        })
+      })
+      await page.route(`**/api/projects/${project}/jobs`, async (route) => {
+        await jobsReady
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify([
+            {
+              status: 'running',
+              job_id: 'job-only-short',
+              project_name: project,
+              project_dir: `/tmp/${project}`,
+              kind: 'make_video',
+              current_stage: 'storyboard',
+              retryable: false,
+              suggestion: '',
+              requested_stage: 'render',
+              created_utc: '2026-06-09T20:00:00Z',
+              updated_utc: '2026-06-09T20:01:00Z',
+              pid: 1234,
+              result: {},
+              error: null,
+              request: {
+                brief: {
+                  project_name: project,
+                  source_mode: 'source_text',
+                  short_form_format: 'vertical_short',
+                  short_form_tier: 'dev-native-credible',
+                  short_form_approach: 'public-reframe',
+                  short_form_duration_seconds: 42,
+                  platform_targets: ['tiktok', 'youtube-shorts'],
+                  caption_strategy: 'meaning-card-captions',
+                  target_length_minutes: 0.7,
+                  source_material: 'Launch brief source from persisted job request.',
+                  video_goal: 'Show that a job-only project keeps its launch brief.',
+                  audience: 'technical viewers',
+                  hook_promise: 'The queued job has the real brief.',
+                  payoff: 'The brief tab opens the correct short-form request.',
+                  tone: 'fast and clear',
+                  visual_style: '9:16 vertical short-form',
+                },
+                render_profile: { aspect_ratio: '9:16', width: 928, height: 1664, fps: 30 },
+              },
+            },
+          ]),
+        })
+      })
+
+      await page.goto(`/projects/${project}/brief`)
+      await expect(page.getByText('Loading project...')).toBeVisible()
+      await expect(page.getByLabel('Output Type')).toHaveCount(0)
+
+      releaseJobs()
+
+      await expect(page.getByRole('heading', { name: 'Short-form brief' })).toBeVisible()
+      await expect(page.getByText('Showing the launch brief from the latest job record until the project plan finishes writing.')).toBeVisible()
+      await expect(page.getByLabel('Project Name')).toHaveValue(project)
+      await expect(page.getByLabel('Output Type')).toHaveValue('vertical_short')
+      await expect(page.getByLabel('Source Material')).toHaveValue('Launch brief source from persisted job request.')
+      await expect(page.getByLabel('Hook Promise')).toHaveValue('The queued job has the real brief.')
+      await expect(page.getByText('Vertical short 9:16 928x1664')).toBeVisible()
+    })
+
     test('style reference upload uses multipart form data', async ({ page }) => {
       await page.goto(`/projects/${EXISTING_PROJECT}/brief`)
       await expect(page.getByRole('heading', { name: 'Providers' })).toBeVisible({ timeout: 10000 })

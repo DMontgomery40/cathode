@@ -73,7 +73,7 @@ export function BriefStudio() {
   const { data: bootstrap } = useBootstrap()
   const { data: shortFormOptions } = useShortFormOptions()
   const { data: plan, isLoading: planLoading } = usePlan(projectId)
-  const { data: jobs } = useProjectJobs(projectId, { enabled: !isNew, refetchInterval: plan ? undefined : 3000 })
+  const { data: jobs, isLoading: jobsLoading } = useProjectJobs(projectId, { enabled: !isNew, refetchInterval: plan ? undefined : 3000 })
 
   const createProject = useCreateProject()
   const rebuildStoryboard = useRebuildStoryboard(projectId)
@@ -90,6 +90,7 @@ export function BriefStudio() {
         ? getApiErrorMessage(rebuildStoryboard.error, 'Storyboard rebuild failed.')
         : null
   const jobBrief = useMemo(() => latestJobRequestBrief(jobs), [jobs])
+  const hasJobBrief = Object.keys(jobBrief).length > 0
   const briefMeta = (plan?.meta?.brief as Record<string, unknown> | undefined) ?? jobBrief
   const agentDemoProfile = (plan?.meta?.agent_demo_profile as Record<string, unknown> | undefined) ?? {}
 
@@ -101,7 +102,9 @@ export function BriefStudio() {
     ...(plan?.meta?.project_name ? { project_name: plan.meta.project_name as string } : {}),
     ...(!plan?.meta?.project_name && !jobBrief.project_name && !isNew ? { project_name: projectId } : {}),
   }), [bootstrap, isNew, jobBrief, plan, projectId])
-  const usingJobBriefFallback = !plan && Object.keys(jobBrief).length > 0
+  const usingJobBriefFallback = !plan && hasJobBrief
+  const waitingForExistingProjectBrief = !isNew && !plan && !hasJobBrief && (planLoading || jobsLoading)
+  const existingProjectBriefUnavailable = !isNew && !plan && !hasJobBrief && !planLoading && !jobsLoading
   const isShortFormBrief = defaults.short_form_format === 'vertical_short'
 
   const styleRefs = briefMeta.style_reference_paths as string[] | undefined
@@ -223,7 +226,7 @@ export function BriefStudio() {
     { label: isNew ? 'New Project' : projectId },
   ]
 
-  if (!isNew && planLoading && !usingJobBriefFallback) {
+  if (waitingForExistingProjectBrief) {
     return (
       <div className="flex flex-col h-full">
         <WorkspaceHeader
@@ -237,6 +240,35 @@ export function BriefStudio() {
           <p className="text-[var(--text-tertiary)]" style={{ fontSize: 'var(--text-sm)' }}>
             Loading project...
           </p>
+        </div>
+      </div>
+    )
+  }
+
+  if (existingProjectBriefUnavailable) {
+    return (
+      <div className="flex flex-col h-full">
+        <WorkspaceHeader
+          title="Brief Studio"
+          subtitle={projectId}
+          breadcrumbs={breadcrumbs}
+        />
+        <ProjectWorkspaceNav projectId={projectId} plan={plan} jobs={jobs} />
+        <div
+          className="flex-1 flex items-center justify-center"
+          style={{ padding: 'var(--space-8)' }}
+        >
+          <div
+            className="max-w-[520px] rounded-[var(--radius-lg)] border border-[var(--border-subtle)] bg-[var(--surface-panel)] text-[var(--text-secondary)]"
+            style={{ padding: 'var(--space-5)', fontSize: 'var(--text-sm)' }}
+          >
+            <h2 className="m-0 text-[var(--text-primary)]" style={{ fontSize: 'var(--text-lg)', fontWeight: 'var(--weight-semibold)' }}>
+              Brief unavailable
+            </h2>
+            <p className="m-0 mt-[var(--space-2)]">
+              This project does not have a saved plan or launch brief yet. Open its queue to inspect the latest job state before editing.
+            </p>
+          </div>
         </div>
       </div>
     )
@@ -272,7 +304,7 @@ export function BriefStudio() {
                       fontSize: 'var(--text-sm)',
                     }}
                   >
-                    Showing the launch brief from the active job until the project plan finishes writing.
+                    Showing the launch brief from the latest job record until the project plan finishes writing.
                   </div>
                 )}
                 {actionError && (

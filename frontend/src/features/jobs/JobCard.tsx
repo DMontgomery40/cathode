@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { clsx } from 'clsx'
 import { GlassPanel } from '../../components/primitives/GlassPanel.tsx'
 import { DetailGrid } from '../../components/composed/DetailGrid.tsx'
-import { getRenderBackendMeta, jobStatusLabel, type Job } from '../../lib/api/jobs.ts'
+import { getRenderBackendMeta, jobStatusLabel, safeJobDetail, type Job } from '../../lib/api/jobs.ts'
 import { useJobLog } from '../../lib/api/scene-hooks.ts'
 import StepChecklist from './StepChecklist.tsx'
 
@@ -38,8 +38,8 @@ function stageLabel(value?: string): string {
 
 function errorMessage(error: Job['error']): string {
   if (!error) return ''
-  if (typeof error === 'string') return error
-  return error.operatorHint || error.message || ''
+  if (typeof error === 'string') return safeJobDetail(error)
+  return safeJobDetail(error.operatorHint || error.message || '')
 }
 
 function logLineCount(content?: string): number {
@@ -160,9 +160,9 @@ export function JobCard({ job, project, onCancel }: JobCardProps) {
               {prettyError}
             </div>
           )}
-          {job.suggestion && (
+          {safeJobDetail(job.suggestion) && (
             <div className="text-[var(--text-secondary)]" style={{ fontSize: 'var(--text-xs)' }}>
-              {job.suggestion}
+              {safeJobDetail(job.suggestion)}
             </div>
           )}
 

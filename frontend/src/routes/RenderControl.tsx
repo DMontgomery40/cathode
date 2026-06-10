@@ -17,7 +17,7 @@ import {
   useSavePlan,
 } from '../lib/api/scene-hooks.ts'
 import type { Job } from '../lib/api/jobs.ts'
-import { WorkspaceCanvas, WorkspaceGrid, WorkspacePanel } from '../design-system/recipes'
+import { WorkspaceCanvas, WorkspaceEmptyState, WorkspaceGrid, WorkspacePanel } from '../design-system/recipes'
 import { sceneHasRenderableAudio, sceneHasRenderableVisual } from '../lib/scene-media.ts'
 import { useInvalidateProjectOnJobCompletion } from '../lib/api/project-job-sync.ts'
 import { resolveRenderOutputFilename } from '../lib/render-output.ts'
@@ -41,7 +41,7 @@ function resolveTextRenderMode(
 
 export function RenderControl() {
   const { projectId = '' } = useParams<{ projectId: string }>()
-  const { data: plan } = usePlan(projectId)
+  const { data: plan, isError: planError, isFetching: planFetching, isLoading: planLoading } = usePlan(projectId)
   const { data: jobs } = useProjectJobs(projectId, { refetchInterval: 2000 })
   const startRender = useStartRender(projectId)
   const genAssets = useGenerateAssets(projectId)
@@ -51,6 +51,9 @@ export function RenderControl() {
   const [outputFilenameDraft, setOutputFilenameDraft] = useState<{ projectId: string; value: string } | null>(null)
   const [fpsDraft, setFpsDraft] = useState<{ projectId: string; value: number } | null>(null)
   const [textRenderModeDraft, setTextRenderModeDraft] = useState<{ projectId: string; value: string } | null>(null)
+
+  const allJobs = jobs ?? []
+  const hasAnyActiveJob = allJobs.some((job) => job.status === 'queued' || job.status === 'running')
 
   const scenes = plan?.scenes ?? []
   const renderProfile = plan?.meta?.render_profile ?? null
@@ -88,7 +91,7 @@ export function RenderControl() {
   const scenesWithAudio = scenes.filter((s) => sceneHasRenderableAudio(projectId, s))
   const allReady = scenes.length > 0 && scenesWithVisual.length === scenes.length && scenesWithAudio.length === scenes.length
 
-  const renderJobs = [...(jobs ?? [])]
+  const renderJobs = [...allJobs]
     .filter((j) => j.requested_stage === 'render' || j.requested_stage === 'assets' || j.current_stage === 'render' || j.current_stage === 'assets')
     .sort((left, right) => {
       const leftTime = left.updated_utc ? new Date(left.updated_utc).valueOf() : 0
@@ -131,6 +134,33 @@ export function RenderControl() {
     enabled: Boolean(activeRenderJob ?? latestRenderJob),
     tailLines: 160,
   })
+
+  if (!plan) {
+    const loading = planLoading || planFetching
+    return (
+      <div className="flex flex-col h-full">
+        <WorkspaceHeader
+          title="Render"
+          subtitle={projectId}
+          breadcrumbs={[
+            { label: 'Projects', href: '/projects' },
+            { label: projectId, href: `/projects/${projectId}/scenes` },
+            { label: 'Render' },
+          ]}
+          status={planError ? 'error' : hasAnyActiveJob ? 'rendering' : 'idle'}
+        />
+        <ProjectWorkspaceNav projectId={projectId} plan={plan} jobs={jobs} />
+        <WorkspaceCanvas>
+          <WorkspaceEmptyState
+            title={loading ? 'Loading project render state' : 'Project render state unavailable'}
+            copy={loading
+              ? 'Waiting for the project plan and render metadata before showing output, settings, or readiness.'
+              : 'The project plan is not available yet. Check the queue for active work or retry after the project plan is written.'}
+          />
+        </WorkspaceCanvas>
+      </div>
+    )
+  }
 
   const handleOutputFilenameChange = (value: string) => {
     setOutputFilenameDraft({ projectId, value })
@@ -184,7 +214,7 @@ export function RenderControl() {
         ]}
         status={status}
       />
-      <ProjectWorkspaceNav projectId={projectId} plan={plan} />
+      <ProjectWorkspaceNav projectId={projectId} plan={plan} jobs={jobs} />
 
       <WorkspaceCanvas>
         <WorkspaceGrid

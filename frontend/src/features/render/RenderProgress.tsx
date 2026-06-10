@@ -1,6 +1,6 @@
 import { clsx } from 'clsx'
 import { GlassPanel } from '../../components/primitives/GlassPanel.tsx'
-import { getRenderBackendMeta, type Job } from '../../lib/api/jobs.ts'
+import { getRenderBackendMeta, safeJobDetail, type Job } from '../../lib/api/jobs.ts'
 import StepChecklist from '../jobs/StepChecklist.tsx'
 
 interface RenderProgressProps {
@@ -56,7 +56,7 @@ export function RenderProgress({ job, logContent, onCancel }: RenderProgressProp
   const progress = job.progress ?? 0
   const prettyError = typeof job.error === 'string' ? job.error : job.error?.operatorHint || job.error?.message
   const progressLabel = job.progress_label || (isActive ? 'Working' : 'Last run')
-  const progressDetail = job.progress_detail || job.suggestion || ''
+  const progressDetail = safeJobDetail(job.progress_detail || job.suggestion || '')
 
   const { warning: backendWarning, used: backendUsed } = getRenderBackendMeta(job.result)
   const renderEngineWarning = backendWarning
