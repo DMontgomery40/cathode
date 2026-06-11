@@ -81,7 +81,7 @@ Text in images:
 Staging handoff:
 - Keep staging direction high-level and creative. Describe the feel, pacing, hierarchy, callout logic, and composition, not renderer APIs.
 - Use `composition_intent` sparingly and only as a thin high-level hint when the family or layout is unusually obvious and important to preserve, such as a ranked data layout or software-demo callout.
-- For clinical, patient-facing, or data-heavy explainers, keep stillness as the default and author exact labels into the visual prompt. Do not ask for `media_pan`. Do not add decorative fades.
+- For data-heavy explainers, keep stillness as the default and author exact labels into the visual prompt. Do not ask for `media_pan`. Do not add decorative fades.
 
 What to avoid:
 - Generic corporate bullet slides with no visual drama.

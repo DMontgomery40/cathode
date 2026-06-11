@@ -193,21 +193,6 @@ def test_generate_with_claude_print_parses_structured_output(monkeypatch):
     assert "LOCAL CLAUDE CODE PRINT-MODE CONTEXT" in captured["kwargs"]["input"]
 
 
-def test_director_system_prompt_selects_clinical_data_authored_stills_capability():
-    prompt = build_director_system_prompt(
-        normalize_brief(
-            {
-                "source_mode": "source_text",
-                "video_goal": "Educate the patient on their assessment data.",
-                "audience": "The patient whose report this is.",
-                "source_material": "Assessment results across sessions with reference ranges and follow-up recommendations.",
-            }
-        )
-    )
-
-    assert "Capability mode: authored clinical data stills." in prompt
-
-
 def test_director_system_prompt_selects_promoted_examples(tmp_path, monkeypatch):
     examples_dir = tmp_path / "director_examples"
     example_dir = examples_dir / "multi_voice_pitch__v1"
@@ -335,22 +320,6 @@ def test_director_prompt_mentions_reviewed_footage_assets():
     assert '"footage_asset_id"' in prompt
 
 
-def test_director_prompt_warns_clinical_results_explainers_away_from_camera_pan():
-    prompt = _build_storyboard_user_prompt_from_brief(
-        normalize_brief(
-            {
-                "project_name": "clinical_results_demo",
-                "source_mode": "source_text",
-                "video_goal": "Explain the patient assessment results clearly.",
-                "audience": "The patient whose report this is.",
-                "source_material": "Assessment results across sessions with reference ranges and test scores.",
-            }
-        )
-    )
-
-    assert "prefer calm authored stills with exact labels, charts, and comparison layouts rather than camera-pan treatment" in prompt
-
-
 def test_director_prompt_uses_tighter_runtime_budget_for_longer_videos():
     prompt = _build_storyboard_user_prompt_from_brief(
         normalize_brief(
@@ -372,121 +341,47 @@ def test_director_prompt_uses_tighter_runtime_budget_for_longer_videos():
     assert "Aim for the finished storyboard to land roughly within 85%-115% of the requested runtime" in prompt
 
 
-def test_director_clinical_template_prompt_forbids_transitions():
-    """Clinical template system prompt must instruct hard cuts, no transitions."""
-    prompt = build_director_system_prompt(
-        normalize_brief(
-            {
-                "source_mode": "source_text",
-                "video_goal": "Educate the patient on their assessment data.",
-                "audience": "The patient whose report this is.",
-                "source_material": "Assessment results across sessions with reference ranges.",
-                "text_render_mode": "deterministic_overlay",
-            }
-        ),
-        provider="anthropic",
-    )
-
-    assert "transition_after to null" in prompt or "transition_after" in prompt
-    assert "hard cut" in prompt.lower() or "Hard cuts" in prompt
-
-
-def test_director_clinical_template_prompt_documents_brain_region_names():
-    """Clinical template prompt must list the recognized brain region names for coordinate mapping."""
-    prompt = build_director_system_prompt(
-        normalize_brief(
-            {
-                "source_mode": "source_text",
-                "video_goal": "Educate the patient on their assessment data.",
-                "audience": "The patient whose report this is.",
-                "source_material": "Assessment results across sessions.",
-                "text_render_mode": "deterministic_overlay",
-            }
-        ),
-        provider="anthropic",
-    )
-
-    for region in ["Frontal", "Central", "Parietal", "Temporal", "Occipital"]:
-        assert region in prompt, f"Missing region {region!r} from brain_region_focus coordinate table"
-
-
 def test_director_deterministic_overlay_prefers_template_families_over_authored_stills():
-    """When deterministic overlay is active on a clinical brief, the prompt should tell the director
-    to prefer clinical template families, not authored stills."""
-    prompt_user = _build_storyboard_user_prompt_from_brief(
-        normalize_brief(
-            {
-                "source_mode": "source_text",
-                "video_goal": "Educate the patient on their assessment data.",
-                "audience": "The patient whose report this is.",
-                "source_material": "Assessment results across sessions with reference ranges.",
-                "text_render_mode": "deterministic_overlay",
-            }
-        )
+    """When deterministic overlay is active, the prompt should tell the director
+    to prefer template deck families, not authored stills."""
+    deterministic_brief = normalize_brief(
+        {
+            "source_mode": "source_text",
+            "video_goal": "Explain the quarterly results clearly.",
+            "audience": "Account holders reviewing their report.",
+            "source_material": "Results across sessions with reference ranges.",
+            "text_render_mode": "deterministic_overlay",
+        }
     )
+    prompt_user = _build_storyboard_user_prompt_from_brief(deterministic_brief)
     # Should NOT say "prefer calm authored stills"
     assert "prefer calm authored stills" not in prompt_user
-    # Should say to use clinical template families
-    assert "clinical template composition families" in prompt_user
+    # Should say to use template deck families
+    assert "template deck composition families" in prompt_user
     assert "three_data_stage" in prompt_user  # mentions reserving it
 
-    prompt_system = build_director_system_prompt(
-        normalize_brief(
-            {
-                "source_mode": "source_text",
-                "video_goal": "Educate the patient on their assessment data.",
-                "audience": "The patient whose report this is.",
-                "source_material": "Assessment results across sessions with reference ranges.",
-                "text_render_mode": "deterministic_overlay",
-            }
-        ),
-        provider="anthropic",
-    )
+    prompt_system = build_director_system_prompt(deterministic_brief, provider="anthropic")
     # Registry constraints should prefer templates
-    assert "prefer the clinical template composition families" in prompt_system
+    assert "prefer the template deck composition families" in prompt_system
     # Should NOT say "prefer authored stillness" when deterministic overlay is active
     assert "prefer authored stillness" not in prompt_system
 
 
-def test_director_visual_authored_clinical_still_prefers_authored_stills():
-    """When visual_authored is active on a clinical brief, the prompt should still prefer authored stills."""
-    prompt_user = _build_storyboard_user_prompt_from_brief(
+def test_director_visual_authored_brief_prefers_authored_stillness():
+    """Without deterministic overlay, the registry constraints should prefer authored stillness."""
+    prompt_system = build_director_system_prompt(
         normalize_brief(
             {
                 "source_mode": "source_text",
-                "video_goal": "Educate the patient on their assessment data.",
-                "audience": "The patient whose report this is.",
-                "source_material": "Assessment results across sessions with reference ranges.",
+                "video_goal": "Explain the quarterly results clearly.",
+                "audience": "Account holders reviewing their report.",
+                "source_material": "Results across sessions with reference ranges.",
                 "text_render_mode": "visual_authored",
-            }
-        )
-    )
-    assert "prefer calm authored stills" in prompt_user
-
-
-def test_director_clinical_template_diversity_guidance():
-    """Clinical template prompt should include the family selection table and diversity requirement."""
-    prompt = build_director_system_prompt(
-        normalize_brief(
-            {
-                "source_mode": "source_text",
-                "video_goal": "Educate the patient on their assessment data.",
-                "audience": "The patient whose report this is.",
-                "source_material": "Assessment results across sessions.",
-                "text_render_mode": "deterministic_overlay",
             }
         ),
         provider="anthropic",
     )
-    # Should have the family selection table differentiating from three_data_stage
-    assert "metric_improvement" in prompt
-    assert "brain_region_focus" in prompt
-    assert "metric_comparison" in prompt
-    assert "timeline_progression" in prompt
-    assert "analogy_metaphor" in prompt
-    assert "synthesis_summary" in prompt
-    # Diversity requirement
-    assert "at least 7 different template families" in prompt
+    assert "keep stillness as the default" in prompt_system
 
 
 def test_generate_storyboard_repairs_openai_storyboard_when_runtime_budget_is_blown(monkeypatch):

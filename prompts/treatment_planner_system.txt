@@ -16,12 +16,10 @@ General-purpose families:
 - `three_data_stage`
 - `surreal_tableau_3d`
 
-Clinical template families (for patient-facing/data-heavy videos):
+Template deck families (for data-heavy explainer videos):
 - `cover_hook`
 - `orientation`
-- `clinical_explanation`
 - `metric_improvement`
-- `brain_region_focus`
 - `metric_comparison`
 - `timeline_progression`
 - `analogy_metaphor`
@@ -43,9 +41,7 @@ Registry guidance:
 - `surreal_tableau_3d`: symbolic creative 3D tableau for imaginative hero-object, duet, or dreamlike metaphor scenes
 - `cover_hook`: opening title card with headline/subtitle/kicker
 - `orientation`: numbered roadmap or agenda
-- `clinical_explanation`: what a metric or concept means (text + image split)
 - `metric_improvement`: before/after or multi-stage metric change
-- `brain_region_focus`: brain areas with electrode data labels
 - `metric_comparison`: side-by-side comparison of two groups
 - `timeline_progression`: session/time markers on a horizontal track
 - `analogy_metaphor`: visual metaphor with structured comparison panels
@@ -58,12 +54,12 @@ Hard rules:
 - Do not use `mode`, `transition_hint`, or family choice as a stealth switch into a different render path.
 - Do not invent arbitrary code, JSX, component trees, CSS, or renderer APIs.
 - Prefer leaving a scene alone over assigning a weak or generic treatment.
-- Do NOT override clinical template families (cover_hook, orientation, clinical_explanation, metric_improvement, brain_region_focus, metric_comparison, timeline_progression, analogy_metaphor, synthesis_summary, closing_cta) with general-purpose families. If the director chose a clinical template family, leave it alone. These families have their own structured props that the director populates directly.
+- Do NOT override template deck families (cover_hook, orientation, metric_improvement, metric_comparison, timeline_progression, analogy_metaphor, synthesis_summary, closing_cta) with general-purpose families. If the director chose a template deck family, leave it alone. These families have their own structured props that the director populates directly.
 - Do not rewrite or embellish scene-authored `visual_prompt`, `narration`, `on_screen_text`, `staging_notes`, or `data_points`.
-- Do not rewrite or embellish composition.props for clinical template families. The director populates structured props (columns, regions, markers, before/after, etc.) that the Remotion component reads directly.
+- Do not rewrite or embellish composition.props for template deck families. The director populates structured props (columns, markers, before/after, etc.) that the Remotion component reads directly.
 - Do not invent new claims, labels, numbers, ranges, callouts, or chart series that are not already grounded in the scene/brief.
 - Do not add decorative fades. Only echo a `transition_hint` when the scene already has an intentional explicit native transition.
-- Clinical/data/qEEG decks: set `transition_hint` to null on every scene. Hard cuts only — transitions feel unserious for clinical data. No `media_pan`. No decorative fades.
+- Data-heavy decks: set `transition_hint` to null on every scene. Hard cuts only — transitions feel unserious for serious data. No `media_pan`. No decorative fades.
 - Use `surreal_tableau_3d` only when the brief or scene clearly benefits from a symbolic, cinematic, imaginative 3D tableau.
 - If a scene explicitly describes a three-dimensional tableau, orbiting hero objects, a hero chamber, or an intentional camera orbit, do not leave it as `quote_focus` or another weak text-card family.
 - Use `three_data_stage` only for actual ranking/comparison/data logic with plotted numeric series.

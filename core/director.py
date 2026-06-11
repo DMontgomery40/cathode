@@ -211,15 +211,15 @@ def _director_manifestation_path_contract() -> str:
 def _director_supported_family_registry_constraints(brief: dict[str, Any] | None = None) -> str:
     deterministic = (normalize_brief(brief or {}).get("text_render_mode") == "deterministic_overlay") if brief else False
     if deterministic:
-        clinical_line = (
-            "- For patient-facing clinical, medical, or data-heavy explainers with deterministic overlay active, "
-            "prefer the clinical template composition families over authored images for every structured-information scene. "
+        data_heavy_line = (
+            "- For data-heavy explainers with deterministic overlay active, "
+            "prefer the template deck composition families over authored images for every structured-information scene. "
             "Reserve `three_data_stage` only for scenes that genuinely need a numeric chart with plotted data series. "
             "Do not choose `media_pan`. Do not ask for decorative fades."
         )
     else:
-        clinical_line = (
-            "- For patient-facing clinical, medical, or data-heavy explainers, prefer authored stillness "
+        data_heavy_line = (
+            "- For data-heavy explainers, prefer authored stillness "
             "unless the brief explicitly asks for motion or the scene truly needs deterministic data staging. "
             "Do not choose `media_pan`. Do not ask for decorative fades."
         )
@@ -228,7 +228,7 @@ def _director_supported_family_registry_constraints(brief: dict[str, Any] | None
 - betTube Studio remains registry-based. Do not generate arbitrary TSX, JSX, React components, renderer APIs, or freeform Remotion code.
 - Use `manifestation_plan.native_family_hint` only when the scene unmistakably maps to a supported betTube Studio family already named in betTube Studio prompt context, such as `three_data_stage` for deterministic data staging or `surreal_tableau_3d` for a true 3D tableau.
 - `native_build_prompt` should elaborate the art direction for a native family, not invent a new family or bypass the registry.
-{clinical_line}
+{data_heavy_line}
 """
 
 
@@ -392,39 +392,6 @@ def _brief_intent_text(brief: dict[str, Any]) -> str:
     return "\n".join(str(value or "").strip() for value in parts if str(value or "").strip()).lower()
 
 
-def _brief_wants_clinical_data_authored_stills(brief: dict[str, Any]) -> bool:
-    text = _brief_intent_text(brief)
-    patient_context_phrases = (
-        "patient",
-        "patients",
-        "clinician",
-        "clinical",
-        "medical",
-        "assessment",
-        "report",
-        "findings",
-        "results",
-        "follow-up",
-        "follow up",
-    )
-    data_context_phrases = (
-        "data",
-        "metrics",
-        "measure",
-        "measurements",
-        "test",
-        "tests",
-        "sessions",
-        "reference range",
-        "baseline",
-        "scores",
-        "results",
-    )
-    has_patient_context = any(phrase in text for phrase in patient_context_phrases)
-    has_data_context = any(phrase in text for phrase in data_context_phrases) or "|---|" in text
-    return has_patient_context and has_data_context
-
-
 def _brief_requests_multi_voice(brief: dict[str, Any]) -> bool:
     text = _brief_intent_text(brief)
     phrases = (
@@ -550,8 +517,6 @@ def _director_capability_prompt_names(brief: dict[str, Any]) -> list[str]:
     native_renderer_requested = _brief_explicitly_requests_native_renderer(normalized)
     if text_render_mode == "deterministic_overlay":
         names.append("director_capability_text_render_deterministic_overlay")
-    if _brief_wants_clinical_data_authored_stills(normalized):
-        names.append("director_capability_clinical_data_authored_stills")
 
     composition_mode = normalized.get("composition_mode")
     if composition_mode == "hybrid" and native_renderer_requested:
@@ -667,10 +632,6 @@ def build_director_system_prompt(
         content = load_optional_prompt(name).strip()
         if content:
             sections.append(content)
-    if provider != "openai" and native_renderer_requested and _brief_wants_clinical_data_authored_stills(normalized):
-        clinical_template_content = load_optional_prompt("director_clinical_template_system_prompt").strip()
-        if clinical_template_content:
-            sections.append(clinical_template_content)
     examples = _selected_director_examples(normalized)
     if examples:
         sections.append("Promoted betTube Studio examples:\n\n" + "\n\n---\n\n".join(examples))
@@ -813,22 +774,16 @@ def _build_storyboard_user_prompt_from_brief(brief: dict[str, Any]) -> str:
     behavior = SOURCE_MODE_BEHAVIOR.get(source_mode, SOURCE_MODE_BEHAVIOR["source_text"])
     low_words, high_words = _target_words_from_minutes(normalized["target_length_minutes"])
     scene_count_guidance = _scene_count_guidance_from_minutes(normalized["target_length_minutes"])
-    clinical_data_guidance = ""
-    if _brief_wants_clinical_data_authored_stills(normalized):
-        if native_renderer_requested and normalized.get("text_render_mode") == "deterministic_overlay":
-            clinical_data_guidance = (
-                '- For patient-facing clinical or results explainers with deterministic overlay active, '
-                'use the clinical template composition families for every structured-information scene. '
-                'Use the FULL catalog of template families — cover_hook, orientation, clinical_explanation, '
-                'metric_improvement, brain_region_focus, metric_comparison, timeline_progression, '
-                'analogy_metaphor, synthesis_summary, closing_cta — not just three_data_stage. '
-                'Reserve three_data_stage ONLY for scenes that need a plotted numeric chart with data series and reference bands.\n'
-            )
-        else:
-            clinical_data_guidance = (
-                '- For patient-facing clinical or results explainers, prefer calm authored stills with exact labels, charts, '
-                'and comparison layouts rather than camera-pan treatment unless the brief explicitly asks for motion.\n'
-            )
+    structured_data_guidance = ""
+    if native_renderer_requested and normalized.get("text_render_mode") == "deterministic_overlay":
+        structured_data_guidance = (
+            '- For data-heavy explainers with deterministic overlay active, '
+            'use the template deck composition families for every structured-information scene. '
+            'Use the FULL catalog of template families — cover_hook, orientation, '
+            'metric_improvement, metric_comparison, timeline_progression, '
+            'analogy_metaphor, synthesis_summary, closing_cta — not just three_data_stage. '
+            'Reserve three_data_stage ONLY for scenes that need a plotted numeric chart with data series and reference bands.\n'
+        )
 
     scene_type_contract = (
         '- "scene_type" ("image", "video", or "motion"; default to "image")'
@@ -876,14 +831,14 @@ def _build_storyboard_user_prompt_from_brief(brief: dict[str, Any]) -> str:
         '  - use data_points when the beat depends on an ordered comparison, ranking, or structured values\n'
         '  - use composition_intent only for thin family/mode/layout hints when the scene is unmistakably a specific deterministic treatment, such as `surreal_tableau_3d`\n'
     ) if native_renderer_requested else ""
-    clinical_native_contract = (
-        '- For patient-facing clinical or data explainers:\n'
-        '  - when text_render_mode is "deterministic_overlay", default to `manifestation_plan.primary_path: "native_remotion"` and set composition.family to the matching clinical template family for each structured scene\n'
+    structured_native_contract = (
+        '- For data-heavy explainers:\n'
+        '  - when text_render_mode is "deterministic_overlay", default to `manifestation_plan.primary_path: "native_remotion"` and set composition.family to the matching template deck family for each structured scene\n'
         '  - when text_render_mode is "visual_authored", default to `manifestation_plan.primary_path: "authored_image"` unless deterministic data staging is genuinely necessary\n'
         '  - do not ask for `media_pan`\n'
         '  - do not ask for decorative fades\n'
     ) if native_renderer_requested else (
-        '- For patient-facing clinical or data explainers:\n'
+        '- For data-heavy explainers:\n'
         '  - default to `manifestation_plan.primary_path: "authored_image"` with exact labels and chart text included in the authored visual prompt\n'
         '  - do not ask for `media_pan`\n'
         '  - do not ask for decorative fades\n'
@@ -958,7 +913,7 @@ Quality constraints:
   - "source_video": the footage/video path. Use it when the beat should be manifested from supplied footage or an intentional video clip.
 {native_manifestation_contract.rstrip()}
 - When "visual_authored" is active and on_screen_text is present, visual_prompt should include the actual visible words and their placement, not vague placeholders like "headline zone," "space for text," or "typography" without naming the text itself.
-{clinical_data_guidance}- Use on_screen_text when there are exact phrases or labels the slide should visibly support.
+{structured_data_guidance}- Use on_screen_text when there are exact phrases or labels the slide should visibly support.
 - No OCR. If readable text matters, put the exact words in `on_screen_text` and/or in the authored visual description itself.
 - Assume the full deck will be reviewed scene by scene. Make each frame legible and self-sufficient.
 - Use composition_intent only when the family or layout choice is unusually clear and useful to preserve downstream, such as a ranked data layout or deliberate software-demo callout. Keep it thin and high-level.
@@ -978,7 +933,7 @@ Quality constraints:
   - "speaking": a real person should plausibly be on camera delivering the words or a very close paraphrase
   - "cinematic": the clip is visual action or atmosphere that supports voiceover without lip-sync pressure
 {motion_scene_contract.rstrip()}
-{clinical_native_contract.rstrip()}
+{structured_native_contract.rstrip()}
 - For "speaking" video scenes:
   - narration should sound like something a spokesperson could say naturally to camera
   - visual_prompt should describe one visible speaker, framing, gestures, wardrobe, setting, and camera treatment
