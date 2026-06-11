@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate all text-free template background images for the clinical video deck.
+"""Generate all text-free template background images for the template deck.
 
 Calls Qwen (qwen/qwen-image-2512) via Replicate sequentially.
 Output: template_deck/backgrounds/<template_name>.png
@@ -27,12 +27,12 @@ OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 # Each entry: (filename_stem, prompt)
 # All prompts explicitly request NO TEXT to prevent Qwen text leakage.
 TEMPLATES = [
-    # 1. Cover hook -- cinematic dark gradient, brain atmosphere
+    # 1. Cover hook -- cinematic dark gradient atmosphere
     (
         "cover_hook",
         "A rich dark navy to deep charcoal vertical gradient background with a subtle "
         "radial light bloom in the upper-center area. Faint teal accent glow at the edges. "
-        "Subtle brain wave line or neural particle field in the background. "
+        "Subtle wave line or particle field in the background. "
         "Ultra-clean, premium medical-brand aesthetic. "
         "No text, no labels, no letters, no numbers, no words, no logos.",
     ),
@@ -51,21 +51,13 @@ TEMPLATES = [
         "Each quadrant has a soft darker recessed panel effect. Modern medical dashboard aesthetic. "
         "No text, no icons, no data, no labels, no letters, no numbers, no words.",
     ),
-    # 4. Closing CTA -- warm, forward-looking, brain glow
+    # 4. Closing CTA -- warm, forward-looking glow
     (
         "closing_cta",
-        "A cinematic warm-toned background with a soft-glowing abstract brain illustration "
+        "A cinematic warm-toned background with a soft-glowing abstract light sculpture "
         "emerging from golden and teal light. Depth-of-field blur creating a forward-looking, "
         "hopeful atmosphere. Rich warm amber and teal tones on dark background. "
         "No text, no labels, no letters, no numbers, no words, no logos.",
-    ),
-    # 5. Clinical explanation -- brain with regions
-    (
-        "clinical_explanation",
-        "A side-view 3D human brain on a dark navy gradient background, with neural pathways "
-        "and connections softly illuminated in teal and blue. Translucent, anatomical-style "
-        "with distinct region boundaries visible as soft glowing areas. Medical illustration style. "
-        "No text, no labels, no letters, no numbers, no words.",
     ),
     # 6. Metric improvement -- gauge/arc comparison
     (
@@ -74,14 +66,6 @@ TEMPLATES = [
         "Left gauge dimmer with red-orange tones. Right gauge brighter with teal-green tones. "
         "Subtle connecting arrow shape between them. Soft glow effects. "
         "No needle, no numbers, no text, no labels, no letters, no words.",
-    ),
-    # 7. Brain region focus -- top-down brain with electrode nodes
-    (
-        "brain_region_focus",
-        "A top-down view of a translucent 3D human brain on a dark navy background, "
-        "with subtle glowing electrode nodes at standard 10-20 EEG positions. "
-        "Soft teal and blue lighting. Clean medical illustration style. "
-        "No text, no labels, no letters, no numbers, no words.",
     ),
     # 8. Metric comparison -- split/divided abstract
     (

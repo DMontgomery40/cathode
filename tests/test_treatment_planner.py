@@ -383,7 +383,7 @@ def test_treatment_planner_preserves_scene_copy_and_rebuilds_data_from_scene_sou
                 "title": "Reaction Time Trend",
                 "scene_type": "image",
                 "narration": "Reaction time improves across the measured sessions.",
-                "visual_prompt": "Clinical data card with calm chart treatment.",
+                "visual_prompt": "Data card with calm chart treatment.",
                 "on_screen_text": ["Reaction Time", "Improved over time"],
                 "data_points": [
                     "Session 1: 3",

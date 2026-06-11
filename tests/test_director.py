@@ -170,8 +170,8 @@ def test_generate_with_claude_print_parses_structured_output(monkeypatch):
                         {
                             "id": 1,
                             "title": "Opening",
-                            "narration": "A clear patient-friendly opening.",
-                            "visual_prompt": "Warm clinical illustration.",
+                            "narration": "A clear viewer-friendly opening.",
+                            "visual_prompt": "Warm editorial illustration.",
                         }
                     ]
                 }
