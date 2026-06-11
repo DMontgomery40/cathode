@@ -368,6 +368,7 @@ interface SceneInspectorProps {
   renderWorkspaceHref?: string | null
   projectVideoPath?: string | null
   projectVideoExists?: boolean
+  projectVideoVersion?: number | null
   renderReadinessCopy?: string | null
   onRunAgentDemo?: () => void
   onRunAgentDemoPass?: () => void
@@ -984,6 +985,7 @@ export function SceneInspector({
   renderWorkspaceHref,
   projectVideoPath,
   projectVideoExists,
+  projectVideoVersion,
   renderReadinessCopy,
   onRunAgentDemo,
   onRunAgentDemoPass,
@@ -1058,7 +1060,7 @@ export function SceneInspector({
   const latestProjectVideoUrl = projectVideoExists === false
     ? null
     : projectVideoPath && projectVideoPath !== '' && projectVideoPath != null
-    ? projectMediaUrl(project, projectVideoPath)
+    ? projectMediaUrl(project, projectVideoPath, projectVideoVersion)
     : null
   const latestProjectVideoFilename = resolveRenderOutputFilename({
     videoPath: projectVideoPath,
@@ -4089,7 +4091,7 @@ export function SceneInspector({
             {hasNarrationAudio && (
               <audio
                 controls
-                src={projectMediaUrl(project, scene.audio_path) ?? undefined}
+                src={projectMediaUrl(project, scene.audio_path, scene.audio_version) ?? undefined}
                 className="w-full"
                 style={{ height: 36 }}
               />
@@ -4121,7 +4123,7 @@ export function SceneInspector({
             {hasScenePreview && (
               <video
                 controls
-                src={projectMediaUrl(project, scene.preview_path) ?? undefined}
+                src={projectMediaUrl(project, scene.preview_path, scene.preview_version) ?? undefined}
                 className="w-full rounded-[var(--radius-md)]"
                 style={{ maxHeight: 220 }}
               />

@@ -229,6 +229,7 @@ export function RenderControl() {
                 <ArtifactShelf
                   videoPath={plan?.meta?.video_path}
                   videoExists={typeof plan?.meta?.video_exists === 'boolean' ? plan.meta.video_exists : undefined}
+                  videoVersion={typeof plan?.meta?.video_version === 'number' ? plan.meta.video_version : undefined}
                   project={projectId}
                 />
                 {remotionManifest.data && (

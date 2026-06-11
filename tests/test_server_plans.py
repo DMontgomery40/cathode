@@ -70,6 +70,45 @@ def test_get_plan_includes_asset_existence_hints(client, tmp_path):
     assert body["scenes"][1]["audio_exists"] is False
 
 
+def test_get_plan_asset_versions_track_file_mtime(client, tmp_path):
+    """Asset versions are mtime-derived so regenerating a file (same name,
+    new bytes) yields a new version — the UI uses this to cache-bust media."""
+    import os
+
+    project_dir = tmp_path / "demo"
+    project_dir.mkdir()
+    audio_dir = project_dir / "audio"
+    audio_dir.mkdir(parents=True)
+    audio_path = audio_dir / "scene_000.wav"
+    audio_path.write_bytes(b"take one")
+    os.utime(audio_path, (1_700_000_000, 1_700_000_000))
+
+    plan = copy.deepcopy(_FAKE_PLAN)
+    plan["scenes"][0]["audio_path"] = str(audio_path)
+    plan["scenes"][1]["audio_path"] = str(audio_dir / "missing.wav")
+
+    def fetch_plan():
+        with (
+            patch("server.routers.plans.PROJECTS_DIR", tmp_path),
+            patch("server.routers.plans.load_plan", return_value=copy.deepcopy(plan)),
+        ):
+            resp = client.get("/api/projects/demo/plan")
+        assert resp.status_code == 200
+        return resp.json()
+
+    body = fetch_plan()
+    first_version = body["scenes"][0]["audio_version"]
+    assert first_version == 1_700_000_000_000
+    assert body["scenes"][1]["audio_version"] is None
+
+    # Regenerate in place: same filename, newer mtime -> new version.
+    audio_path.write_bytes(b"take two, longer narration")
+    os.utime(audio_path, (1_700_000_060, 1_700_000_060))
+    body = fetch_plan()
+    assert body["scenes"][0]["audio_version"] == 1_700_000_060_000
+    assert body["scenes"][0]["audio_version"] != first_version
+
+
 @patch("server.routers.plans.load_plan", return_value=None)
 def test_get_plan_missing(mock_load, client, tmp_path):
     (tmp_path / "noplan").mkdir()

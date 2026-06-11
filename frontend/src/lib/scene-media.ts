@@ -41,15 +41,15 @@ export function sceneVisualUrl(project: string, scene: Scene): string | null {
       ?? projectMediaUrl(project, motion.render_path)
       ?? projectMediaUrl(project, composition.preview_path)
       ?? projectMediaUrl(project, composition.render_path)
-      ?? projectMediaUrl(project, scene.preview_path)
-      ?? projectMediaUrl(project, scene.image_path)
+      ?? projectMediaUrl(project, scene.preview_path, scene.preview_version)
+      ?? projectMediaUrl(project, scene.image_path, scene.image_version)
   }
   if (String(scene.scene_type) === 'video') {
-    return projectMediaUrl(project, scene.video_path)
+    return projectMediaUrl(project, scene.video_path, scene.video_version)
   }
-  return projectMediaUrl(project, scene.image_path)
+  return projectMediaUrl(project, scene.image_path, scene.image_version)
 }
 
 export function scenePreviewUrl(project: string, scene: Scene): string | null {
-  return projectMediaUrl(project, scene.preview_path)
+  return projectMediaUrl(project, scene.preview_path, scene.preview_version)
 }

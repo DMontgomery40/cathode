@@ -86,7 +86,9 @@ KOKORO_VOICES = {
     "af_bella": "Warm, friendly, upbeat female",
     "af_sarah": "Clear, enthusiastic female",
     "af_heart": "Gentle, reassuring female (default)",
-    "af_nicole": "Professional, confident female",
+    # Upstream Kokoro trains af_nicole on whispered audio (headphones-tagged in
+    # hexgrad/Kokoro-82M VOICES.md) — do not describe it as a normal speaking voice.
+    "af_nicole": "Soft whispered ASMR female",
     "af_jessica": "Bright, energetic female",
     "af_nova": "Modern, dynamic female",
     "af_sky": "Light, airy female",

@@ -456,6 +456,7 @@ export function SceneTimeline() {
   const allReadyToRender = scenes.length > 0 && scenesWithVisual.length === scenes.length && scenesWithAudio.length === scenes.length
   const projectVideoPath = typeof currentPlan?.meta?.video_path === 'string' ? currentPlan.meta.video_path : null
   const projectVideoExists = typeof currentPlan?.meta?.video_exists === 'boolean' ? currentPlan.meta.video_exists : undefined
+  const projectVideoVersion = typeof currentPlan?.meta?.video_version === 'number' ? currentPlan.meta.video_version : undefined
   const renderOutputFilename = resolveRenderOutputFilename({
     videoPath: projectVideoPath,
     projectName: typeof currentPlan?.meta?.project_name === 'string' ? currentPlan.meta.project_name : null,
@@ -1111,6 +1112,7 @@ export function SceneTimeline() {
                   renderWorkspaceHref={renderWorkspacePath}
                   projectVideoPath={projectVideoPath}
                   projectVideoExists={projectVideoExists}
+                  projectVideoVersion={projectVideoVersion}
                   renderReadinessCopy={renderReadinessCopy}
                   onRunAgentDemo={() => {
                     if (!selectedScene) return

@@ -89,6 +89,21 @@ def asset_path_exists(project_dir: Path, raw_path: Any) -> bool:
     return bool(resolved and resolved.exists() and resolved.is_file())
 
 
+def asset_version(project_dir: Path, raw_path: Any) -> int | None:
+    """Return the asset file's mtime in milliseconds, used to cache-bust media URLs.
+
+    Regenerating an asset reuses its filename, so without a version marker the
+    browser keeps serving the previous bytes from cache.
+    """
+    resolved = _resolve_asset_path(Path(project_dir), raw_path)
+    try:
+        if resolved and resolved.is_file():
+            return int(resolved.stat().st_mtime * 1000)
+    except OSError:
+        return None
+    return None
+
+
 def annotate_plan_asset_existence(project_dir: Path, plan: dict[str, Any]) -> dict[str, Any]:
     """Attach non-persisted asset existence hints used by the API/UI."""
     annotated = copy.deepcopy(plan if isinstance(plan, dict) else {})
@@ -99,6 +114,7 @@ def annotate_plan_asset_existence(project_dir: Path, plan: dict[str, Any]) -> di
         meta = {}
         annotated["meta"] = meta
     meta["video_exists"] = asset_path_exists(project_dir, meta.get("video_path"))
+    meta["video_version"] = asset_version(project_dir, meta.get("video_path"))
 
     scenes = annotated.get("scenes")
     if not isinstance(scenes, list):
@@ -109,12 +125,16 @@ def annotate_plan_asset_existence(project_dir: Path, plan: dict[str, Any]) -> di
         if not isinstance(scene, dict):
             continue
         scene["image_exists"] = asset_path_exists(project_dir, scene.get("image_path"))
+        scene["image_version"] = asset_version(project_dir, scene.get("image_path"))
         scene["video_exists"] = asset_path_exists(project_dir, scene.get("video_path"))
+        scene["video_version"] = asset_version(project_dir, scene.get("video_path"))
         scene["video_audio_exists"] = bool(
             scene["video_exists"] and media_has_audio_stream(_resolve_asset_path(project_dir, scene.get("video_path")) or "")
         )
         scene["audio_exists"] = asset_path_exists(project_dir, scene.get("audio_path"))
+        scene["audio_version"] = asset_version(project_dir, scene.get("audio_path"))
         scene["preview_exists"] = asset_path_exists(project_dir, scene.get("preview_path"))
+        scene["preview_version"] = asset_version(project_dir, scene.get("preview_path"))
         composition = scene.get("composition")
         if isinstance(composition, dict):
             composition["render_exists"] = asset_path_exists(project_dir, composition.get("render_path"))

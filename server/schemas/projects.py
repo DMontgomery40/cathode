@@ -34,6 +34,7 @@ class ProjectSummary(BaseModel):
     jobs: ProjectJobSummary = Field(default_factory=ProjectJobSummary)
     video_path: str | None = None
     thumbnail_path: str | None = None
+    thumbnail_version: int | None = None
     created_utc: str | None = None
     updated_utc: str | None = None
     image_profile: dict[str, Any] | None = None

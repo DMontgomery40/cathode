@@ -120,12 +120,16 @@ export interface Scene {
   on_screen_text: string[]
   image_path?: string | null
   image_exists?: boolean
+  image_version?: number | null
   video_path?: string | null
   video_exists?: boolean
+  video_version?: number | null
   audio_path?: string | null
   audio_exists?: boolean
+  audio_version?: number | null
   preview_path?: string | null
   preview_exists?: boolean
+  preview_version?: number | null
   video_audio_source?: string | null
   video_scene_kind?: string | null
   speaker_name?: string | null
@@ -161,6 +165,7 @@ export interface Plan {
     tts_profile?: Record<string, unknown>
     video_path?: string | null
     video_exists?: boolean
+    video_version?: number | null
     cost_estimate?: Record<string, unknown>
     cost_actual?: Record<string, unknown>
     image_action_history?: ImageActionHistoryEntry[]

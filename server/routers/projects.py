@@ -11,7 +11,7 @@ from fastapi import APIRouter, HTTPException
 
 from core.job_runner import list_project_jobs
 from core.pipeline_service import create_project_from_brief_service
-from core.project_store import annotate_plan_asset_existence, collect_project_artifacts, list_projects, load_plan
+from core.project_store import annotate_plan_asset_existence, asset_version, collect_project_artifacts, list_projects, load_plan
 from core.runtime import PROJECTS_DIR
 from server.schemas.projects import (
     CreateProjectRequest,
@@ -207,6 +207,7 @@ async def get_projects() -> list[ProjectSummary]:
                 jobs=_project_job_summary(jobs),
                 video_path=video_path,
                 thumbnail_path=thumbnail_path,
+                thumbnail_version=asset_version(project_dir, thumbnail_path),
                 created_utc=created_utc,
                 updated_utc=updated_utc,
                 image_profile=meta.get("image_profile"),

@@ -18,11 +18,14 @@ function projectRelativePath(project: string, rawPath: string): string | null {
   return normalized.replace(/^\/+/, '')
 }
 
-export function projectMediaUrl(project: string, rawPath: unknown): string | null {
+export function projectMediaUrl(project: string, rawPath: unknown, version?: unknown): string | null {
   if (!project || typeof rawPath !== 'string') return null
   const relative = projectRelativePath(project, rawPath)
   if (!relative) return null
-  return `/api/projects/${encodeURIComponent(project)}/media/${relative.split('/').map(encodeURIComponent).join('/')}`
+  const base = `/api/projects/${encodeURIComponent(project)}/media/${relative.split('/').map(encodeURIComponent).join('/')}`
+  // Regenerated assets keep their filename; the version (server-reported file
+  // mtime) busts the browser cache so players pick up the new bytes.
+  return typeof version === 'number' && Number.isFinite(version) ? `${base}?v=${version}` : base
 }
 
 export function hasProjectMediaPath(project: string, rawPath: unknown): boolean {

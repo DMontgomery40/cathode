@@ -4,10 +4,11 @@ import { projectMediaUrl } from '../../lib/media-url.ts'
 interface ArtifactShelfProps {
   videoPath: string | null | undefined
   videoExists?: boolean
+  videoVersion?: number | null
   project: string
 }
 
-export function ArtifactShelf({ videoPath, videoExists, project }: ArtifactShelfProps) {
+export function ArtifactShelf({ videoPath, videoExists, videoVersion, project }: ArtifactShelfProps) {
   if (!videoPath) {
     return (
       <GlassPanel variant="inset" padding="lg" className="flex items-center justify-center" style={{ minHeight: 200 }}>
@@ -19,7 +20,7 @@ export function ArtifactShelf({ videoPath, videoExists, project }: ArtifactShelf
   }
 
   const filename = videoPath.split('/').pop() ?? 'output.mp4'
-  const videoUrl = videoExists === false ? null : projectMediaUrl(project, videoPath)
+  const videoUrl = videoExists === false ? null : projectMediaUrl(project, videoPath, videoVersion)
 
   if (!videoUrl) {
     return (

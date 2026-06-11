@@ -27,6 +27,7 @@ export interface ProjectSummary {
   jobs?: ProjectJobSummary | null
   video_path?: string | null
   thumbnail_path?: string | null
+  thumbnail_version?: number | null
   created_utc?: string | null
   updated_utc?: string | null
   image_profile?: Record<string, unknown> | null

@@ -66,7 +66,7 @@ export function ProjectCard({ project }: ProjectCardProps) {
     : (project.jobs?.counts?.total ?? 0) > 0
       ? `/projects/${encodeURIComponent(project.name)}/queue`
     : `/projects/${encodeURIComponent(project.name)}/brief`
-  const thumbnailUrl = projectMediaUrl(project.name, project.thumbnail_path)
+  const thumbnailUrl = projectMediaUrl(project.name, project.thumbnail_path, project.thumbnail_version)
   // The server falls back to a video asset (scene clip or final render) when a
   // project has no still images; render those with <video> so the first frame
   // shows instead of a broken <img>.
