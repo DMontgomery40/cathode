@@ -926,9 +926,9 @@ def test_backfill_plan_preserves_clinical_template_composition_props():
     assert metric["composition"]["props"]["delta"] == "+45%"
     assert metric["composition"]["props"]["direction"] == "improvement"
 
-    # Brain region focus -- regions array
+    # Removed legacy family -- falls back to three_data_stage with props intact
     brain = plan["scenes"][2]
-    assert brain["composition"]["family"] == "brain_region_focus"
+    assert brain["composition"]["family"] == "three_data_stage"
     assert len(brain["composition"]["props"]["regions"]) == 3
     assert brain["composition"]["props"]["regions"][0]["name"] == "Frontal"
     assert brain["composition"]["props"]["regions"][2]["status"] == "stable"
@@ -1073,3 +1073,50 @@ def test_normalize_scene_keeps_heading_prefixes_as_narration_text():
     scene = plan["scenes"][0]
     assert "speaker_name" not in scene
     assert scene["narration"] == "Overview: the pipeline starts locally."
+
+
+# ── Legacy family fallbacks: removed families resolve to surviving templates ──
+
+def test_legacy_clinical_families_fall_back_to_surviving_templates():
+    from core.project_schema import scene_composition_payload
+
+    explanation = scene_composition_payload(
+        {
+            "scene_type": "motion",
+            "composition": {
+                "family": "clinical_explanation",
+                "mode": "native",
+                "props": {"headline": "How it works", "body": "Plain-language summary."},
+            },
+        }
+    )
+    assert explanation["family"] == "bullet_stack"
+    assert explanation["manifestation"] == "native_remotion"
+    assert explanation["props"] == {"headline": "How it works", "body": "Plain-language summary."}
+
+    region_focus = scene_composition_payload(
+        {
+            "scene_type": "motion",
+            "composition": {
+                "family": "brain_region_focus",
+                "mode": "native",
+                "props": {"headline": "Key sites", "regions": [{"name": "F3", "value": "1.0"}]},
+            },
+        }
+    )
+    assert region_focus["family"] == "three_data_stage"
+    assert region_focus["manifestation"] == "native_remotion"
+    assert region_focus["props"]["regions"] == [{"name": "F3", "value": "1.0"}]
+
+
+def test_legacy_family_fallback_applies_to_legacy_motion_template_id():
+    from core.project_schema import scene_composition_payload
+
+    payload = scene_composition_payload(
+        {
+            "scene_type": "motion",
+            "motion": {"template_id": "brain_region_focus", "props": {"headline": "Sites"}},
+        }
+    )
+    assert payload["family"] == "three_data_stage"
+    assert payload["manifestation"] == "native_remotion"

@@ -71,6 +71,14 @@ _NATIVE_REMOTION_FAMILIES = {
     "analogy_metaphor",
 }
 
+# Families removed from the product; legacy plan.json files may still reference
+# them. Map to the closest surviving template so old projects keep loading and
+# rendering deterministically. Safe to delete once no pre-removal plans remain.
+_LEGACY_FAMILY_FALLBACKS = {
+    "clinical_explanation": "bullet_stack",
+    "brain_region_focus": "three_data_stage",
+}
+
 
 def _normalize_project_asset_path(
     raw_path: Any,
@@ -819,6 +827,7 @@ def scene_composition_payload(scene: Any) -> dict[str, Any]:
         or (motion_raw.get("template_id") if allow_legacy_motion_mirror else None)
         or defaults["family"]
     ).strip() or defaults["family"]
+    family = _LEGACY_FAMILY_FALLBACKS.get(family, family)
     mode = str(
         composition_raw.get("mode")
         or (legacy_intent.get("mode_hint") if allow_legacy_shape_hints else None)
