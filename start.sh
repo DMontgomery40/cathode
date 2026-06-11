@@ -1,32 +1,28 @@
 #!/bin/bash
 # Start script for betTube Studio.
-# Default mode: Streamlit app on 8517.
-# React mode: FastAPI on 9321 + Vite on 9322 via `./start.sh --react`.
+# Default mode: FastAPI on 9321 + Vite on 9322.
 
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PYTHON="${BETTUBE_STUDIO_PYTHON:-$ROOT_DIR/.venv/bin/python3.10}"
+PYTHON="${BETTUBE_STUDIO_PYTHON:-$ROOT_DIR/.venv/bin/python}"
 FALLBACK_PYTHON="/opt/homebrew/bin/python3.10"
 
-STREAMLIT_PORT="${STREAMLIT_PORT:-8517}"
 BETTUBE_STUDIO_API_PORT="${BETTUBE_STUDIO_API_PORT:-9321}"
 BETTUBE_STUDIO_FRONTEND_PORT="${BETTUBE_STUDIO_FRONTEND_PORT:-9322}"
 
-MODE="streamlit"
+MODE="react"
 EXTRA_ARGS=()
 API_PID=""
 
 usage() {
   cat <<'EOF'
 Usage:
-  ./start.sh                Start the legacy Streamlit app on 8517
-  ./start.sh --streamlit    Start the legacy Streamlit app on 8517
-  ./start.sh --react        Start FastAPI on 9321 and the React app on 9322
+  ./start.sh                Start FastAPI on 9321 and the React app on 9322
+  ./start.sh --react        Same as the default
   ./start.sh --help         Show this help
 
 Ports:
-  STREAMLIT_PORT          Streamlit port (default: 8517)
   BETTUBE_STUDIO_API_PORT        FastAPI port (default: 9321)
   BETTUBE_STUDIO_FRONTEND_PORT   React/Vite port (default: 9322)
 EOF
@@ -36,10 +32,6 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --react|react|--frontend|frontend|--web|web)
       MODE="react"
-      shift
-      ;;
-    --streamlit|streamlit)
-      MODE="streamlit"
       shift
       ;;
     --help|-h)
@@ -64,8 +56,8 @@ require_python() {
   fi
 
   if [[ ! -x "$PYTHON" ]]; then
-    echo "Error: Python 3.10 not found at $PYTHON or $FALLBACK_PYTHON"
-    echo "Install with: uv python install 3.10 && uv venv --python 3.10 .venv"
+    echo "Error: Python not found at $PYTHON or $FALLBACK_PYTHON"
+    echo "Install with: uv python install 3.10 && uv venv --python 3.10 .venv && uv sync"
     exit 1
   fi
 }
@@ -73,7 +65,7 @@ require_python() {
 require_npm() {
   if ! command -v npm >/dev/null 2>&1; then
     echo "Error: npm not found in PATH"
-    echo "Install Node.js and npm before using --react mode."
+    echo "Install Node.js and npm before starting the React stack."
     exit 1
   fi
 }
@@ -140,32 +132,10 @@ wait_for_http() {
   return 1
 }
 
-run_streamlit() {
-  install_python_requirements_if_missing \
-    "import streamlit, kokoro, anthropic, openai, replicate"
-
-  echo "Starting betTube Studio Streamlit app..."
-  echo "Opening http://127.0.0.1:${STREAMLIT_PORT}"
-  cd "$ROOT_DIR"
-  local streamlit_cmd=(
-    "$PYTHON"
-    -m
-    streamlit
-    run
-    app.py
-    --server.port
-    "${STREAMLIT_PORT}"
-  )
-  if [[ ${#EXTRA_ARGS[@]} -gt 0 ]]; then
-    streamlit_cmd+=("${EXTRA_ARGS[@]}")
-  fi
-  "${streamlit_cmd[@]}"
-}
-
 run_react_stack() {
   require_npm
   install_python_requirements_if_missing \
-    "import fastapi, uvicorn; import streamlit, kokoro, anthropic, openai, replicate" \
+    "import fastapi, uvicorn; import kokoro, anthropic, openai, replicate" \
     server
   install_frontend_requirements_if_missing
 
@@ -191,9 +161,6 @@ load_env
 case "$MODE" in
   react)
     run_react_stack
-    ;;
-  streamlit)
-    run_streamlit
     ;;
   *)
     echo "Unknown mode: $MODE"

@@ -63,10 +63,10 @@ def parse_args() -> argparse.Namespace:
         help="Force pip install -e .[server] even when the virtualenv already exists.",
     )
     parser.add_argument(
-        "--streamlit-port",
+        "--api-port",
         type=int,
-        default=8517,
-        help="Port included in the emitted Streamlit launch command. Default: 8517",
+        default=9321,
+        help="Port included in the emitted web app launch command. Default: 9321",
     )
     parser.add_argument(
         "--mcp-port",
@@ -209,7 +209,7 @@ def build_output(
     venv_python: Path,
     venv_created: bool,
     dependencies_installed: bool,
-    streamlit_port: int,
+    api_port: int,
     mcp_port: int,
 ) -> dict[str, object]:
     env_example = repo_path / ".env.example"
@@ -218,11 +218,12 @@ def build_output(
     app_command = [
         str(venv_python),
         "-m",
-        "streamlit",
-        "run",
-        "app.py",
-        "--server.port",
-        str(streamlit_port),
+        "uvicorn",
+        "server.app:app",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        str(api_port),
     ]
     mcp_stdio_command = [str(venv_python), "bettube_studio_mcp_server.py", "--transport", "stdio"]
     mcp_http_command = [
@@ -280,7 +281,7 @@ def main() -> int:
             venv_python=venv_python,
             venv_created=venv_created,
             dependencies_installed=dependencies_installed,
-            streamlit_port=args.streamlit_port,
+            api_port=args.api_port,
             mcp_port=args.mcp_port,
         )
     except BootstrapError as exc:

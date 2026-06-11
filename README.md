@@ -4,10 +4,9 @@
 
 # betTube Studio
 
-betTube Studio is a local-first explainer-video pipeline with three main surfaces:
+betTube Studio is a local-first explainer-video pipeline with two main surfaces:
 
-- a React + FastAPI control room for the current workspace-first UI
-- a legacy Streamlit app for the older manual step-by-step path
+- a React + FastAPI control room for the workspace-first UI
 - an MCP server for agent/client-driven runs
 
 It turns rough notes, source text, or a finished script into a local project folder plus a rendered MP4, and it supports classic, mixed-media, and Remotion composition modes.
@@ -16,15 +15,13 @@ It turns rough notes, source text, or a finished script into a local project fol
 
 [Watch the betTube Studio demo](https://innovation.gcp/bettube/video/785f8ef6-6e14-4b60-b03f-70442b170e8d).
 
-betTube Studio now has four practical lanes:
+betTube Studio has three practical lanes:
 
 1. `React/FastAPI control room`
    Fill in Brief Studio, hit the primary button, watch the background job/logs, then land on the final MP4.
-2. `Legacy Streamlit app`
-   Use the older manual step-by-step path when you want a more explicit scene-by-scene workflow.
-3. `MCP workflow`
+2. `MCP workflow`
    Call `make_video` from an agent or client and let betTube Studio build the local project in the background.
-4. `Live demo workflow`
+3. `Live demo workflow`
    Launch or attach to a real app, capture fresh footage, review it, then feed the approved clips into betTube Studio for final render.
 
 If you only remember one thing, remember this:
@@ -47,10 +44,10 @@ If you only remember one thing, remember this:
 
 ### 1. React/FastAPI Control Room
 
-Use this for the current workspace-based UI.
+Use this for the workspace-based UI.
 
 ```bash
-./start.sh --react
+./start.sh
 ```
 
 The main workspaces are:
@@ -68,17 +65,7 @@ In `Brief Studio`, there are now two clearly separate actions:
 
 If demo-target context or reviewed footage is present, the GUI prefers the hybrid path automatically unless you explicitly choose something else.
 
-### 2. Legacy Streamlit App
-
-Use this when you want the older manual step-by-step flow.
-
-```bash
-./start.sh
-```
-
-This is still supported, but the React/FastAPI control room is the more current operator surface.
-
-### 3. Agent / MCP
+### 2. Agent / MCP
 
 Use this when an agent or client should drive betTube Studio programmatically.
 
@@ -91,7 +78,7 @@ The core tool is `make_video`. It can inspect a bounded workspace, accept explic
 The React GUI and the MCP path now converge on the same persisted background-job model instead of maintaining separate orchestration logic.
 The web stack also exposes the same job model through `POST /api/jobs/make-video`.
 
-### 4. Live Demo Workflow
+### 3. Live Demo Workflow
 
 Use this when the video should prove a real running product. The workflow can launch or attach to a target app, capture fresh browser footage, review the clips, and feed approved footage back into betTube Studio through `footage_paths` or `footage_manifest`.
 
@@ -246,12 +233,6 @@ BETTUBE_STUDIO_LOCAL_VIDEO_MODEL=wan2.1
 ## Quick Start
 
 ```bash
-./start.sh --react
-```
-
-Legacy Streamlit path:
-
-```bash
 ./start.sh
 ```
 
@@ -262,14 +243,7 @@ Manual React + FastAPI run:
 npm run dev --prefix frontend -- --host 127.0.0.1 --port 9322
 ```
 
-Manual app run:
-
-```bash
-/opt/homebrew/bin/python3.10 -m streamlit run app.py --server.port 8517
-```
-
-Default port is `8517`. Override it with `STREAMLIT_PORT` when using `./start.sh`.
-React mode uses `BETTUBE_STUDIO_API_PORT` for FastAPI (default `9321`) and `BETTUBE_STUDIO_FRONTEND_PORT` for Vite (default `9322`).
+The launcher uses `BETTUBE_STUDIO_API_PORT` for FastAPI (default `9321`) and `BETTUBE_STUDIO_FRONTEND_PORT` for Vite (default `9322`).
 
 Final render now uses direct `ffmpeg` orchestration and auto-prefers hardware H.264 encoders when the local ffmpeg build supports them. Override with `BETTUBE_STUDIO_VIDEO_ENCODER` or force CPU fallback with `BETTUBE_STUDIO_DISABLE_HW_ENCODER=1`.
 After a standard explainer render, betTube Studio runs a non-blocking in-place web MP4 optimization with `libx264`, AAC audio, yuv420p pixels, `+faststart`, and max 1920px width. If that final optimization fails, the render still succeeds and the failure is recorded in `plan.json` under `meta.web_optimization`. Vertical shorts skip this extra pass.
@@ -290,9 +264,6 @@ The compose file persists local artifacts in `./projects` and `./output`, and fo
 Useful variants:
 
 ```bash
-# Legacy Streamlit surface
-docker compose --profile streamlit up --build streamlit
-
 # MCP server over Streamable HTTP
 docker compose --profile mcp up --build mcp
 ```
@@ -370,17 +341,14 @@ sudo apt-get install python3.10 ffmpeg espeak-ng
 
 ### Python Dependencies
 
-betTube Studio uses a `pyproject.toml` install flow and targets Python 3.10 (`requires-python >=3.10`). The intended local runtime is `.venv/bin/python3.10`; create the virtualenv first, then install the project in editable mode:
+betTube Studio uses a `pyproject.toml` install flow and targets Python 3.10 (pinned in `.python-version`). Create the virtualenv with `uv`, then install the project in editable mode:
 
 ```bash
-python3.10 -m venv .venv
-# Streamlit app only:
-.venv/bin/python3.10 -m pip install -e .
-# React/FastAPI stack (adds fastapi/uvicorn/httpx):
-.venv/bin/python3.10 -m pip install -e '.[server]'
+uv venv --python 3.10 .venv
+uv pip install -e '.[server,dev]'
 ```
 
-`uv` works the same way if you prefer it (`uv pip install -e .` / `uv pip install -e '.[server]'`).
+Plain `pip` works the same way if you prefer it (`.venv/bin/python -m pip install -e '.[server,dev]'`).
 
 Package installs should come from approved internal mirrors, configured via environment variables rather than baked-in URLs. For Python, set `UV_INDEX_URL`, `PIP_INDEX_URL`, and/or `PIP_EXTRA_INDEX_URL`; for npm, set `NPM_CONFIG_REGISTRY`. No registry URLs are hardcoded in this repo.
 
@@ -409,7 +377,6 @@ BETTUBE_STUDIO_LOCAL_IMAGE_TRUE_CFG_SCALE=4.0
 BETTUBE_STUDIO_LOCAL_IMAGE_NEGATIVE_PROMPT=
 BETTUBE_STUDIO_LOCAL_IMAGE_MLX_CACHE_LIMIT_GB=
 BETTUBE_STUDIO_LOCAL_IMAGE_MLX_LOW_RAM=0
-STREAMLIT_PORT=8517
 BETTUBE_STUDIO_VIDEO_ENCODER=auto
 BETTUBE_STUDIO_DISABLE_HW_ENCODER=0
 BETTUBE_STUDIO_LOCAL_VIDEO_COMMAND=
@@ -481,7 +448,6 @@ PYTHONPATH=. /opt/homebrew/bin/python3.10 -m pytest -q
 ## Repository Layout
 
 ```text
-app.py
 bettube_studio_mcp_server.py
 core/
 core/remotion_render.py

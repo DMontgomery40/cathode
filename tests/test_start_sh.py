@@ -27,9 +27,24 @@ printf '%s\n' "$@" > "$FAKE_PYTHON_LOG"
 """,
     )
 
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    _write_executable(
+        fake_bin / "npm",
+        """#!/bin/sh
+printf '%s\n' "$@" >> "$FAKE_NPM_LOG"
+exit 0
+""",
+    )
+    # wait_for_http polls with curl; always report ready.
+    _write_executable(fake_bin / "curl", "#!/bin/sh\nexit 0\n")
+
+    # Pre-create node_modules so the script skips npm install.
+    (tmp_path / "frontend" / "node_modules").mkdir(parents=True)
+
     script_copy = tmp_path / "start.sh"
     script_text = START_SCRIPT.read_text().replace(
-        'PYTHON="${BETTUBE_STUDIO_PYTHON:-$ROOT_DIR/.venv/bin/python3.10}"',
+        'PYTHON="${BETTUBE_STUDIO_PYTHON:-$ROOT_DIR/.venv/bin/python}"',
         f'PYTHON="${{BETTUBE_STUDIO_PYTHON:-{fake_python}}}"',
         1,
     )
@@ -37,23 +52,18 @@ printf '%s\n' "$@" > "$FAKE_PYTHON_LOG"
     return script_copy
 
 
-@pytest.mark.parametrize(
-    ("cli_args", "expected_tail"),
-    [
-        ([], []),
-        (["--"], []),
-        (
-            ["--streamlit", "--", "--browser.gatherUsageStats=false", "--logger.level=debug"],
-            ["--browser.gatherUsageStats=false", "--logger.level=debug"],
-        ),
-    ],
-)
-def test_start_sh_streamlit_handles_optional_extra_args(tmp_path: Path, cli_args: list[str], expected_tail: list[str]) -> None:
-    script_copy = _prepare_launcher_fixture(tmp_path)
-    log_path = tmp_path / "fake_python.log"
-
+def _launcher_env(tmp_path: Path) -> dict[str, str]:
     env = os.environ.copy()
-    env["FAKE_PYTHON_LOG"] = str(log_path)
+    env["PATH"] = f"{tmp_path / 'bin'}{os.pathsep}{env['PATH']}"
+    env["FAKE_PYTHON_LOG"] = str(tmp_path / "fake_python.log")
+    env["FAKE_NPM_LOG"] = str(tmp_path / "fake_npm.log")
+    return env
+
+
+@pytest.mark.parametrize("cli_args", [[], ["--react"], ["--web"]])
+def test_start_sh_defaults_to_react_stack(tmp_path: Path, cli_args: list[str]) -> None:
+    script_copy = _prepare_launcher_fixture(tmp_path)
+    env = _launcher_env(tmp_path)
 
     result = subprocess.run(
         ["/bin/bash", str(script_copy), *cli_args],
@@ -66,12 +76,36 @@ def test_start_sh_streamlit_handles_optional_extra_args(tmp_path: Path, cli_args
 
     assert result.returncode == 0, result.stderr
     assert "unbound variable" not in result.stderr
-    assert log_path.read_text().splitlines() == [
+
+    uvicorn_args = (tmp_path / "fake_python.log").read_text().splitlines()
+    assert uvicorn_args == [
         "-m",
-        "streamlit",
-        "run",
-        "app.py",
-        "--server.port",
-        "8517",
-        *expected_tail,
+        "uvicorn",
+        "server.app:app",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "9321",
+        "--reload",
     ]
+
+    npm_calls = (tmp_path / "fake_npm.log").read_text()
+    assert "run" in npm_calls and "dev" in npm_calls
+
+
+def test_start_sh_help_no_longer_mentions_streamlit(tmp_path: Path) -> None:
+    script_copy = _prepare_launcher_fixture(tmp_path)
+    env = _launcher_env(tmp_path)
+
+    result = subprocess.run(
+        ["/bin/bash", str(script_copy), "--help"],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        env=env,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "streamlit" not in result.stdout.lower()
+    assert "FastAPI" in result.stdout

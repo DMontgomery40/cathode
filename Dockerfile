@@ -61,7 +61,7 @@ COPY --from=frontend-build /usr/local/lib/node_modules /usr/local/lib/node_modul
 
 # Dependency install from pyproject.toml. core/ + server/ + README.md are copied
 # first (the build backend needs the packages and readme) so this layer is cached
-# independently of app.py / prompts / scripts churn. No registry URL is baked in:
+# independently of prompts / scripts churn. No registry URL is baked in:
 # PIP_INDEX_URL / PIP_EXTRA_INDEX_URL are build args for approved-mirror corp builds.
 COPY pyproject.toml README.md ./
 COPY core ./core
@@ -87,10 +87,6 @@ USER app
 FROM runtime AS mcp
 EXPOSE 8765
 CMD ["python", "bettube_studio_mcp_server.py", "--transport", "streamable-http"]
-
-FROM runtime AS streamlit
-EXPOSE 8517
-CMD ["python", "-m", "streamlit", "run", "app.py", "--server.address=0.0.0.0", "--server.port=8517"]
 
 FROM runtime AS web
 EXPOSE 9321

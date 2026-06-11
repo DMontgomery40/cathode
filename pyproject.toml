@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "bettube-studio"
 version = "0.1.0"
-description = "Local-first explainer-video pipeline with Streamlit, React/FastAPI, and MCP surfaces."
+description = "Local-first explainer-video pipeline with React/FastAPI and MCP surfaces."
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
@@ -14,7 +14,6 @@ license = { text = "MIT" }
 # here; uv/pip honor UV_INDEX_URL / PIP_INDEX_URL / PIP_EXTRA_INDEX_URL from the
 # environment so this drops into an approved-mirror corp workflow unchanged.
 dependencies = [
-    "streamlit>=1.28.0",
     "openai>=1.0.0",
     "anthropic>=0.40.0",
     "replicate>=0.25.0",
@@ -54,5 +53,5 @@ dev = [
 [tool.setuptools]
 # Flat collection of top-level modules plus the core/ and server/ packages, not a
 # single importable distribution package. Limit discovery so the build backend does
-# not try to package app.py / scripts / frontend / projects.
+# not try to package scripts / frontend / projects.
 packages = ["core", "server"]
