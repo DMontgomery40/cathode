@@ -2994,19 +2994,17 @@ export function SceneInspector({
               compact
               className="scene-inspector__type-select min-w-[7rem]"
             />
-            <button
-              type="button"
-              aria-label={remotionEnabled
-                ? 'Remotion is enabled. Advanced Remotion scenes and previews can be generated/rendered locally.'
-                : 'Remotion is the optional React-based renderer for advanced animated/template scenes. It is not installed in this build, so Remotion scenes are disabled.'}
-              title={remotionEnabled
-                ? 'Remotion is enabled. Advanced Remotion scenes and previews can be generated/rendered locally.'
-                : 'Remotion is the optional React-based renderer for advanced animated/template scenes. It is not installed in this build, so Remotion scenes are disabled.'}
-              className="scene-inspector__remotion-info inline-flex h-[16px] w-[16px] shrink-0 cursor-help select-none items-center justify-center rounded-full border border-[var(--border-subtle)] bg-transparent text-[var(--text-tertiary)] outline-none focus-visible:shadow-[var(--focus-ring)]"
-              style={{ fontSize: '10px', fontFamily: 'var(--font-mono)', fontStyle: 'italic' }}
-            >
-              i
-            </button>
+            {remotionEnabled ? (
+              <button
+                type="button"
+                aria-label="Remotion is enabled. Advanced Remotion scenes and previews can be generated/rendered locally."
+                title="Remotion is enabled. Advanced Remotion scenes and previews can be generated/rendered locally."
+                className="scene-inspector__remotion-info inline-flex h-[16px] w-[16px] shrink-0 cursor-help select-none items-center justify-center rounded-full border border-[var(--border-subtle)] bg-transparent text-[var(--text-tertiary)] outline-none focus-visible:shadow-[var(--focus-ring)]"
+                style={{ fontSize: '10px', fontFamily: 'var(--font-mono)', fontStyle: 'italic' }}
+              >
+                i
+              </button>
+            ) : null}
           </div>
         </GlassPanel>
 

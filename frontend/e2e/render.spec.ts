@@ -17,6 +17,15 @@ type MutablePlan = Record<string, unknown> & {
   scenes?: Array<Record<string, unknown>>
 }
 
+// Remotion is hidden behind BETTUBE_STUDIO_ENABLE_REMOTION (off by default).
+// Tests that exercise the Remotion player/engine only run when the server
+// actually exposes the surface.
+async function skipWithoutRemotion(request: import('@playwright/test').APIRequestContext) {
+  const response = await request.get('/api/bootstrap')
+  const body = await response.json() as { providers?: { remotion_available?: boolean } }
+  test.skip(!body.providers?.remotion_available, 'Remotion surface disabled (BETTUBE_STUDIO_ENABLE_REMOTION off or toolchain absent)')
+}
+
 test.describe('Render Control', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto(`/projects/${PROJECT}/render`)
@@ -190,7 +199,8 @@ test.describe('Render Control', () => {
     await expect(page.getByText('hwaccel=required')).not.toBeVisible()
   })
 
-  test('software demo overlay manifests keep the media layer and do not duplicate the headline chip', async ({ page }) => {
+  test('software demo overlay manifests keep the media layer and do not duplicate the headline chip', async ({ page, request }) => {
+    await skipWithoutRemotion(request)
     const overlayImage = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(
       '<svg xmlns="http://www.w3.org/2000/svg" width="1664" height="928" viewBox="0 0 1664 928"><rect width="1664" height="928" fill="#172033"/><rect x="120" y="120" width="1424" height="688" rx="32" fill="#23314f"/><rect x="220" y="220" width="360" height="220" rx="24" fill="#f4d8a0"/><rect x="620" y="220" width="540" height="40" rx="20" fill="#a9c0ff"/><rect x="620" y="290" width="420" height="32" rx="16" fill="#dce6ff"/><rect x="620" y="346" width="480" height="32" rx="16" fill="#dce6ff"/><rect x="220" y="476" width="1160" height="180" rx="28" fill="#2c3e61"/></svg>',
     )}`
@@ -240,7 +250,8 @@ test.describe('Render Control', () => {
     await expect(player.getByText('Top-rated school district · 3 BR · 2.5 BA', { exact: true })).toBeVisible()
   })
 
-  test('static media manifests keep authored visuals without generic overlay chrome or pan', async ({ page }) => {
+  test('static media manifests keep authored visuals without generic overlay chrome or pan', async ({ page, request }) => {
+    await skipWithoutRemotion(request)
     const backgroundImage = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(
       '<svg xmlns="http://www.w3.org/2000/svg" width="1664" height="928" viewBox="0 0 1664 928"><rect width="1664" height="928" fill="#0f1524"/><circle cx="540" cy="420" r="210" fill="#ffb66b" fill-opacity="0.28"/><rect x="240" y="250" width="460" height="310" rx="44" fill="#f0a357" fill-opacity="0.18"/><rect x="960" y="220" width="140" height="140" rx="28" fill="#f4d8a0" fill-opacity="0.22"/><rect x="960" y="420" width="180" height="32" rx="16" fill="#f4d8a0" fill-opacity="0.18"/><rect x="960" y="520" width="180" height="32" rx="16" fill="#f4d8a0" fill-opacity="0.18"/></svg>',
     )}`
@@ -295,7 +306,8 @@ test.describe('Render Control', () => {
     expect(await image.evaluate((node) => (node as HTMLElement).style.transform)).toBe('scale(1)')
   })
 
-  test('structured data-stage manifests render stable chart labels from composition data', async ({ page }) => {
+  test('structured data-stage manifests render stable chart labels from composition data', async ({ page, request }) => {
+    await skipWithoutRemotion(request)
     await page.route(`**/api/projects/${PROJECT}/remotion-manifest`, async (route) => {
       await route.fulfill({
         status: 200,
@@ -396,7 +408,8 @@ test.describe('Render Control', () => {
     expect(Math.max(...visibleBarBounds.map((bounds) => bounds.width))).toBeGreaterThan(20)
   })
 
-  test('structured data-stage line charts draw visible geometry on the initial frame', async ({ page }) => {
+  test('structured data-stage line charts draw visible geometry on the initial frame', async ({ page, request }) => {
+    await skipWithoutRemotion(request)
     await page.route(`**/api/projects/${PROJECT}/remotion-manifest`, async (route) => {
       await route.fulfill({
         status: 200,
@@ -493,7 +506,8 @@ test.describe('Render Control', () => {
     expect(lineBounds.height).toBeGreaterThan(20)
   })
 
-  test('legacy null-valued data-stage bars recover visible geometry from comparison copy', async ({ page }) => {
+  test('legacy null-valued data-stage bars recover visible geometry from comparison copy', async ({ page, request }) => {
+    await skipWithoutRemotion(request)
     await page.route(`**/api/projects/${PROJECT}/remotion-manifest`, async (route) => {
       await route.fulfill({
         status: 200,
@@ -568,7 +582,8 @@ test.describe('Render Control', () => {
     expect(Math.max(...recoveredBarHeights)).toBeGreaterThan(30)
   })
 
-  test('legacy null-valued data-stage lines recover geometry and target bands from comparison copy', async ({ page }) => {
+  test('legacy null-valued data-stage lines recover geometry and target bands from comparison copy', async ({ page, request }) => {
+    await skipWithoutRemotion(request)
     await page.route(`**/api/projects/${PROJECT}/remotion-manifest`, async (route) => {
       await route.fulfill({
         status: 200,
@@ -651,7 +666,8 @@ test.describe('Render Control', () => {
     expect(recoveredLineBounds.height).toBeGreaterThan(20)
   })
 
-  test('legacy multi-comparison data-stage lines recover multiple visible series', async ({ page }) => {
+  test('legacy multi-comparison data-stage lines recover multiple visible series', async ({ page, request }) => {
+    await skipWithoutRemotion(request)
     await page.route(`**/api/projects/${PROJECT}/remotion-manifest`, async (route) => {
       await route.fulfill({
         status: 200,
@@ -868,7 +884,8 @@ test.describe('Render Control', () => {
       cleanupProjectFixture(TEXT_MODE_PROJECT)
     })
 
-    test('render settings persist text strategy into the project plan', async ({ page }) => {
+    test('render settings persist text strategy into the project plan', async ({ page, request }) => {
+      await skipWithoutRemotion(request)
       await page.goto(`/projects/${TEXT_MODE_PROJECT}/render`)
       await expect(page.getByRole('heading', { name: 'Render', exact: true })).toBeVisible()
       await expect(page.getByText('Engine: remotion')).toBeVisible()
@@ -965,7 +982,8 @@ test.describe('Render Control', () => {
       cleanupProjectFixture(MOTION_RENDER_PROJECT)
     })
 
-    test('remotion backend treats motion scenes as visual-ready in render gate', async ({ page }) => {
+    test('remotion backend treats motion scenes as visual-ready in render gate', async ({ page, request }) => {
+      await skipWithoutRemotion(request)
       await page.goto(`/projects/${MOTION_RENDER_PROJECT}/render`)
       await expect(page.getByRole('heading', { name: 'Render', exact: true })).toBeVisible()
       await expect(page.getByText('Engine: remotion')).toBeVisible()

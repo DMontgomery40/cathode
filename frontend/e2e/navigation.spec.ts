@@ -24,7 +24,7 @@ test.describe('Cross-route navigation', () => {
     const homeLink = page.locator('[role="menuitem"]').first()
     await homeLink.click()
     await page.waitForURL('/')
-    await expect(page).toHaveURL('http://127.0.0.1:9322/')
+    await expect(page).toHaveURL(`http://127.0.0.1:${process.env.BETTUBE_STUDIO_FRONTEND_PORT || 9322}/`)
   })
 
   // ── Full workflow navigation ───────────────────────────────────
@@ -35,9 +35,9 @@ test.describe('Cross-route navigation', () => {
     await page.locator('button', { hasText: 'Continue editing' }).click()
     await page.waitForURL('**/projects')
 
-    // Projects: click first project to go to Scenes
-    await page.waitForSelector(`button:has-text("bet365")`, { timeout: 10000 })
-    await page.locator('button').filter({ hasText: 'bet365' }).first().click()
+    // Projects: open the fixture project to go to Scenes
+    await page.waitForSelector(`button:has-text("${PROJECT}")`, { timeout: 10000 })
+    await page.locator('button').filter({ hasText: PROJECT }).first().click()
     await page.waitForURL(/\/projects\/.*\/(scenes|brief)/)
 
     // If on scenes page, navigate to render through the project workspace nav
@@ -96,7 +96,7 @@ test.describe('Cross-route navigation', () => {
     await page.goto('/projects')
     await page.waitForTimeout(500)
     await page.goto(`/projects/${PROJECT}/scenes`)
-    await expect(page.locator('text=Scenes')).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Scenes', exact: true })).toBeVisible()
 
     await page.goBack()
     await page.waitForURL('**/projects')
@@ -134,7 +134,7 @@ test.describe('Cross-route navigation', () => {
 
   test('refresh render page preserves settings', async ({ page }) => {
     await page.goto(`/projects/${PROJECT}/render`)
-    await expect(page.locator('text=Render Settings')).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Render Settings' })).toBeVisible()
 
     // Change filename
     const input = page.locator('#output-filename')
@@ -164,7 +164,7 @@ test.describe('Cross-route navigation', () => {
 
   test('direct URL to render', async ({ page }) => {
     await page.goto(`/projects/${PROJECT}/render`)
-    await expect(page.locator('text=Render Settings')).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Render Settings' })).toBeVisible()
   })
 
   test('project workspace nav links scenes to render', async ({ page }) => {

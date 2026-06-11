@@ -122,9 +122,9 @@ test.describe('Settings', () => {
 
     await expect(page.getByRole('heading', { name: 'Image profile' })).toBeVisible()
     await expect(page.getByText('Edit path')).toBeVisible()
-    expect(await page.getByText('DashScope-backed', { exact: true }).count()).toBeGreaterThan(0)
+    await expect(page.getByText('DashScope-backed', { exact: true }).first()).toBeVisible()
     await expect(page.getByText('Variants', { exact: true })).toBeVisible()
-    expect(await page.getByText('3', { exact: true }).count()).toBeGreaterThan(0)
+    await expect(page.getByText('3', { exact: true }).first()).toBeVisible()
     await expect(page.locator('pre')).toHaveCount(0)
     await expect(page.getByRole('heading', { name: 'Image activity' })).toBeVisible()
     await expect(page.getByText('Recent scene image actions', { exact: true })).toBeVisible()
@@ -142,15 +142,16 @@ test.describe('Settings', () => {
     await page.getByLabel('Project', { exact: true }).selectOption(DISPOSABLE_PROJECT)
 
     await page.getByText(JOB_ID).click()
-    await expect(page.getByText('generated image for scene_000')).toBeVisible()
-    await expect(page.getByText('edit retry queued')).toBeVisible()
+    // The job card summarizes the fetched worker log instead of dumping raw
+    // lines; the line count proves the log endpoint round-trip worked.
+    await expect(page.getByText('Worker diagnostics captured (2 lines).')).toBeVisible()
   })
 
   test('selected project persists after leaving settings and coming back', async ({ page }) => {
     await page.getByLabel('Project', { exact: true }).selectOption(CONTEXT_PROJECT)
 
     await page.getByRole('menuitem', { name: 'Home' }).click()
-    await expect(page).toHaveURL('http://127.0.0.1:9322/')
+    await expect(page).toHaveURL(`http://127.0.0.1:${process.env.BETTUBE_STUDIO_FRONTEND_PORT || 9322}/`)
 
     await page.getByRole('menuitem', { name: 'Settings' }).click()
     await expect(page.getByLabel('Project', { exact: true })).toHaveValue(CONTEXT_PROJECT)

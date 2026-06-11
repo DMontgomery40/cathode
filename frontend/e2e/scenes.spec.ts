@@ -550,7 +550,7 @@ test.describe('Scene Timeline', () => {
       await page.goto(`/projects/${MANUAL_IMAGE_PROJECT}/scenes`)
       await expect(page.getByRole('region', { name: 'Scene inspector' })).toBeVisible()
       await expect(page.getByRole('button', { name: 'Generate Image' })).toBeDisabled()
-      await expect(page.getByText('Manual image mode is upload-first.')).toBeVisible()
+      await expect(page.getByText('Manual image generation is upload-first', { exact: false })).toBeVisible()
     })
   })
 
@@ -673,26 +673,32 @@ test.describe('Scene Timeline', () => {
     })
 
     test('composition edits persist through the real save endpoint', async ({ page }) => {
-      const saveResponse = page.waitForResponse((response) =>
+      const planSave = () => page.waitForResponse((response) =>
         response.request().method() === 'PUT'
         && response.url().includes(`/api/projects/${DISPOSABLE_PROJECT}/plan`),
       )
 
-      await selectInspectorOption(page, 'Composition family', 'kinetic_statements', 'Kinetic statements')
-      await expectInspectorOption(page, 'Composition behavior', 'native', 'Native')
+      // With Remotion hidden, only the media families are selectable; the
+      // round-trip through the real save endpoint is what this test covers.
+      // Each selection triggers its own save; await both so no trailing PUT
+      // lands after the file reset below and clobbers it.
+      const familySave = planSave()
+      await selectInspectorOption(page, 'Composition family', 'static_media', 'Static media')
+      await familySave
+      const transitionSave = planSave()
       await selectInspectorOption(page, 'Transition after', 'fade', 'Fade')
-      await saveResponse
+      await transitionSave
 
       await expect.poll(() => {
         const plan = readProjectPlan(DISPOSABLE_PROJECT) as MutablePlan
         const composition = plan.scenes?.[0]?.composition ?? {}
-        return `${composition.family ?? ''}|${composition.mode ?? ''}|${composition.transition_after?.kind ?? ''}`
-      }).toBe('kinetic_statements|native|fade')
+        return `${composition.family ?? ''}|${composition.transition_after?.kind ?? ''}`
+      }).toBe('static_media|fade')
 
       const resetPlan = readProjectPlan(DISPOSABLE_PROJECT) as MutablePlan
       const firstScene = resetPlan.scenes[0]
       firstScene.scene_type = 'image'
-      firstScene.image_path = `projects/${DISPOSABLE_PROJECT}/images/scene_000.svg`
+      firstScene.image_path = `projects/${DISPOSABLE_PROJECT}/images/scene_000.png`
       firstScene.video_path = null
       firstScene.preview_path = null
       firstScene.motion = null
@@ -783,6 +789,9 @@ test.describe('Scene Timeline', () => {
         const updatedPlan = structuredClone(plan) as Record<string, unknown>
         const scenes = updatedPlan.scenes as Array<Record<string, unknown>>
         scenes[0].audio_path = `projects/${DISPOSABLE_PROJECT}/audio/scene_${sceneUid}.wav`
+        // The real endpoint returns the server-normalized plan, which marks the
+        // freshly generated narration as present.
+        scenes[0].audio_exists = true
         await route.fulfill({
           status: 200,
           contentType: 'application/json',
@@ -801,6 +810,9 @@ test.describe('Scene Timeline', () => {
       )
 
       await page.getByLabel('Override project narrator for this scene').check()
+      // Pin the override provider: the project default depends on configured
+      // API keys, and af_sarah is a Kokoro voice.
+      await page.getByLabel('Scene TTS Provider').selectOption('kokoro')
       await page.getByLabel('Scene Voice', { exact: true }).selectOption('af_sarah')
       await page.getByLabel('Scene Voice Speed').fill('1.25')
       await saveResponse
@@ -939,8 +951,10 @@ test.describe('Scene Timeline', () => {
       await page.locator('button[aria-controls="scene-operator-content"]').click()
 
       await expect(page.getByText('Recent image activity')).toBeVisible()
+      // The operator panel shows the action label, status chip, and a
+      // scene-title summary; full request details live on the Settings page.
       await expect(page.getByText('Image edit', { exact: true })).toBeVisible()
-      await expect(page.getByText('Increase contrast and clean the label')).toBeVisible()
+      await expect(page.getByText('succeeded', { exact: true })).toBeVisible()
     })
 
     test('video scenes expose clip controls and the separate demo capture action', async ({ page }) => {

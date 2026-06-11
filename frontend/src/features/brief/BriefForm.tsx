@@ -213,13 +213,11 @@ export function BriefForm({
 
   const submitVideo = handleSubmit((data) => onSubmit(data, 'video'))
   const submitStoryboard = handleSubmit((data) => onSubmit(data, 'storyboard'))
-  const sceneEngineOptions = remotionAvailable === false
-    ? SCENE_ENGINE_OPTIONS.map((option) => (
-      option.value === 'hybrid' || option.value === 'motion_only'
-        ? { ...option, label: `${option.label} (not installed)`, disabled: true }
-        : option
-    ))
-    : SCENE_ENGINE_OPTIONS
+  // When Remotion is disabled, the motion-backed engines are hidden entirely
+  // (not just disabled) so the brief never advertises an unavailable path.
+  const sceneEngineOptions = remotionAvailable
+    ? SCENE_ENGINE_OPTIONS
+    : SCENE_ENGINE_OPTIONS.filter((option) => option.value !== 'hybrid' && option.value !== 'motion_only')
 
   function applyShortFormMode(enabled: boolean) {
     setValue('short_form_format', enabled ? 'vertical_short' : '', { shouldDirty: true })
@@ -553,7 +551,9 @@ export function BriefForm({
                   Choose the primary visual path.
                 </div>
                 <p className="m-0 mt-[var(--space-2)] text-[var(--text-secondary)]" style={{ fontSize: 'var(--text-sm)' }}>
-                  Use GPT Image for generated stills, or switch to mixed media and Remotion only when a scene needs motion or footage.
+                  {remotionAvailable
+                    ? 'Use GPT Image for generated stills, or switch to mixed media and Remotion only when a scene needs motion or footage.'
+                    : 'Use GPT Image for generated stills, or switch to mixed media when a scene needs real footage.'}
                 </p>
               </div>
               <TextInput
@@ -669,33 +669,31 @@ export function BriefForm({
               </summary>
               <div className="mt-[var(--space-4)] grid gap-[var(--space-4)] md:grid-cols-2">
                 <div className="flex flex-col gap-[var(--space-1)]">
-                  <div className="flex items-center gap-[var(--space-2)]">
-                    <span
-                      className="font-[family-name:var(--font-body)] text-[var(--text-secondary)]"
-                      style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--weight-medium)' }}
-                    >
-                      Remotion availability
-                    </span>
-                    <button
-                      type="button"
-                      aria-label={remotionAvailable === false
-                        ? 'Remotion is the optional React-based renderer for advanced animated/template scenes. It is not installed in this build, so Remotion scenes are disabled.'
-                        : 'Remotion is enabled. Advanced Remotion scenes and previews can be generated/rendered locally.'}
-                      title={remotionAvailable === false
-                        ? 'Remotion is the optional React-based renderer for advanced animated/template scenes. It is not installed in this build, so Remotion scenes are disabled.'
-                        : 'Remotion is enabled. Advanced Remotion scenes and previews can be generated/rendered locally.'}
-                      className="inline-flex h-[16px] w-[16px] items-center justify-center rounded-full border border-[var(--border-default)] text-[var(--text-tertiary)] outline-none focus-visible:shadow-[var(--focus-ring)] cursor-help"
-                      style={{ fontSize: '10px', fontFamily: 'var(--font-mono)', fontWeight: 700, lineHeight: 1 }}
-                    >
-                      i
-                    </button>
-                  </div>
+                  {remotionAvailable ? (
+                    <div className="flex items-center gap-[var(--space-2)]">
+                      <span
+                        className="font-[family-name:var(--font-body)] text-[var(--text-secondary)]"
+                        style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--weight-medium)' }}
+                      >
+                        Remotion availability
+                      </span>
+                      <button
+                        type="button"
+                        aria-label="Remotion is enabled. Advanced Remotion scenes and previews can be generated/rendered locally."
+                        title="Remotion is enabled. Advanced Remotion scenes and previews can be generated/rendered locally."
+                        className="inline-flex h-[16px] w-[16px] items-center justify-center rounded-full border border-[var(--border-default)] text-[var(--text-tertiary)] outline-none focus-visible:shadow-[var(--focus-ring)] cursor-help"
+                        style={{ fontSize: '10px', fontFamily: 'var(--font-mono)', fontWeight: 700, lineHeight: 1 }}
+                      >
+                        i
+                      </button>
+                    </div>
+                  ) : null}
                   <Select
                     label="Scene Engine"
                     options={sceneEngineOptions}
-                    hint={remotionAvailable === false
-                      ? 'Auto and Classic stay available. Mixed Media and Remotion scenes need the local Remotion toolchain.'
-                      : 'Auto keeps betTube Studio image-first by default. Mixed Media and Remotion are explicit specialist overrides when you truly want them.'}
+                    hint={remotionAvailable
+                      ? 'Auto keeps betTube Studio image-first by default. Mixed Media and Remotion are explicit specialist overrides when you truly want them.'
+                      : 'Auto keeps betTube Studio image-first by default. Still-Image Focus pins every scene to authored stills.'}
                     error={errors.composition_mode?.message}
                     {...register('composition_mode')}
                   />

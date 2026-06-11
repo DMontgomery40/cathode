@@ -285,7 +285,7 @@ test.describe('Brief Studio', () => {
       await expect(select).toHaveValue('classic')
     })
 
-    test('Scene Engine choices stay visible even if bootstrap is unavailable', async ({ page }) => {
+    test('Scene Engine hides motion engines when bootstrap is unavailable', async ({ page }) => {
       await page.route('**/api/bootstrap', async (route) => {
         await route.abort()
       })
@@ -293,13 +293,15 @@ test.describe('Brief Studio', () => {
       await page.reload()
       await expect(page.getByRole('heading', { name: 'Brief Studio' })).toBeVisible()
 
+      // Without a confirmed Remotion capability the motion-backed engines are
+      // hidden, leaving only the image-first paths.
       await openAdvancedCreativeControls(page)
       const select = page.getByLabel('Scene Engine')
-      await expect(select.locator('option')).toHaveCount(4)
+      await expect(select.locator('option')).toHaveCount(2)
       await expect(select.locator('option[value="auto"]')).toHaveText('Image-First Auto')
     })
 
-    test('Scene Engine shows disabled Remotion-only modes when bootstrap says Remotion is unavailable', async ({ page }) => {
+    test('Scene Engine hides Remotion-only modes when bootstrap says Remotion is unavailable', async ({ page }) => {
       await page.route('**/api/bootstrap', async (route) => {
         await route.fulfill({
           status: 200,
@@ -319,10 +321,10 @@ test.describe('Brief Studio', () => {
       await expect(page.getByRole('heading', { name: 'Brief Studio' })).toBeVisible()
 
       await openAdvancedCreativeControls(page)
-      const hybridOption = page.locator('option[value="hybrid"]')
-      const motionOnlyOption = page.locator('option[value="motion_only"]')
-      await expect(hybridOption).toBeDisabled()
-      await expect(motionOnlyOption).toBeDisabled()
+      const select = page.getByLabel('Scene Engine')
+      await expect(select.locator('option')).toHaveCount(2)
+      await expect(select.locator('option[value="hybrid"]')).toHaveCount(0)
+      await expect(select.locator('option[value="motion_only"]')).toHaveCount(0)
     })
 
     // ── Slider interaction ───────────────────────────────────────
