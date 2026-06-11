@@ -386,6 +386,17 @@ BETTUBE_STUDIO_LOCAL_VIDEO_API_KEY=
 BETTUBE_STUDIO_LOCAL_VIDEO_TIMEOUT_SECONDS=900
 ```
 
+Server behavior:
+
+```bash
+# Comma-separated allowed CORS origins (default: localhost dev ports)
+BETTUBE_STUDIO_CORS_ORIGINS=
+# Python logging level for the API server (default: INFO)
+BETTUBE_STUDIO_LOG_LEVEL=INFO
+```
+
+See `docs/DEPLOYMENT.md` for the full deployment guide and `docs/ARCHITECTURE.md` for the system overview.
+
 ## Workflow
 
 ### Standard betTube Studio Project

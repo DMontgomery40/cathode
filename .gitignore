@@ -10,12 +10,10 @@ reference_frames/
 .playwright-mcp/
 frontend/test-results/
 frontend/projects/
-data/portal_patients_precompress_backups/
 /brief-*.png
 /scene*.png
 /menu-open-check.png
 /scenes-overview.png
-/lumit-*.png
 /tmp_github_*.png
 .logos/
 
@@ -75,9 +73,11 @@ Thumbs.db
 # Temporary files
 *.tmp
 *.temp
+tmp/
+.run_logs/
+.agent-memory-nexus/
 
 # Local operator context
-LOCAL_QEEG_ADMIN_CONTEXT.md
 .codex-scratchpad/
 
 # Experiments
