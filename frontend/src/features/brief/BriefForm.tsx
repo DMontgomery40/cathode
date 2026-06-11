@@ -531,26 +531,11 @@ export function BriefForm({
               Style
             </legend>
             <div className="flex flex-col gap-[var(--space-4)]">
-              <div
-                className="rounded-[var(--radius-lg)] border p-[var(--space-4)]"
-                style={{
-                  borderColor: 'rgba(214, 118, 88, 0.26)',
-                  background: 'linear-gradient(135deg, rgba(255,245,232,0.92), rgba(245,229,214,0.56))',
-                }}
-              >
-                <p
-                  className="m-0 uppercase tracking-[0.22em] text-[var(--text-tertiary)]"
-                  style={{ fontSize: '10px', fontFamily: 'var(--font-mono)', fontWeight: 700 }}
-                >
+              <div className="rounded-[var(--radius-lg)] border border-[var(--border-accent)] bg-[linear-gradient(135deg,rgba(var(--accent-primary-rgb),0.16),rgba(var(--focus-rgb),0.08))] px-[var(--space-4)] py-[var(--space-3)]">
+                <div className="text-[var(--text-primary)]" style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--weight-semibold)' }}>
                   Visual defaults
-                </p>
-                <div
-                  className="mt-[var(--space-2)] text-[var(--text-primary)]"
-                  style={{ fontSize: 'clamp(1.4rem, 3vw, 2.2rem)', lineHeight: 0.92, fontWeight: 700, letterSpacing: '-0.04em' }}
-                >
-                  Choose the primary visual path.
                 </div>
-                <p className="m-0 mt-[var(--space-2)] text-[var(--text-secondary)]" style={{ fontSize: 'var(--text-sm)' }}>
+                <p className="m-0 mt-[var(--space-1)] text-[var(--text-secondary)]" style={{ fontSize: 'var(--text-xs)' }}>
                   {remotionAvailable
                     ? 'Use GPT Image for generated stills, or switch to mixed media and Remotion only when a scene needs motion or footage.'
                     : 'Use GPT Image for generated stills, or switch to mixed media when a scene needs real footage.'}

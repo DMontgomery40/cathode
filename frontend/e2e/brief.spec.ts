@@ -100,6 +100,23 @@ test.describe('Brief Studio', () => {
       await expect(page.getByRole('heading', { name: 'Brief Studio' })).toBeVisible()
     })
 
+    test('new-project route never queries the API for a project named "new"', async ({ page }) => {
+      const phantomRequests: string[] = []
+      page.on('request', (request) => {
+        if (request.url().includes('/api/projects/new/')) {
+          phantomRequests.push(request.url())
+        }
+      })
+
+      // Reload so request tracking covers the full page lifecycle, then let
+      // the JobDock/plan pollers get a chance to fire their first interval.
+      await page.reload()
+      await expect(page.getByRole('heading', { name: 'Brief Studio' })).toBeVisible()
+      await page.waitForTimeout(3500)
+
+      expect(phantomRequests).toEqual([])
+    })
+
     test('page shows header, subtitle, and breadcrumbs', async ({ page }) => {
       const banner = page.getByRole('banner')
       await expect(banner.getByRole('heading', { name: 'Brief Studio' })).toBeVisible()

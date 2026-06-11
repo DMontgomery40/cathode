@@ -168,7 +168,8 @@ export function useRunAgentDemo(project: string) {
 export function useProjectJobs(project: string | null | undefined, options?: QueryOpts) {
   return useQuery({
     queryKey: ['project', project, 'jobs'],
-    enabled: Boolean(project && (options?.enabled ?? true)),
+    // 'new' is the unsaved-project route segment, not a real project name.
+    enabled: Boolean(project && project !== 'new' && (options?.enabled ?? true)),
     refetchInterval: options?.refetchInterval,
     queryFn: () => apiRequest<Job[]>(`/api/projects/${encodeURIComponent(String(project))}/jobs`),
   })
