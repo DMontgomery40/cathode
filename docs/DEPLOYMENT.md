@@ -36,6 +36,7 @@ Provider keys are read from the environment (locally via `.env`, which is gitign
 - `BETTUBE_STUDIO_API_PORT` — FastAPI port (default 9321)
 - `BETTUBE_STUDIO_CORS_ORIGINS` — comma-separated allowed origins. Defaults to the localhost dev ports; set this to the deployed frontend origin(s) when the SPA is served from a different origin. A literal `*` cannot be combined with credentialed requests — list origins explicitly.
 - `BETTUBE_STUDIO_LOG_LEVEL` — Python logging level (default `INFO`). Logs go to stdout in `timestamp level logger message` format; swap the formatter in `server/logging_setup.py` if you need JSON.
+- `BETTUBE_STUDIO_ENABLE_REMOTION` — master switch for the Remotion/motion surface (default off; see the Remotion section below).
 - `BETTUBE_STUDIO_FRONTEND_DIST` — override the directory the SPA is served from (defaults to `frontend/dist`)
 - `VITE_API_BASE_URL` — build-time base URL for the frontend API client; leave empty when FastAPI serves the SPA (same-origin `/api`)
 
@@ -57,6 +58,11 @@ All state is on the filesystem — there is no database:
 
 Mount both as volumes (compose already does). Backup = copy the directories.
 
-## Remotion (optional)
+## Remotion (optional, hidden by default)
 
-Remotion is intentionally NOT installed by default. Without it, every project renders through `ffmpeg` and the scene preview uses the plain media player. Installing the Remotion packages in `frontend/` enables `motion_only`/`hybrid` composition modes and template-deck scene rendering; the app detects availability at startup. Nothing breaks when it is absent — the stub fallback is wired in `frontend/vite.config.ts` and `core/runtime.py` (`remotion_available()`).
+The Remotion/motion surface is gated behind a master switch and is OFF by default. Two conditions must both hold before any motion option appears in the GUI:
+
+1. `BETTUBE_STUDIO_ENABLE_REMOTION=1` in the server environment, and
+2. the optional Remotion toolchain installed in `frontend/` (`npm install remotion @remotion/renderer @remotion/player @remotion/transitions` — these are deliberately not in `package.json`).
+
+With the switch off, every project renders through `ffmpeg`, the scene preview uses the plain media player, and no motion scene type / motion composition family / Remotion engine option is shown. Nothing breaks when it is absent — the stub fallback is wired in `frontend/vite.config.ts` and `core/runtime.py` (`remotion_available()`). Do not enable it until your team has decided how to own the Remotion render path.

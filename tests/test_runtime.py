@@ -153,7 +153,7 @@ def test_resolve_video_profile_normalizes_model_selection_mode(monkeypatch):
     assert profile["model_selection_mode"] == "advanced"
 
 
-def test_remotion_capabilities_reports_player_transitions_and_three(monkeypatch, tmp_path):
+def _install_fake_remotion_toolchain(monkeypatch, tmp_path):
     frontend_dir = tmp_path / "frontend"
     for pkg in (
         frontend_dir / "node_modules" / "remotion" / "package.json",
@@ -172,12 +172,44 @@ def test_remotion_capabilities_reports_player_transitions_and_three(monkeypatch,
     monkeypatch.setattr("core.runtime.REPO_ROOT", tmp_path)
     monkeypatch.setattr("core.runtime.shutil.which", lambda value: "/usr/bin/node" if value == "node" else None)
 
+
+def test_remotion_capabilities_reports_player_transitions_and_three(monkeypatch, tmp_path):
+    _install_fake_remotion_toolchain(monkeypatch, tmp_path)
+    monkeypatch.setenv("BETTUBE_STUDIO_ENABLE_REMOTION", "1")
+
     caps = remotion_capabilities()
 
     assert caps["render_available"] is True
     assert caps["player_available"] is True
     assert caps["transitions_available"] is True
     assert caps["three_available"] is True
+
+
+def test_remotion_hidden_by_default_even_with_toolchain_installed(monkeypatch, tmp_path):
+    """The master switch defaults off: an installed toolchain alone must not
+    expose any Remotion/motion surface."""
+    from core.runtime import remotion_available
+
+    _install_fake_remotion_toolchain(monkeypatch, tmp_path)
+    monkeypatch.delenv("BETTUBE_STUDIO_ENABLE_REMOTION", raising=False)
+
+    assert remotion_available() is False
+    caps = remotion_capabilities()
+    assert caps == {
+        "render_available": False,
+        "player_available": False,
+        "transitions_available": False,
+        "three_available": False,
+    }
+
+
+def test_remotion_switch_alone_is_not_enough_without_toolchain(monkeypatch, tmp_path):
+    from core.runtime import remotion_available
+
+    monkeypatch.setattr("core.runtime.REPO_ROOT", tmp_path)
+    monkeypatch.setenv("BETTUBE_STUDIO_ENABLE_REMOTION", "1")
+
+    assert remotion_available() is False
 
 
 def test_load_repo_env_populates_missing_provider_keys(tmp_path, monkeypatch):

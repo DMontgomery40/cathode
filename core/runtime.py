@@ -324,8 +324,19 @@ def default_local_video_generation_model() -> str:
     return str(os.getenv("BETTUBE_STUDIO_LOCAL_VIDEO_MODEL") or "").strip()
 
 
-def remotion_available() -> bool:
-    """Return whether the local frontend workspace has a runnable Remotion toolchain."""
+def remotion_enabled_by_config() -> bool:
+    """Master switch for the Remotion/motion product surface.
+
+    Remotion is hidden by default: every motion scene type, composition family,
+    preview, and render-backend option in the GUI keys off this signal (via
+    /api/bootstrap). Set BETTUBE_STUDIO_ENABLE_REMOTION=1 to expose it — the
+    optional Remotion toolchain must also be installed in frontend/ for the
+    surface to actually activate.
+    """
+    return str(os.getenv("BETTUBE_STUDIO_ENABLE_REMOTION") or "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _remotion_toolchain_present() -> bool:
     frontend_dir = REPO_ROOT / "frontend"
     return bool(
         shutil.which("node")
@@ -335,8 +346,20 @@ def remotion_available() -> bool:
     )
 
 
+def remotion_available() -> bool:
+    """Return whether Remotion is enabled by config AND locally runnable."""
+    return remotion_enabled_by_config() and _remotion_toolchain_present()
+
+
 def remotion_capabilities() -> dict[str, bool]:
     """Return the locally available Remotion feature surface for the UI."""
+    if not remotion_enabled_by_config():
+        return {
+            "render_available": False,
+            "player_available": False,
+            "transitions_available": False,
+            "three_available": False,
+        }
     frontend_dir = REPO_ROOT / "frontend"
     node_modules = frontend_dir / "node_modules"
     has_node = bool(shutil.which("node"))

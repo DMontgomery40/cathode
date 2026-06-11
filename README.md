@@ -88,7 +88,7 @@ This path is capture-first and review-first. It does not assume existing README 
 
 betTube Studio no longer stops at still-image and clip-only storyboards.
 
-Remotion is the optional React-based renderer for advanced animated/template scenes. It is not installed in the normal build, so Remotion scenes are disabled by default. The default and fallback final render path is always `ffmpeg`; advanced Remotion scenes and previews require the optional Remotion toolchain in `frontend/` to be installed and runnable on this machine.
+Remotion is the optional React-based renderer for advanced animated/template scenes. It is **hidden by default behind a master switch**: set `BETTUBE_STUDIO_ENABLE_REMOTION=1` *and* install the optional Remotion toolchain in `frontend/` to expose any motion scene type, motion composition family, motion preview, or Remotion render-backend option in the GUI. With the switch off (the default), the product is image/video + `ffmpeg` only, and the motion code paths stay dormant. The default and fallback final render path is always `ffmpeg`.
 
 - `classic`
   image + video scenes, with `ffmpeg` as the default final render backend
@@ -97,7 +97,7 @@ Remotion is the optional React-based renderer for advanced animated/template sce
 - `motion_only`
   build the project around Remotion scenes plus narration
 
-Remotion scenes are template-first in the current product and render through the optional local Remotion toolchain bundled in `frontend/`. The React app only exposes the Remotion-backed composition options when that toolchain is actually runnable on this machine.
+Remotion scenes are template-first in the current product and render through the optional local Remotion toolchain in `frontend/`. The React app only exposes the Remotion-backed composition options when `BETTUBE_STUDIO_ENABLE_REMOTION=1` is set and that toolchain is actually runnable on this machine.
 
 Important timing rule: narration audio is still the source of truth. betTube Studio computes scene durations, video trim/speed/hold behavior, and the Remotion manifest from the same timing contract, so hybrid renders stay in sync instead of drifting.
 
@@ -393,6 +393,8 @@ Server behavior:
 BETTUBE_STUDIO_CORS_ORIGINS=
 # Python logging level for the API server (default: INFO)
 BETTUBE_STUDIO_LOG_LEVEL=INFO
+# Master switch for the Remotion/motion surface (default: off/hidden)
+BETTUBE_STUDIO_ENABLE_REMOTION=0
 ```
 
 See `docs/DEPLOYMENT.md` for the full deployment guide and `docs/ARCHITECTURE.md` for the system overview.

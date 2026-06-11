@@ -34,6 +34,8 @@ Earlier versions shipped two domain-specific families (`clinical_explanation`, `
 
 `core/project_schema.py:backfill_plan()` is the single entry point that normalizes any (possibly legacy) plan into the current schema: `meta` (brief, render/image/video/tts profiles, pipeline mode) and `scenes` (narration, visual_prompt, scene_type, composition, asset paths, timing). Background jobs persist under `projects/<name>/.bettube-studio/jobs/`.
 
-## Remotion is optional
+## Remotion is optional and hidden by default
 
-The repo never depends on Remotion packages directly. `frontend/vite.config.ts` aliases the player surface to a stub when `@remotion/player` is absent, `tsconfig.app.json` excludes the Remotion sources from the no-Remotion build, and the backend resolves the render backend to `ffmpeg` when `core/runtime.py:remotion_available()` is false.
+"Motion" in the GUI means Remotion. The entire motion surface (motion scene type, native motion + template deck families, motion preview, Remotion render backend) keys off one signal: `core/runtime.py:remotion_available()`, exposed to the frontend via `/api/bootstrap`. That signal requires BOTH the `BETTUBE_STUDIO_ENABLE_REMOTION=1` master switch and an installed Remotion toolchain in `frontend/node_modules`; by default it is false and the product is image/video + `ffmpeg` only.
+
+The repo never depends on Remotion packages directly. `frontend/vite.config.ts` aliases the player surface to a stub when `@remotion/player` is absent, `tsconfig.app.json` excludes the Remotion sources from the no-Remotion build, and the backend resolves the render backend to `ffmpeg` when `remotion_available()` is false.
