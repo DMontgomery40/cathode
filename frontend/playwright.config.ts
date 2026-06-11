@@ -11,7 +11,7 @@ export default defineConfig({
   timeout: 30_000,
   expect: { timeout: 10_000 },
   use: {
-    baseURL: 'http://127.0.0.1:9322',
+    baseURL: `http://127.0.0.1:${process.env.BETTUBE_STUDIO_FRONTEND_PORT || 9322}`,
     trace: 'on-first-retry',
     screenshot: 'on',
     video: 'on',

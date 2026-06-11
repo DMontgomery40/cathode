@@ -36,10 +36,10 @@ export default defineConfig({
   },
   server: {
     host: '127.0.0.1',
-    port: 9322,
+    port: Number(process.env.BETTUBE_STUDIO_FRONTEND_PORT || 9322),
     proxy: {
       '/api': {
-        target: 'http://127.0.0.1:9321',
+        target: `http://127.0.0.1:${process.env.BETTUBE_STUDIO_API_PORT || 9321}`,
         changeOrigin: true,
       },
     },
