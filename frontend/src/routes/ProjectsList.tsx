@@ -76,6 +76,16 @@ export function ProjectsList() {
           title="Project library"
           eyebrow="Workspace index"
           copy="Browse saved videos, open a scene timeline, or start a new production."
+          actions={!isLoading && sortedProjects.length > 0 ? (
+            <div className="w-[13rem]">
+              <Select
+                label="Sort projects"
+                value={sortOrder}
+                onChange={(event) => setSortOrder(event.target.value as ProjectSortOrder)}
+                options={PROJECT_SORT_OPTIONS.map((option) => ({ value: option.value, label: option.label }))}
+              />
+            </div>
+          ) : undefined}
         >
           <div className="workspace-kpi-grid">
             <div>
@@ -92,20 +102,6 @@ export function ProjectsList() {
             </div>
           </div>
         </WorkspacePanel>
-
-        {!isLoading && sortedProjects.length > 0 ? (
-          <div className="flex justify-end">
-            <div className="w-full sm:w-[15rem]">
-              <Select
-                label="Sort projects"
-                value={sortOrder}
-                onChange={(event) => setSortOrder(event.target.value as ProjectSortOrder)}
-                options={PROJECT_SORT_OPTIONS.map((option) => ({ value: option.value, label: option.label }))}
-                hint="Newest first uses project creation time. Recently updated uses the latest plan activity."
-              />
-            </div>
-          </div>
-        ) : null}
 
         {isLoading ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-[var(--space-4)]">

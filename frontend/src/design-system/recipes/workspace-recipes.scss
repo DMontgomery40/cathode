@@ -3,6 +3,10 @@
   flex: 1 1 auto;
   overflow-y: auto;
   padding: var(--space-6);
+  /* Capped canvases center inside the shell instead of hugging the left
+     edge and leaving a dead column on wide windows. */
+  width: 100%;
+  margin-inline: auto;
 }
 
 .workspace-canvas[data-size='compact'] {

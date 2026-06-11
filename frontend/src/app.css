@@ -28,3 +28,28 @@
   --color-border-subtle: var(--border-subtle);
   --color-border-default: var(--border-default);
 }
+
+/* Scrollbars: match the dark shell instead of the default white WebKit bar.
+   Applies to every scroll container (main, workspace canvas, panels). */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-default) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: var(--border-default);
+  border-radius: 999px;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--text-tertiary);
+}

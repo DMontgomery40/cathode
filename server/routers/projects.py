@@ -110,18 +110,28 @@ def _project_asset_path(project_dir: Path, raw_path: Any) -> str | None:
     if not value:
         return None
 
-    candidate = Path(value)
-    if not candidate.is_absolute():
-        normalized = value.replace("\\", "/").lstrip("/")
-        marker = f"projects/{project_dir.name}/"
-        index = normalized.rfind(marker)
-        if index >= 0:
-            normalized = normalized[index + len(marker):]
-        candidate = (project_dir / normalized).resolve()
-    else:
-        candidate = candidate.resolve()
-
     project_root = project_dir.resolve()
+    normalized = value.replace("\\", "/")
+    candidate = Path(value)
+    if candidate.is_absolute():
+        candidate = candidate.resolve()
+        if not str(candidate).startswith(str(project_root)):
+            # Plans created on another machine (or under a previous repo name)
+            # persist absolute paths. Remap anything that still contains a
+            # projects/<name>/ segment into the local project directory.
+            marker = f"projects/{project_dir.name}/"
+            index = normalized.rfind(marker)
+            if index < 0:
+                return None
+            candidate = (project_dir / normalized[index + len(marker):]).resolve()
+    else:
+        relative = normalized.lstrip("/")
+        marker = f"projects/{project_dir.name}/"
+        index = relative.rfind(marker)
+        if index >= 0:
+            relative = relative[index + len(marker):]
+        candidate = (project_dir / relative).resolve()
+
     if not str(candidate).startswith(str(project_root)):
         return None
     if not candidate.exists() or not candidate.is_file():
@@ -170,18 +180,25 @@ async def get_projects() -> list[ProjectSummary]:
         render_profile = meta.get("render_profile") if isinstance(meta.get("render_profile"), dict) else {}
         created_utc, updated_utc = _project_dates(project_dir, meta)
         video_path = _project_asset_path(project_dir, meta.get("video_path"))
+        # Prefer a still image from any scene; only fall back to a video asset
+        # (scene clip, motion preview, or the final render) when no still
+        # exists, so video-only projects still get a card thumbnail.
         thumbnail_path = None
+        video_thumbnail = None
         for scene in plan.get("scenes", []):
             motion = scene.get("motion") if isinstance(scene.get("motion"), dict) else {}
-            thumbnail_path = (
-                _project_asset_path(project_dir, scene.get("image_path"))
-                or _project_asset_path(project_dir, scene.get("video_path"))
-                or _project_asset_path(project_dir, motion.get("preview_path"))
-                or _project_asset_path(project_dir, motion.get("render_path"))
-                or _project_asset_path(project_dir, scene.get("preview_path"))
-            )
+            thumbnail_path = _project_asset_path(project_dir, scene.get("image_path"))
             if thumbnail_path:
                 break
+            if video_thumbnail is None:
+                video_thumbnail = (
+                    _project_asset_path(project_dir, scene.get("video_path"))
+                    or _project_asset_path(project_dir, motion.get("preview_path"))
+                    or _project_asset_path(project_dir, motion.get("render_path"))
+                    or _project_asset_path(project_dir, scene.get("preview_path"))
+                )
+        if not thumbnail_path:
+            thumbnail_path = video_thumbnail or video_path
         summaries.append(
             ProjectSummary(
                 name=name,

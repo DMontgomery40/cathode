@@ -560,3 +560,57 @@ def test_cors_env_origin_is_honored_by_app(monkeypatch):
         },
     )
     assert "access-control-allow-origin" not in disallowed.headers
+
+def test_project_asset_path_remaps_foreign_absolute_paths(tmp_path):
+    """Plans written on another machine persist absolute paths; anything with a
+    projects/<name>/ segment must remap into the local project directory."""
+    from server.routers.projects import _project_asset_path
+
+    project_dir = tmp_path / "projects" / "demo_project"
+    (project_dir / "images").mkdir(parents=True)
+    asset = project_dir / "images" / "scene_000.png"
+    asset.write_bytes(b"png")
+
+    foreign = "/Users/somebody-else/old-repo/projects/demo_project/images/scene_000.png"
+    assert _project_asset_path(project_dir, foreign) == "images/scene_000.png"
+
+    # Absolute paths with no project marker stay rejected (no path escape).
+    assert _project_asset_path(project_dir, "/etc/passwd") is None
+    # Missing files stay rejected even when the marker matches.
+    missing = "/elsewhere/projects/demo_project/images/missing.png"
+    assert _project_asset_path(project_dir, missing) is None
+
+
+def test_get_projects_thumbnail_prefers_stills_then_falls_back_to_video(tmp_path):
+    from server.routers import projects as projects_router
+
+    project_dir = tmp_path / "video_only"
+    (project_dir / "clips").mkdir(parents=True)
+    clip = project_dir / "clips" / "scene_001.mp4"
+    clip.write_bytes(b"mp4")
+    render = project_dir / "final.mp4"
+    render.write_bytes(b"mp4")
+    (project_dir / "plan.json").write_text("{}", encoding="utf-8")
+
+    plan = {
+        "meta": {"video_path": str(render)},
+        "scenes": [
+            {"id": 0, "image_path": None, "video_path": str(clip)},
+            {"id": 1, "image_path": None},
+        ],
+    }
+
+    with (
+        patch.object(projects_router, "PROJECTS_DIR", tmp_path),
+        patch.object(projects_router, "list_projects", return_value=["video_only"]),
+        patch.object(projects_router, "load_plan", return_value=plan),
+    ):
+        app = create_app()
+        client = TestClient(app)
+        resp = client.get("/api/projects")
+
+    assert resp.status_code == 200
+    body = resp.json()[0]
+    # No stills anywhere -> first scene clip becomes the thumbnail.
+    assert body["thumbnail_path"] == "clips/scene_001.mp4"
+    assert body["has_video"] is True

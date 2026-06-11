@@ -67,6 +67,10 @@ export function ProjectCard({ project }: ProjectCardProps) {
       ? `/projects/${encodeURIComponent(project.name)}/queue`
     : `/projects/${encodeURIComponent(project.name)}/brief`
   const thumbnailUrl = projectMediaUrl(project.name, project.thumbnail_path)
+  // The server falls back to a video asset (scene clip or final render) when a
+  // project has no still images; render those with <video> so the first frame
+  // shows instead of a broken <img>.
+  const thumbnailIsVideo = /\.(mp4|mov|webm|m4v)$/i.test(project.thumbnail_path ?? '')
   const jobCount = project.jobs?.counts?.total ?? 0
 
   return (
@@ -84,7 +88,19 @@ export function ProjectCard({ project }: ProjectCardProps) {
         className="w-full bg-[var(--surface-stage)] flex items-center justify-center overflow-hidden rounded-t-[var(--radius-lg)]"
         style={{ height: 140 }}
       >
-        {thumbnailUrl ? (
+        {thumbnailUrl && thumbnailIsVideo ? (
+          <video
+            src={`${thumbnailUrl}#t=0.1`}
+            muted
+            playsInline
+            preload="metadata"
+            aria-label={`${project.name} thumbnail`}
+            className="w-full h-full object-cover pointer-events-none"
+            onError={(e) => {
+              e.currentTarget.style.display = 'none'
+            }}
+          />
+        ) : thumbnailUrl ? (
           <img
             src={thumbnailUrl}
             alt={`${project.name} thumbnail`}
