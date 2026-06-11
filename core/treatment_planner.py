@@ -6,7 +6,6 @@ import json
 from typing import Any, Literal
 
 from .composition_planner import (
-    _brief_prefers_authored_clinical_stills,
     _composition_props_from_scene,
     _normalize_composition_intent,
     _normalized_data_points,
@@ -281,7 +280,6 @@ def _merge_treatment_overrides(
 ) -> list[dict[str, Any]]:
     by_uid = {item["uid"]: item for item in overrides}
     merged: list[dict[str, Any]] = []
-    suppress_transitions = _brief_prefers_authored_clinical_stills(brief)
     for scene in scenes:
         uid = str(scene.get("uid") or "").strip()
         override = by_uid.get(uid)
@@ -315,7 +313,7 @@ def _merge_treatment_overrides(
             merged.append(scene)
             continue
 
-        transition_after = None if suppress_transitions else current.get("transition_after")
+        transition_after = current.get("transition_after")
         next_scene = _clean_legacy_transition_hints(scene, transition_after)
         next_props = _merged_props(scene, current, override_family, override.get("props"))
         next_composition = {

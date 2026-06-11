@@ -125,32 +125,6 @@ _SURREAL_PALETTE_HINTS = (
 )
 _LABELED_VALUE_RE = re.compile(r"(?P<label>[^:]+?):\s*(?P<value>-?\d+(?:\.\d+)?)")
 _NUMERIC_RANGE_RE = re.compile(r"(?P<min>-?\d+(?:\.\d+)?)\s*(?:to|[–—-])\s*(?P<max>-?\d+(?:\.\d+)?)")
-_CLINICAL_PATIENT_HINTS = (
-    "patient",
-    "patients",
-    "clinician",
-    "clinical",
-    "medical",
-    "assessment",
-    "report",
-    "findings",
-    "results",
-    "follow-up",
-    "follow up",
-)
-_CLINICAL_DATA_HINTS = (
-    "data",
-    "metrics",
-    "measure",
-    "measurements",
-    "test",
-    "tests",
-    "sessions",
-    "reference range",
-    "baseline",
-    "scores",
-    "results",
-)
 
 
 def _scene_text(scene: dict[str, Any]) -> str:
@@ -250,15 +224,6 @@ def _brief_text(brief: dict[str, Any] | None) -> str:
     return "\n".join(str(value or "").strip() for value in parts if str(value or "").strip()).lower()
 
 
-def _brief_prefers_authored_clinical_stills(brief: dict[str, Any] | None) -> bool:
-    text = _brief_text(brief)
-    if not text:
-        return False
-    has_patient_context = _has_any_hint(text, _CLINICAL_PATIENT_HINTS)
-    has_data_context = _has_any_hint(text, _CLINICAL_DATA_HINTS) or "|---|" in text
-    return has_patient_context and has_data_context
-
-
 def _brief_allows_native_motion(brief: dict[str, Any] | None) -> bool:
     raw = brief if isinstance(brief, dict) else {}
     return (
@@ -272,18 +237,6 @@ def _native_motion_requested(scene: dict[str, Any], intent: dict[str, Any]) -> b
     if scene_type == "motion":
         return True
     if intent["mode_hint"] == "native":
-        return True
-    if _normalized_data_points(scene, intent):
-        return True
-    notes = _staging_notes(scene, intent).lower()
-    if not notes:
-        return False
-    return any(hint in notes for hint in _NATIVE_MOTION_HINTS)
-
-
-def _clinical_native_motion_requested(scene: dict[str, Any], intent: dict[str, Any]) -> bool:
-    scene_type = str(scene.get("scene_type") or "").strip().lower()
-    if scene_type == "motion":
         return True
     if _normalized_data_points(scene, intent):
         return True
@@ -1016,17 +969,17 @@ def _composition_props_from_scene(scene: dict[str, Any], intent: dict[str, Any],
     headline = lines[0] if lines else title
     body = " ".join(lines[1:3]).strip() if len(lines) > 1 else narration[:180].strip()
     props: dict[str, Any] = {}
-    # Clinical template families: prefer director-provided structured props, but
+    # Template deck families: prefer director-provided structured props, but
     # fall back to building them from on_screen_text / data_points when the
     # director only populated flat text.
-    if family in _CLINICAL_TEMPLATE_FAMILIES:
+    if family in _TEMPLATE_DECK_FAMILIES:
         existing_props = (scene.get("composition") or {}).get("props") or {}
         if existing_props:
             props.update(existing_props)
         if "headline" not in props:
             props["headline"] = headline
         data_points = _scene_data_points(scene)
-        _enrich_clinical_props(family, props, lines, data_points)
+        _enrich_template_props(family, props, lines, data_points)
         return props
 
     if family in {"media_pan", "software_demo_focus", "kinetic_statements", "bullet_stack", "quote_focus"}:
@@ -1054,10 +1007,10 @@ def _composition_props_from_scene(scene: dict[str, Any], intent: dict[str, Any],
     return props
 
 
-_CLINICAL_TEMPLATE_FAMILIES = {
+_TEMPLATE_DECK_FAMILIES = {
     "cover_hook", "orientation", "synthesis_summary", "closing_cta",
-    "clinical_explanation", "metric_improvement", "brain_region_focus",
-    "metric_comparison", "timeline_progression", "analogy_metaphor",
+    "metric_improvement", "metric_comparison", "timeline_progression",
+    "analogy_metaphor",
 }
 
 _ARROW_PAT = re.compile(r"[\u2192]|->|=>")
@@ -1106,7 +1059,6 @@ def _reroute_family_by_data_shape(family: str, scene: dict[str, Any]) -> str:
 
     - metric_improvement + session data → three_data_stage (charts)
     - metric_comparison + temporal arrows → three_data_stage (charts)
-    - brain_region_focus + temporal arrows → three_data_stage (charts)
     """
     if family == "metric_improvement":
         data_points = _scene_data_points(scene)
@@ -1139,33 +1091,6 @@ def _reroute_family_by_data_shape(family: str, scene: dict[str, Any]) -> str:
         if _has_session_labels(data_points):
             return "three_data_stage"
         return family
-    if family != "brain_region_focus":
-        return family
-    data_points = _scene_data_points(scene)
-    if _has_temporal_progression(data_points):
-        expanded = _expand_arrow_data_points(data_points)
-        comp = scene.get("composition")
-        if isinstance(comp, dict):
-            data = comp.get("data")
-            if isinstance(data, dict):
-                data["data_points"] = expanded
-            else:
-                comp["data"] = {"data_points": expanded}
-            props = comp.get("props")
-            if isinstance(props, dict):
-                bg = props.get("background_id", "")
-                if "brain" in bg.lower():
-                    del props["background_id"]
-        return "three_data_stage"
-    if _has_session_labels(data_points):
-        comp = scene.get("composition")
-        if isinstance(comp, dict):
-            props = comp.get("props")
-            if isinstance(props, dict):
-                bg = props.get("background_id", "")
-                if "brain" in bg.lower():
-                    del props["background_id"]
-        return "three_data_stage"
     return family
 
 
@@ -1181,14 +1106,14 @@ def _scene_data_points(scene: dict[str, Any]) -> list[str]:
 # and data_points when the director didn't populate them directly.
 # ---------------------------------------------------------------------------
 
-def _enrich_clinical_props(
+def _enrich_template_props(
     family: str,
     props: dict[str, Any],
     lines: list[str],
     data_points: list[str],
 ) -> None:
     """Mutate *props* in-place, filling structured fields from flat text when absent."""
-    fn = _CLINICAL_ENRICHERS.get(family)
+    fn = _TEMPLATE_ENRICHERS.get(family)
     if fn:
         fn(props, lines, data_points)
 
@@ -1262,53 +1187,6 @@ def _enrich_metric_improvement(props: dict[str, Any], lines: list[str], data_poi
             props["stages"] = stages
 
 
-def _enrich_brain_region_focus(props: dict[str, Any], lines: list[str], data_points: list[str]) -> None:
-    if "regions" in props and props["regions"]:
-        return
-    # Filter data_points: drop progression arrows and target/reference lines
-    _arrow_pat = re.compile(r"[\u2192]|->|=>")  # → or -> or =>
-    _target_pat = re.compile(r"^target", re.IGNORECASE)
-    usable_dp = [
-        dp for dp in data_points
-        if dp.strip() and not _arrow_pat.search(dp) and not _target_pat.match(dp.strip())
-    ]
-    source = usable_dp if usable_dp else lines[1:]
-    # Filter target/reference and pure-prose lines from any source
-    source = [
-        s for s in source
-        if s.strip() and not _target_pat.match(s.strip())
-    ]
-    # Parse "Region: value status" or "Region -- value (status)"
-    # Also handle "F3 (Left): 1.0 ✓" style
-    region_pat = re.compile(
-        r"^([A-Za-z][\w\s/\-()]*?)(?:\s*[-:]\s*)(.+?)(?:\s*[\(\[]?(improved|stable|declined|flagged)[\)\]]?\s*)?$",
-        re.IGNORECASE,
-    )
-    # Status indicators: ✓ = improved/stable, ✗/✘ = declined/flagged
-    check_mark = re.compile(r"[\u2713\u2714\u2705]")  # ✓ ✔ ✅
-    cross_mark = re.compile(r"[\u2717\u2718\u274C]")   # ✗ ✘ ❌
-    regions: list[dict[str, str]] = []
-    for item in source:
-        stripped = item.strip()
-        m = region_pat.match(stripped)
-        if not m:
-            # Skip lines that don't match "Name: value" pattern (prose captions, etc.)
-            continue
-        value_str = m.group(2).strip()
-        region: dict[str, str] = {"name": m.group(1).strip(), "value": value_str}
-        if m.group(3):
-            region["status"] = m.group(3).strip().lower()
-        elif check_mark.search(value_str):
-            region["status"] = "improved"
-            region["value"] = check_mark.sub("", value_str).strip()
-        elif cross_mark.search(value_str):
-            region["status"] = "declined"
-            region["value"] = cross_mark.sub("", value_str).strip()
-        regions.append(region)
-    if regions:
-        props["regions"] = regions
-
-
 def _enrich_metric_comparison(props: dict[str, Any], lines: list[str], data_points: list[str]) -> None:
     if ("left" in props and props["left"]) or ("right" in props and props["right"]):
         return
@@ -1318,11 +1196,6 @@ def _enrich_metric_comparison(props: dict[str, Any], lines: list[str], data_poin
         mid = len(source) // 2
         props["left"] = {"title": "Before", "items": source[:mid], "accent": "amber"}
         props["right"] = {"title": "After", "items": source[mid:], "accent": "teal"}
-
-
-def _enrich_clinical_explanation(props: dict[str, Any], lines: list[str], _dp: list[str]) -> None:
-    if "body" not in props and len(lines) > 1:
-        props["body"] = " ".join(lines[1:3])
 
 
 def _enrich_synthesis_summary(props: dict[str, Any], lines: list[str], data_points: list[str]) -> None:
@@ -1366,14 +1239,12 @@ def _enrich_analogy_metaphor(props: dict[str, Any], lines: list[str], data_point
         props["right"] = {"title": source[mid], "items": source[mid + 1:] if len(source) > mid + 1 else [], "accent": "teal"}
 
 
-_CLINICAL_ENRICHERS: dict[str, Any] = {
+_TEMPLATE_ENRICHERS: dict[str, Any] = {
     "cover_hook": _enrich_cover_hook,
     "orientation": _enrich_orientation,
     "timeline_progression": _enrich_timeline_progression,
     "metric_improvement": _enrich_metric_improvement,
-    "brain_region_focus": _enrich_brain_region_focus,
     "metric_comparison": _enrich_metric_comparison,
-    "clinical_explanation": _enrich_clinical_explanation,
     "synthesis_summary": _enrich_synthesis_summary,
     "closing_cta": _enrich_closing_cta,
     "analogy_metaphor": _enrich_analogy_metaphor,
@@ -1386,7 +1257,7 @@ def _default_mode_for_family(scene: dict[str, Any], family: str, current_mode: s
         return "native"
     if family in {"kinetic_statements", "bullet_stack", "quote_focus", "three_data_stage", "surreal_tableau_3d"}:
         return "native"
-    if family in _CLINICAL_TEMPLATE_FAMILIES:
+    if family in _TEMPLATE_DECK_FAMILIES:
         return "native"
     if family == "software_demo_focus":
         return "overlay"
@@ -1396,7 +1267,7 @@ def _default_mode_for_family(scene: dict[str, Any], family: str, current_mode: s
 def _family_needs_native_renderer(family: str) -> bool:
     return family in (
         {"kinetic_statements", "bullet_stack", "quote_focus", "three_data_stage", "surreal_tableau_3d"}
-        | _CLINICAL_TEMPLATE_FAMILIES
+        | _TEMPLATE_DECK_FAMILIES
         | {"software_demo_focus"}
     )
 
@@ -1409,7 +1280,7 @@ def _mode_for_family(
 ) -> str:
     native_families = {
         "kinetic_statements", "bullet_stack", "quote_focus", "three_data_stage", "surreal_tableau_3d",
-    } | _CLINICAL_TEMPLATE_FAMILIES
+    } | _TEMPLATE_DECK_FAMILIES
     if str(scene.get("scene_type") or "").strip().lower() == "motion":
         return "native"
     if family in native_families:
@@ -1433,11 +1304,6 @@ def _family_for_scene(
 ) -> str:
     intent = _normalize_composition_intent(scene)
     scene_type = str(scene.get("scene_type") or "image").strip().lower()
-    prefers_clinical_stills = scene_type == "image" and _brief_prefers_authored_clinical_stills(brief)
-    if prefers_clinical_stills and not _clinical_native_motion_requested(scene, intent):
-        if intent["family_hint"] in {"", "static_media", "media_pan"}:
-            return "static_media"
-
     if intent["family_hint"]:
         return intent["family_hint"]
 
@@ -1454,10 +1320,6 @@ def _family_for_scene(
     if scene_type == "image":
         if _software_demo_focus_requested(scene, intent):
             return "software_demo_focus"
-        if prefers_clinical_stills:
-            if _clinical_native_motion_requested(scene, intent):
-                return _motion_family_from_scene(scene, intent)
-            return "static_media"
         if _native_motion_requested(scene, intent):
             return _motion_family_from_scene(scene, intent)
         if current_family == "media_pan":
@@ -1474,7 +1336,7 @@ def plan_scene_compositions(
     """Populate stable composition families without forcing a new render path yet."""
     planned: list[dict[str, Any]] = []
     native_motion_allowed = _brief_allows_native_motion(brief)
-    suppress_transitions = _brief_prefers_authored_clinical_stills(brief) or not native_motion_allowed
+    suppress_transitions = not native_motion_allowed
 
     for scene in scenes:
         current = scene_composition_payload(scene)
@@ -1495,7 +1357,7 @@ def plan_scene_compositions(
         original_family = family
         family = _reroute_family_by_data_shape(family, next_scene)
         if not native_motion_allowed and _family_needs_native_renderer(family):
-            family = "static_media" if _brief_prefers_authored_clinical_stills(brief) else "media_pan"
+            family = "media_pan"
         if family != original_family:
             # Update current composition family for downstream logic
             if isinstance(next_scene.get("composition"), dict):

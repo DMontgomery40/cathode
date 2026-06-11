@@ -2,7 +2,7 @@ import pytest
 
 from core.composition_planner import (
     plan_scene_compositions,
-    _enrich_clinical_props,
+    _enrich_template_props,
     _has_temporal_progression,
     _expand_arrow_data_points,
     _expand_arrow_lines_for_data_stage,
@@ -32,42 +32,15 @@ def test_plain_ui_screenshot_stays_media_pan_without_overlay_callouts():
     assert scene["composition"]["mode"] == "none"
 
 
-def test_patient_data_explainer_defaults_ordinary_image_slides_to_static_media():
+def test_non_native_brief_suppresses_transition_treatments():
     scenes = [
         {
-            "uid": "scene_patient",
-            "id": 0,
-            "title": "What Comes Next",
-            "scene_type": "image",
-            "narration": "A follow-up check helps confirm the gains are holding.",
-            "visual_prompt": "Warm dark background with a calendar, sleep icon, movement icon, and supportive labels.",
-            "on_screen_text": ["Follow-up in 2-3 months", "Sleep · Exercise · Stress management · Cognitive activity"],
-        }
-    ]
-
-    planned = plan_scene_compositions(
-        scenes,
-        brief={
-            "video_goal": "Educate the patient on their assessment data in a patient-focused explainer video.",
-            "audience": "The patient whose report this is.",
-            "source_material": "Assessment results across sessions with reference ranges and follow-up recommendations.",
-        },
-    )
-    scene = planned[0]
-
-    assert scene["composition"]["family"] == "static_media"
-    assert scene["composition"]["mode"] == "none"
-
-
-def test_patient_data_explainer_suppresses_transition_treatments():
-    scenes = [
-        {
-            "uid": "scene_patient",
+            "uid": "scene_cover",
             "id": 0,
             "title": "Cover",
             "scene_type": "image",
             "narration": "Walk through the report clearly.",
-            "visual_prompt": "Illustrated brain cover still.",
+            "visual_prompt": "Illustrated cover still.",
             "transition_hint": "fade",
             "composition": {"transition_after": {"kind": "fade", "duration_in_frames": 20}},
         }
@@ -76,52 +49,14 @@ def test_patient_data_explainer_suppresses_transition_treatments():
     planned = plan_scene_compositions(
         scenes,
         brief={
-            "video_goal": "Explain patient assessment results clearly.",
-            "audience": "The patient whose report this is.",
-            "source_material": "Assessment results across sessions with reference ranges and follow-up recommendations.",
+            "video_goal": "Explain quarterly results clearly.",
+            "audience": "Account holders reviewing their report.",
+            "source_material": "Results across sessions with reference ranges and follow-up recommendations.",
         },
     )
 
     assert planned[0]["composition"]["transition_after"] is None
     assert planned[0]["transition_hint"] is None
-
-
-def test_patient_data_explainer_ignores_legacy_media_pan_and_native_mode_hints():
-    scenes = [
-        {
-            "uid": "scene_patient",
-            "id": 0,
-            "title": "Summary Card",
-            "scene_type": "image",
-            "narration": "Keep the explanation steady and readable.",
-            "visual_prompt": "Calm authored still with supportive labels.",
-            "composition_intent": {
-                "family_hint": "media_pan",
-                "mode_hint": "native",
-                "transition_after": "fade",
-            },
-            "composition": {
-                "family": "media_pan",
-                "mode": "native",
-                "transition_after": {"kind": "fade", "duration_in_frames": 20},
-            },
-        }
-    ]
-
-    planned = plan_scene_compositions(
-        scenes,
-        brief={
-            "video_goal": "Explain patient assessment results clearly.",
-            "audience": "The patient whose report this is.",
-            "source_material": "Assessment results across sessions with reference ranges and follow-up recommendations.",
-        },
-    )
-
-    scene = planned[0]
-    assert scene["composition"]["family"] == "static_media"
-    assert scene["composition"]["mode"] == "none"
-    assert scene["composition"]["transition_after"] is None
-    assert scene["transition_hint"] is None
 
 
 def test_plain_screen_recording_stays_static_media_without_overlay_callouts():
@@ -190,48 +125,44 @@ def test_explicit_ui_callout_scene_keeps_software_demo_overlay_when_native_reque
 
 
 # ---------------------------------------------------------------------------
-# Clinical template structured props from on_screen_text / data_points
+# Template deck structured props from on_screen_text / data_points
 # ---------------------------------------------------------------------------
 
-_CLINICAL_BRIEF = {
-    "video_goal": "Educate the patient on their assessment data.",
-    "audience": "The patient whose report this is.",
-    "source_material": "Assessment results across sessions.",
-}
-
-_CLINICAL_NATIVE_BRIEF = {
-    **_CLINICAL_BRIEF,
+_NATIVE_BRIEF = {
+    "video_goal": "Explain progress across review sessions.",
+    "audience": "Account holders reviewing their report.",
+    "source_material": "Results across sessions.",
     "text_render_mode": "deterministic_overlay",
 }
 
 
-class TestClinicalTemplatePropsBuiltFromOnScreenText:
-    """Verify each clinical family gets structured props from on_screen_text."""
+class TestTemplatePropsBuiltFromOnScreenText:
+    """Verify each template deck family gets structured props from on_screen_text."""
 
     def test_cover_hook_gets_subtitle_and_kicker(self):
-        props: dict = {"headline": "Your Brain Health Report"}
-        _enrich_clinical_props(
+        props: dict = {"headline": "Your Quarterly Report"}
+        _enrich_template_props(
             "cover_hook", props,
-            ["Your Brain Health Report", "Session Overview", "NeuroClinic"],
+            ["Your Quarterly Report", "Session Overview", "betTube Studio"],
             [],
         )
         assert props["subtitle"] == "Session Overview"
-        assert props["kicker"] == "NeuroClinic"
+        assert props["kicker"] == "betTube Studio"
 
     def test_orientation_gets_items(self):
         props: dict = {"headline": "What We Will Explore"}
-        _enrich_clinical_props(
+        _enrich_template_props(
             "orientation", props,
-            ["What We Will Explore", "Brain Waves", "Focus Metrics", "Treatment Plan"],
+            ["What We Will Explore", "Response Times", "Focus Metrics", "Action Plan"],
             [],
         )
-        assert props["items"] == ["Brain Waves", "Focus Metrics", "Treatment Plan"]
+        assert props["items"] == ["Response Times", "Focus Metrics", "Action Plan"]
 
     def test_timeline_progression_gets_markers(self):
-        props: dict = {"headline": "Treatment Timeline"}
-        _enrich_clinical_props(
+        props: dict = {"headline": "Rollout Timeline"}
+        _enrich_template_props(
             "timeline_progression", props,
-            ["Treatment Timeline", "Session 1 -- Jan 15", "Session 2 -- Feb 20", "Session 3 -- Mar 10"],
+            ["Rollout Timeline", "Session 1 -- Jan 15", "Session 2 -- Feb 20", "Session 3 -- Mar 10"],
             [],
         )
         assert len(props["markers"]) == 3
@@ -239,21 +170,21 @@ class TestClinicalTemplatePropsBuiltFromOnScreenText:
         assert props["markers"][0]["date"] == "Jan 15"
 
     def test_metric_improvement_gets_stages_from_data_points(self):
-        props: dict = {"headline": "P300 Signal Strength"}
-        _enrich_clinical_props(
+        props: dict = {"headline": "Signal Strength"}
+        _enrich_template_props(
             "metric_improvement", props,
-            ["P300 Signal Strength"],
-            ["Session 1: 6.9 uV", "Session 2: 11.0 uV"],
+            ["Signal Strength"],
+            ["Session 1: 6.9 ms", "Session 2: 11.0 ms"],
         )
         assert len(props["stages"]) == 2
-        assert props["stages"][0]["value"] == "6.9 uV"
+        assert props["stages"][0]["value"] == "6.9 ms"
         assert props["stages"][0]["label"] == "Session 1"
-        assert props["stages"][1]["value"] == "11.0 uV"
+        assert props["stages"][1]["value"] == "11.0 ms"
         assert "delta" in props
 
     def test_metric_improvement_computes_delta(self):
         props: dict = {"headline": "Test"}
-        _enrich_clinical_props(
+        _enrich_template_props(
             "metric_improvement", props,
             ["Test"],
             ["Before: 5.0", "After: 8.0"],
@@ -261,144 +192,86 @@ class TestClinicalTemplatePropsBuiltFromOnScreenText:
         assert props["delta"] == "+3.0"
         assert props["direction"] == "improvement"
 
-    def test_brain_region_focus_gets_regions(self):
-        props: dict = {"headline": "Brain Regions"}
-        _enrich_clinical_props(
-            "brain_region_focus", props,
-            ["Brain Regions"],
-            ["Frontal: 12.5 uV improved", "Parietal: 8.2 uV stable"],
-        )
-        assert len(props["regions"]) == 2
-        assert props["regions"][0]["name"] == "Frontal"
-        assert "12.5" in props["regions"][0]["value"]
-
     def test_metric_comparison_gets_left_right(self):
         props: dict = {"headline": "Before vs After"}
-        _enrich_clinical_props(
+        _enrich_template_props(
             "metric_comparison", props,
             ["Before vs After"],
-            ["Low focus 3.2", "Poor sleep 4.1", "Good focus 7.8", "Better sleep 6.5"],
+            ["Low focus 3.2", "Poor uptime 4.1", "Good focus 7.8", "Better uptime 6.5"],
         )
         assert "left" in props
         assert "right" in props
         assert len(props["left"]["items"]) == 2
         assert len(props["right"]["items"]) == 2
 
-    def test_clinical_explanation_gets_body(self):
-        props: dict = {"headline": "What This Means"}
-        _enrich_clinical_props(
-            "clinical_explanation", props,
-            ["What This Means", "Your brain waves show improvement.", "Alpha power increased."],
-            [],
-        )
-        assert "Your brain waves show improvement." in props["body"]
-
     def test_synthesis_summary_gets_columns(self):
         props: dict = {"headline": "Summary"}
-        _enrich_clinical_props(
+        _enrich_template_props(
             "synthesis_summary", props,
             ["Summary"],
-            ["Focus improved", "Sleep better", "Stress lower", "Memory sharper"],
+            ["Focus improved", "Latency lower", "Errors down", "Coverage up"],
         )
         assert "columns" in props
         assert len(props["columns"]) >= 2
 
     def test_closing_cta_gets_bullets(self):
         props: dict = {"headline": "Next Steps"}
-        _enrich_clinical_props(
+        _enrich_template_props(
             "closing_cta", props,
-            ["Next Steps", "Schedule follow-up", "Continue exercises", "Track sleep"],
+            ["Next Steps", "Schedule follow-up", "Continue training", "Track metrics"],
             [],
         )
-        assert props["bullets"] == ["Schedule follow-up", "Continue exercises", "Track sleep"]
+        assert props["bullets"] == ["Schedule follow-up", "Continue training", "Track metrics"]
 
     def test_analogy_metaphor_gets_left_right(self):
-        props: dict = {"headline": "Understanding Your Brain"}
-        _enrich_clinical_props(
+        props: dict = {"headline": "Understanding the System"}
+        _enrich_template_props(
             "analogy_metaphor", props,
-            ["Understanding Your Brain"],
-            ["Orchestra", "Each section plays", "Your Brain", "Each region contributes"],
+            ["Understanding the System"],
+            ["Orchestra", "Each section plays", "Your Pipeline", "Each stage contributes"],
         )
         assert props["left"]["title"] == "Orchestra"
-        assert props["right"]["title"] == "Your Brain"
+        assert props["right"]["title"] == "Your Pipeline"
 
 
-class TestClinicalTemplatePreservesDirectorProps:
+class TestTemplatePropsPreserveDirectorProps:
     """Verify director-populated props aren't overwritten by enrichment."""
 
     def test_director_stages_preserved(self):
         props: dict = {
-            "headline": "P300",
-            "stages": [{"value": "6.9 uV", "label": "Baseline"}, {"value": "11.0 uV", "label": "Post"}],
+            "headline": "Response Time",
+            "stages": [{"value": "6.9 ms", "label": "Baseline"}, {"value": "11.0 ms", "label": "Post"}],
         }
-        _enrich_clinical_props(
+        _enrich_template_props(
             "metric_improvement", props,
-            ["P300", "Session 1: 6.9 uV"],
-            ["Session 1: 6.9 uV"],
+            ["Response Time", "Session 1: 6.9 ms"],
+            ["Session 1: 6.9 ms"],
         )
         # stages should remain unchanged
         assert props["stages"][0]["label"] == "Baseline"
 
-    def test_director_regions_preserved(self):
-        props: dict = {
-            "headline": "Brain",
-            "regions": [{"name": "Frontal", "value": "12.5", "status": "improved"}],
-        }
-        _enrich_clinical_props(
-            "brain_region_focus", props,
-            ["Brain", "Frontal: 12.5 improved"],
-            [],
-        )
-        assert len(props["regions"]) == 1
-        assert props["regions"][0]["status"] == "improved"
-
     def test_metric_improvement_filters_target_lines_and_computes_delta(self):
         """Real data: 'Target: 43–83 sec' must NOT become a stage."""
-        props: dict = {"headline": "Reaction Time"}
-        _enrich_clinical_props(
+        props: dict = {"headline": "Completion Time"}
+        _enrich_template_props(
             "metric_improvement", props,
-            ["Reaction Time"],
-            ["Session 1: 96 sec", "Session 2: 44 sec", "Session 3: 47 sec", "Target: 43\u201383 sec"],
+            ["Completion Time"],
+            ["Session 1: 96 sec", "Session 2: 44 sec", "Session 3: 47 sec", "Target: 43–83 sec"],
         )
         # Target line excluded from stages
         assert len(props["stages"]) == 3
         assert props["stages"][-1]["label"] == "Session 3"
         # Target stored as caption
         assert "Target" in props.get("caption", "")
-        # Delta: 47 - 96 = -49 (decline, since reaction time dropped)
+        # Delta: 47 - 96 = -49 (decline, since completion time dropped)
         assert props["delta"] == "-49.0"
-
-    def test_brain_region_focus_skips_progression_arrows_uses_on_screen_text(self):
-        """Real data: 'F3/F4 Alpha Ratio: 0.8 → 1.0' has arrows, should fall back to on_screen_text."""
-        props: dict = {"headline": "Frontal Alpha Symmetry"}
-        _enrich_clinical_props(
-            "brain_region_focus", props,
-            ["Frontal Alpha Symmetry", "F3 (Left): 1.0 \u2713", "F4 (Right): 1.0 \u2713"],
-            ["F3/F4 Alpha Ratio: 0.8 \u2192 1.0 \u2192 1.0", "Target: 0.9\u20131.1"],
-        )
-        # Both arrow data_points filtered out; falls back to on_screen_text
-        assert len(props["regions"]) == 2
-        assert props["regions"][0]["name"] == "F3 (Left)"
-        assert props["regions"][0]["value"] == "1.0"
-        assert props["regions"][0]["status"] == "improved"
-        assert props["regions"][1]["name"] == "F4 (Right)"
-
-    def test_brain_region_focus_checkmark_sets_improved_status(self):
-        props: dict = {"headline": "Regions"}
-        _enrich_clinical_props(
-            "brain_region_focus", props,
-            ["Regions", "Frontal: 12.5 \u2713"],
-            [],
-        )
-        assert props["regions"][0]["status"] == "improved"
-        assert "\u2713" not in props["regions"][0]["value"]
 
     def test_director_markers_preserved(self):
         props: dict = {
             "headline": "Timeline",
             "markers": [{"label": "Start", "date": "Jan 1", "status": "completed"}],
         }
-        _enrich_clinical_props(
+        _enrich_template_props(
             "timeline_progression", props,
             ["Timeline", "Session 1 -- Jan 1"],
             [],
@@ -408,47 +281,41 @@ class TestClinicalTemplatePreservesDirectorProps:
 
 
 # ---------------------------------------------------------------------------
-# Data-shape rerouting: brain_region_focus -> metric_improvement when arrows
+# Data-shape rerouting: arrow progressions reroute to three_data_stage
 # ---------------------------------------------------------------------------
-
-_CLINICAL_BRIEF = {
-    "video_goal": "Educate the patient on their assessment data.",
-    "audience": "The patient whose report this is.",
-    "source_material": "Assessment results across sessions.",
-}
 
 
 class TestHasTemporalProgression:
     """Unit tests for _has_temporal_progression."""
 
     def test_unicode_arrow(self):
-        assert _has_temporal_progression(["F3/F4: 0.8 \u2192 1.0 \u2192 1.0"]) is True
+        assert _has_temporal_progression(["Latency Ratio: 0.8 → 1.0 → 1.0"]) is True
 
     def test_ascii_arrow(self):
-        assert _has_temporal_progression(["Alpha Ratio: 0.8 -> 1.0"]) is True
+        assert _has_temporal_progression(["Cache Ratio: 0.8 -> 1.0"]) is True
 
     def test_fat_arrow(self):
         assert _has_temporal_progression(["Metric: 5 => 8"]) is True
 
     def test_no_arrows(self):
-        assert _has_temporal_progression(["Frontal: 12.5 uV improved"]) is False
+        assert _has_temporal_progression(["Throughput: 12.5 rps improved"]) is False
 
     def test_empty(self):
         assert _has_temporal_progression([]) is False
 
     def test_mixed_lines(self):
-        assert _has_temporal_progression(["Frontal: 12.5", "Ratio: 0.8 -> 1.0"]) is True
+        assert _has_temporal_progression(["Throughput: 12.5", "Ratio: 0.8 -> 1.0"]) is True
 
 
 class TestExpandArrowDataPoints:
     """Unit tests for _expand_arrow_data_points."""
 
     def test_three_stage_unicode_arrow(self):
-        result = _expand_arrow_data_points(["F3/F4 Alpha Ratio: 0.8 \u2192 1.0 \u2192 1.0"])
+        result = _expand_arrow_data_points(["Cache Hit Ratio: 0.8 → 1.0 → 1.0"])
         assert result == ["Session 1: 0.8", "Session 2: 1.0", "Session 3: 1.0"]
 
     def test_two_stage_ascii_arrow(self):
-        result = _expand_arrow_data_points(["P300: 6.9 -> 11.0"])
+        result = _expand_arrow_data_points(["Signal: 6.9 -> 11.0"])
         assert result == ["Session 1: 6.9", "Session 2: 11.0"]
 
     def test_non_arrow_lines_pass_through(self):
@@ -465,100 +332,60 @@ class TestExpandArrowDataPoints:
 class TestDataShapeRerouting:
     """Integration tests for data-shape rerouting through plan_scene_compositions."""
 
-    def _brain_scene_with_arrows(self):
-        return {
-            "uid": "scene_brain",
-            "id": 0,
-            "title": "Frontal Alpha Symmetry",
-            "scene_type": "motion",
-            "narration": "The frontal alpha ratio improved across sessions.",
-            "on_screen_text": ["Frontal Alpha Symmetry"],
-            "composition": {
-                "family": "brain_region_focus",
-                "mode": "native",
-                "props": {
-                    "background_id": "brain_region_top_down",
-                    "headline": "Frontal Alpha Symmetry",
-                },
-                "data": {
-                    "data_points": [
-                        "F3/F4 Alpha Ratio: 0.8 \u2192 1.0 \u2192 1.0",
-                        "Target: 0.9\u20131.1",
-                    ],
-                },
-            },
-        }
-
-    def _brain_scene_without_arrows(self):
-        return {
-            "uid": "scene_brain_static",
-            "id": 0,
-            "title": "Brain Regions",
-            "scene_type": "motion",
-            "narration": "Current brain region readings.",
-            "on_screen_text": ["Brain Regions"],
-            "composition": {
-                "family": "brain_region_focus",
-                "mode": "native",
-                "props": {
-                    "background_id": "brain_region_top_down",
-                    "headline": "Brain Regions",
-                },
-                "data": {
-                    "data_points": [
-                        "Frontal: 12.5 uV improved",
-                        "Parietal: 8.2 uV stable",
-                    ],
-                },
-            },
-        }
-
-    def test_brain_region_with_arrows_reroutes_to_three_data_stage(self):
-        scenes = [self._brain_scene_with_arrows()]
-        planned = plan_scene_compositions(scenes, brief=_CLINICAL_NATIVE_BRIEF)
-        scene = planned[0]
-        assert scene["composition"]["family"] == "three_data_stage"
-        assert scene["composition"]["mode"] == "native"
-
-    def test_brain_region_without_arrows_stays_brain_region(self):
-        scenes = [self._brain_scene_without_arrows()]
-        planned = plan_scene_compositions(scenes, brief=_CLINICAL_NATIVE_BRIEF)
-        scene = planned[0]
-        assert scene["composition"]["family"] == "brain_region_focus"
-
-    def test_rerouted_scene_preserves_data_points(self):
-        scenes = [self._brain_scene_with_arrows()]
-        planned = plan_scene_compositions(scenes, brief=_CLINICAL_NATIVE_BRIEF)
-        data = planned[0]["composition"].get("data", {})
-        dp = data.get("data_points", [])
-        # Data points should be preserved for manifest-time enrichment
-        assert len(dp) >= 1
-
-    def test_rerouted_scene_clears_brain_background_id(self):
-        scenes = [self._brain_scene_with_arrows()]
-        planned = plan_scene_compositions(scenes, brief=_CLINICAL_NATIVE_BRIEF)
-        props = planned[0]["composition"]["props"]
-        # brain-specific background_id should be cleared
-        assert "background_id" not in props or "brain" not in props.get("background_id", "").lower()
-
     def test_metric_improvement_with_arrows_reroutes_to_chart(self):
         """metric_improvement with arrows reroutes to three_data_stage."""
         scene = {
             "uid": "scene_metric",
             "id": 0,
-            "title": "Trail Making",
+            "title": "Task Completion",
             "scene_type": "motion",
-            "narration": "Executive function improved.",
-            "on_screen_text": ["Trail Making Test B"],
+            "narration": "Completion times improved.",
+            "on_screen_text": ["Task Completion"],
             "composition": {
                 "family": "metric_improvement",
                 "mode": "native",
-                "props": {"headline": "Trail Making Test B"},
+                "props": {"headline": "Task Completion"},
                 "data": {"data_points": ["Time: 75 -> 63 -> 58"]},
             },
         }
-        planned = plan_scene_compositions([scene], brief=_CLINICAL_NATIVE_BRIEF)
+        planned = plan_scene_compositions([scene], brief=_NATIVE_BRIEF)
         assert planned[0]["composition"]["family"] == "three_data_stage"
+
+    def test_metric_improvement_with_session_labels_reroutes_to_chart(self):
+        scene = {
+            "uid": "scene_metric_sessions",
+            "id": 0,
+            "title": "Signal Strength",
+            "scene_type": "motion",
+            "narration": "Signal grew across sessions.",
+            "on_screen_text": ["Signal Strength"],
+            "composition": {
+                "family": "metric_improvement",
+                "mode": "native",
+                "props": {"headline": "Signal Strength"},
+                "data": {"data_points": ["Session 1: 6.9", "Session 2: 11.0"]},
+            },
+        }
+        planned = plan_scene_compositions([scene], brief=_NATIVE_BRIEF)
+        assert planned[0]["composition"]["family"] == "three_data_stage"
+
+    def test_metric_improvement_without_progression_stays_put(self):
+        scene = {
+            "uid": "scene_metric_static",
+            "id": 0,
+            "title": "Uptime",
+            "scene_type": "motion",
+            "narration": "Current uptime reading.",
+            "on_screen_text": ["Uptime"],
+            "composition": {
+                "family": "metric_improvement",
+                "mode": "native",
+                "props": {"headline": "Uptime"},
+                "data": {"data_points": ["Before: 95%", "After: 99%"]},
+            },
+        }
+        planned = plan_scene_compositions([scene], brief=_NATIVE_BRIEF)
+        assert planned[0]["composition"]["family"] == "metric_improvement"
 
 
 class TestThreeDataStageNullYFix:
@@ -567,30 +394,30 @@ class TestThreeDataStageNullYFix:
     def test_null_y_series_replaced_with_extracted_values(self):
         """When director pre-populates series with y=null, _three_data_stage_data replaces them."""
         scene = {
-            "uid": "scene_p300",
+            "uid": "scene_signal",
             "id": 0,
-            "title": "P300 Strength: Growing Into Range",
+            "title": "Signal Strength: Growing Into Range",
             "scene_type": "motion",
-            "narration": "P300 amplitude grew from 6.9 to 11.0",
+            "narration": "Signal amplitude grew from 6.9 to 11.0",
             "data_points": [
-                "Session 1: 6.9 µV (below target)",
-                "Session 2: 11.0 µV (within target)",
-                "Session 3: 11.0 µV (within target)",
-                "Target: 8–20 µV",
+                "Session 1: 6.9 ms (below target)",
+                "Session 2: 11.0 ms (within target)",
+                "Session 3: 11.0 ms (within target)",
+                "Target: 8–20 ms",
             ],
-            "on_screen_text": ["P300 Signal Strength"],
+            "on_screen_text": ["Signal Strength"],
         }
         # Simulate director pre-populated data with y=null
         existing_data = {
             "series": [
                 {
                     "id": "series_1",
-                    "label": "P300 Strength",
+                    "label": "Signal Strength",
                     "type": "bar",
                     "points": [
-                        {"x": "Session 1: 6.9 µV (below target)", "y": None},
-                        {"x": "Session 2: 11.0 µV (within target)", "y": None},
-                        {"x": "Session 3: 11.0 µV (within target)", "y": None},
+                        {"x": "Session 1: 6.9 ms (below target)", "y": None},
+                        {"x": "Session 2: 11.0 ms (within target)", "y": None},
+                        {"x": "Session 3: 11.0 ms (within target)", "y": None},
                     ],
                 }
             ]
@@ -649,7 +476,7 @@ class TestArrowExpansionForDataStage:
 
     def test_expand_arrow_with_target(self):
         """Arrow data with embedded (target ...) expands correctly."""
-        dp = ["Trail Making A: 33s → 41s → 42s (target 38–65s)"]
+        dp = ["Task A: 33s → 41s → 42s (target 38–65s)"]
         expanded, extra_bands = _expand_arrow_lines_for_data_stage(dp)
         assert len(expanded) == 3
         assert "33" in expanded[0]
@@ -661,7 +488,7 @@ class TestArrowExpansionForDataStage:
 
     def test_non_arrow_passthrough(self):
         """Non-arrow data_points are passed through unchanged."""
-        dp = ["Session 1: 6.9 µV (below target)", "Target: 8–20 µV"]
+        dp = ["Session 1: 6.9 ms (below target)", "Target: 8–20 ms"]
         expanded, extra_bands = _expand_arrow_lines_for_data_stage(dp)
         assert expanded == dp
         assert extra_bands == []
@@ -675,8 +502,8 @@ class TestArrowExpansionForDataStage:
             "scene_type": "motion",
             "narration": "Both metrics stable.",
             "data_points": [
-                "Trail Making A: 33s → 41s → 42s (target 38–65s)",
-                "Reaction Time: 296ms → 293ms → 321ms (target 252–362ms)",
+                "Task A: 33s → 41s → 42s (target 38–65s)",
+                "Response Time: 296ms → 293ms → 321ms (target 252–362ms)",
             ],
             "on_screen_text": ["Two Metrics"],
         }
@@ -701,14 +528,14 @@ class TestArrowExpansionForDataStage:
 class TestInferPolarity:
     """Unit tests for _infer_polarity."""
 
-    def test_lower_is_better_trail_making(self):
-        """Trail Making B: 96 → 44 → 47 sec, target 43-83.  First above band, last in band."""
+    def test_lower_is_better_completion_time(self):
+        """Completion time: 96 → 44 → 47 sec, target 43-83.  First above band, last in band."""
         points = [{"x": "S1", "y": 96}, {"x": "S2", "y": 44}, {"x": "S3", "y": 47}]
         bands = [{"yMin": 43, "yMax": 83}]
         assert _infer_polarity(points, bands) == "lower_is_better"
 
-    def test_higher_is_better_p300(self):
-        """P300: 6.9 → 11 → 11 µV, target 8-20.  First below band, last in band."""
+    def test_higher_is_better_signal(self):
+        """Signal: 6.9 → 11 → 11 ms, target 8-20.  First below band, last in band."""
         points = [{"x": "S1", "y": 6.9}, {"x": "S2", "y": 11}, {"x": "S3", "y": 11}]
         bands = [{"yMin": 8, "yMax": 20}]
         assert _infer_polarity(points, bands) == "higher_is_better"
@@ -751,18 +578,18 @@ class TestInferPolarity:
     def test_polarity_in_three_data_stage_data(self):
         """End-to-end: _three_data_stage_data populates polarity."""
         scene = {
-            "uid": "scene_trail",
+            "uid": "scene_completion",
             "id": 0,
-            "title": "Trail Making B: Improvement",
+            "title": "Completion Time: Improvement",
             "scene_type": "motion",
             "narration": "...",
             "data_points": [
                 "Session 1: 96 sec",
                 "Session 2: 44 sec",
                 "Session 3: 47 sec",
-                "Target: 43\u201383 sec",
+                "Target: 43–83 sec",
             ],
-            "on_screen_text": ["Trail Making Test B"],
+            "on_screen_text": ["Completion Time"],
         }
         intent = {"data_points": [], "family_hint": "three_data_stage", "mode_hint": "", "transition_after": None}
         result = _three_data_stage_data(scene, intent, {}, {"layoutVariant": "bars_with_band"})
@@ -777,9 +604,9 @@ class TestInferPolarity:
             "scene_type": "motion",
             "narration": "...",
             "data_points": [
-                "Session 1: 6.9 µV",
-                "Session 2: 11.0 µV",
-                "Target: 8\u201320 µV",
+                "Session 1: 6.9 ms",
+                "Session 2: 11.0 ms",
+                "Target: 8–20 ms",
             ],
             "on_screen_text": ["Custom Metric"],
         }
@@ -798,8 +625,8 @@ class TestInferPolarity:
             "scene_type": "motion",
             "narration": "Both metrics improved.",
             "data_points": [
-                "Trail Making A: 33s \u2192 41s \u2192 42s (target 38\u201365s)",
-                "Reaction Time: 296ms \u2192 293ms \u2192 321ms (target 252\u2013362ms)",
+                "Task A: 33s → 41s → 42s (target 38–65s)",
+                "Response Time: 296ms → 293ms → 321ms (target 252–362ms)",
             ],
             "on_screen_text": ["Two Metrics"],
         }

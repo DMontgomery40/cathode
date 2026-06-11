@@ -50,14 +50,13 @@ def test_treatment_planning_needed_requires_explicit_native_composition():
     assert treatment_planning_needed(brief, scenes) is False
 
 
-def test_treatment_planner_prompt_forbids_transitions_for_clinical_decks():
-    """Treatment planner system prompt must enforce hard cuts for clinical/qEEG content."""
+def test_treatment_planner_prompt_defaults_to_hard_cuts():
+    """Treatment planner system prompt must default data-heavy decks to hard cuts."""
     from core.director import load_prompt
 
     prompt_text = load_prompt("treatment_planner_system")
     assert "hard cut" in prompt_text.lower() or "Hard cuts" in prompt_text
     assert "transition_hint" in prompt_text
-    assert "qEEG" in prompt_text or "clinical" in prompt_text.lower()
 
 
 def test_treatment_planner_applies_supported_registry_override_without_decorative_fade_drift(monkeypatch):
@@ -404,7 +403,7 @@ def test_treatment_planner_preserves_scene_copy_and_rebuilds_data_from_scene_sou
         ],
         brief={
             "source_mode": "ideas_notes",
-            "source_material": "Show the patient data clearly and honestly.",
+            "source_material": "Show the report data clearly and honestly.",
             "composition_mode": "classic",
             "visual_source_strategy": "images_only",
             "text_render_mode": "visual_authored",
