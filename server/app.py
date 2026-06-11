@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
+import logging
 import os
 import sys
-import traceback
 from pathlib import Path
 
 # Ensure repo root is on sys.path so `core.*` imports resolve when running
@@ -22,7 +22,29 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
+from server.logging_setup import configure_logging
 from server.routers import bootstrap, footage, jobs, media, plans, projects, scenes, settings, short_form, style_refs
+
+logger = logging.getLogger("bettube_studio.server")
+
+_DEFAULT_CORS_ORIGINS = [
+    "http://localhost:9322",
+    "http://localhost:9323",
+    "http://127.0.0.1:9322",
+    "http://127.0.0.1:9323",
+]
+
+
+def _cors_origins() -> list[str]:
+    """Comma-separated BETTUBE_STUDIO_CORS_ORIGINS, defaulting to local dev origins.
+
+    Note: a literal "*" cannot be combined with allow_credentials=True; list the
+    deployed frontend origins explicitly instead.
+    """
+    raw = str(os.getenv("BETTUBE_STUDIO_CORS_ORIGINS") or "").strip()
+    if not raw:
+        return list(_DEFAULT_CORS_ORIGINS)
+    return [origin.strip().rstrip("/") for origin in raw.split(",") if origin.strip()]
 
 
 def _frontend_dist_dir() -> Path:
@@ -66,16 +88,12 @@ def _mount_frontend(application: FastAPI) -> None:
 
 
 def create_app() -> FastAPI:
+    configure_logging()
     application = FastAPI(title="betTube Studio API", version="0.1.0")
 
     application.add_middleware(
         CORSMiddleware,
-        allow_origins=[
-            "http://localhost:9322",
-            "http://localhost:9323",
-            "http://127.0.0.1:9322",
-            "http://127.0.0.1:9323",
-        ],
+        allow_origins=_cors_origins(),
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
@@ -97,8 +115,8 @@ def create_app() -> FastAPI:
         return {"status": "ok"}
 
     @application.exception_handler(Exception)
-    async def unhandled_exception_handler(_request: Request, exc: Exception):
-        traceback.print_exc()
+    async def unhandled_exception_handler(request: Request, exc: Exception):
+        logger.exception("Unhandled exception on %s %s", request.method, request.url.path)
         return JSONResponse(
             status_code=500,
             content={

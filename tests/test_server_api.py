@@ -44,7 +44,10 @@ def test_health_allows_127001_frontend_origin(client):
     assert resp.headers["access-control-allow-origin"] == "http://127.0.0.1:9322"
 
 
-def test_unhandled_exception_returns_operator_hint():
+def test_unhandled_exception_returns_operator_hint(monkeypatch, tmp_path):
+    # Point the SPA mount at an empty dir so its catch-all route does not
+    # shadow the test route registered after create_app().
+    monkeypatch.setenv("BETTUBE_STUDIO_FRONTEND_DIST", str(tmp_path))
     app = create_app()
     router = APIRouter()
 
@@ -520,3 +523,40 @@ def test_get_project_remotion_manifest(mock_manifest, client, tmp_path):
     assert resp.status_code == 200
     assert resp.json()["fps"] == 24
     mock_manifest.assert_called_once()
+
+def test_cors_origins_env_override(monkeypatch):
+    from server.app import _cors_origins
+
+    monkeypatch.delenv("BETTUBE_STUDIO_CORS_ORIGINS", raising=False)
+    defaults = _cors_origins()
+    assert "http://127.0.0.1:9322" in defaults
+
+    monkeypatch.setenv(
+        "BETTUBE_STUDIO_CORS_ORIGINS",
+        "https://studio.example.com, https://tools.example.com/",
+    )
+    assert _cors_origins() == ["https://studio.example.com", "https://tools.example.com"]
+
+
+def test_cors_env_origin_is_honored_by_app(monkeypatch):
+    monkeypatch.setenv("BETTUBE_STUDIO_CORS_ORIGINS", "https://studio.example.com")
+    app = create_app()
+    client = TestClient(app)
+    resp = client.options(
+        "/api/health",
+        headers={
+            "Origin": "https://studio.example.com",
+            "Access-Control-Request-Method": "GET",
+        },
+    )
+    assert resp.status_code == 200
+    assert resp.headers["access-control-allow-origin"] == "https://studio.example.com"
+
+    disallowed = client.options(
+        "/api/health",
+        headers={
+            "Origin": "https://evil.example.com",
+            "Access-Control-Request-Method": "GET",
+        },
+    )
+    assert "access-control-allow-origin" not in disallowed.headers
