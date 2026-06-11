@@ -3345,7 +3345,7 @@ export function SceneInspector({
                 )}
               </div>
 
-              <div className="grid gap-[var(--space-3)] xl:grid-cols-3">
+              <div className={remotionEnabled ? 'grid gap-[var(--space-3)] xl:grid-cols-3' : 'grid gap-[var(--space-3)]'}>
                 <InspectorSelect
                   label="Composition family"
                   value={compositionFamilyValue}
@@ -3355,33 +3355,42 @@ export function SceneInspector({
                     mode: remotionEnabled ? defaultCompositionModeForFamily(family) : 'none',
                   })}
                 />
-                <InspectorSelect
-                  label="Composition behavior"
-                  value={compositionModeValue}
-                  options={compositionModeOptions}
-                  onChange={(mode) => updateComposition({ mode: mode as NonNullable<Scene['composition']>['mode'] })}
-                />
-                <InspectorSelect
-                  label="Transition after"
-                  value={compositionTransitionKind}
-                  options={TRANSITION_OPTIONS}
-                  onChange={(transition) => updateComposition({
-                    transition_after: transition
-                      ? { kind: transition, duration_in_frames: 20 }
-                      : null,
-                  })}
-                />
+                {/* Behavior (overlay/native), transitions (fade/wipe), and the
+                    director's rationale only affect the Remotion render path;
+                    the ffmpeg assembly ignores all three. */}
+                {remotionEnabled ? (
+                  <>
+                    <InspectorSelect
+                      label="Composition behavior"
+                      value={compositionModeValue}
+                      options={compositionModeOptions}
+                      onChange={(mode) => updateComposition({ mode: mode as NonNullable<Scene['composition']>['mode'] })}
+                    />
+                    <InspectorSelect
+                      label="Transition after"
+                      value={compositionTransitionKind}
+                      options={TRANSITION_OPTIONS}
+                      onChange={(transition) => updateComposition({
+                        transition_after: transition
+                          ? { kind: transition, duration_in_frames: 20 }
+                          : null,
+                      })}
+                    />
+                  </>
+                ) : null}
               </div>
-              <label className="flex flex-col gap-[var(--space-1)] text-[var(--text-secondary)]" style={{ fontSize: 'var(--text-xs)' }}>
-                <span>Composition rationale</span>
-                <textarea
-                  value={compositionState.rationale}
-                  onChange={(event) => updateComposition({ rationale: event.target.value })}
-                  rows={2}
-                  className="rounded-[var(--radius-md)] border border-[var(--border-subtle)] bg-[var(--surface-stage)] px-[var(--space-2)] py-[var(--space-2)] text-[var(--text-primary)] outline-none focus-visible:shadow-[var(--focus-ring)]"
-                  aria-label="Composition rationale"
-                />
-              </label>
+              {remotionEnabled ? (
+                <label className="flex flex-col gap-[var(--space-1)] text-[var(--text-secondary)]" style={{ fontSize: 'var(--text-xs)' }}>
+                  <span>Composition rationale</span>
+                  <textarea
+                    value={compositionState.rationale}
+                    onChange={(event) => updateComposition({ rationale: event.target.value })}
+                    rows={2}
+                    className="rounded-[var(--radius-md)] border border-[var(--border-subtle)] bg-[var(--surface-stage)] px-[var(--space-2)] py-[var(--space-2)] text-[var(--text-primary)] outline-none focus-visible:shadow-[var(--focus-ring)]"
+                    aria-label="Composition rationale"
+                  />
+                </label>
+              ) : null}
               {isThreeDataStage ? renderThreeDataStageEditor() : isTemplateDeck ? renderTemplateDeckEditor() : null}
 
               <div className="grid gap-[var(--space-3)] xl:grid-cols-2">
@@ -3637,7 +3646,7 @@ export function SceneInspector({
                   Edit Image
                 </ActionButton>
               </div>
-              <div className="grid gap-[var(--space-3)] xl:grid-cols-3">
+              <div className={remotionEnabled ? 'grid gap-[var(--space-3)] xl:grid-cols-3' : 'grid gap-[var(--space-3)]'}>
                 <InspectorSelect
                   label="Composition family"
                   value={compositionFamilyValue}
@@ -3647,33 +3656,42 @@ export function SceneInspector({
                     mode: remotionEnabled ? defaultCompositionModeForFamily(family) : 'none',
                   })}
                 />
-                <InspectorSelect
-                  label="Composition behavior"
-                  value={compositionModeValue}
-                  options={compositionModeOptions}
-                  onChange={(mode) => updateComposition({ mode: mode as NonNullable<Scene['composition']>['mode'] })}
-                />
-                <InspectorSelect
-                  label="Transition after"
-                  value={compositionTransitionKind}
-                  options={TRANSITION_OPTIONS}
-                  onChange={(transition) => updateComposition({
-                    transition_after: transition
-                      ? { kind: transition, duration_in_frames: 20 }
-                      : null,
-                  })}
-                />
+                {/* Behavior (overlay/native), transitions (fade/wipe), and the
+                    director's rationale only affect the Remotion render path;
+                    the ffmpeg assembly ignores all three. */}
+                {remotionEnabled ? (
+                  <>
+                    <InspectorSelect
+                      label="Composition behavior"
+                      value={compositionModeValue}
+                      options={compositionModeOptions}
+                      onChange={(mode) => updateComposition({ mode: mode as NonNullable<Scene['composition']>['mode'] })}
+                    />
+                    <InspectorSelect
+                      label="Transition after"
+                      value={compositionTransitionKind}
+                      options={TRANSITION_OPTIONS}
+                      onChange={(transition) => updateComposition({
+                        transition_after: transition
+                          ? { kind: transition, duration_in_frames: 20 }
+                          : null,
+                      })}
+                    />
+                  </>
+                ) : null}
               </div>
-              <label className="flex flex-col gap-[var(--space-1)] text-[var(--text-secondary)]" style={{ fontSize: 'var(--text-xs)' }}>
-                <span>Composition rationale</span>
-                <textarea
-                  value={compositionState.rationale}
-                  onChange={(event) => updateComposition({ rationale: event.target.value })}
-                  rows={2}
-                  className="rounded-[var(--radius-md)] border border-[var(--border-subtle)] bg-[var(--surface-stage)] px-[var(--space-2)] py-[var(--space-2)] text-[var(--text-primary)] outline-none focus-visible:shadow-[var(--focus-ring)]"
-                  aria-label="Composition rationale"
-                />
-              </label>
+              {remotionEnabled ? (
+                <label className="flex flex-col gap-[var(--space-1)] text-[var(--text-secondary)]" style={{ fontSize: 'var(--text-xs)' }}>
+                  <span>Composition rationale</span>
+                  <textarea
+                    value={compositionState.rationale}
+                    onChange={(event) => updateComposition({ rationale: event.target.value })}
+                    rows={2}
+                    className="rounded-[var(--radius-md)] border border-[var(--border-subtle)] bg-[var(--surface-stage)] px-[var(--space-2)] py-[var(--space-2)] text-[var(--text-primary)] outline-none focus-visible:shadow-[var(--focus-ring)]"
+                    aria-label="Composition rationale"
+                  />
+                </label>
+              ) : null}
               {isThreeDataStage ? renderThreeDataStageEditor() : isTemplateDeck ? renderTemplateDeckEditor() : null}
               {imageGenerationProvider === 'manual' && (
                 <p className="m-0 text-[var(--text-tertiary)]" style={{ fontSize: 'var(--text-xs)', marginTop: 'var(--space-2)' }}>

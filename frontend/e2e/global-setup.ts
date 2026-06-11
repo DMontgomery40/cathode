@@ -182,9 +182,9 @@ function plan(projectName: string): Record<string, unknown> {
       footage_manifest: [],
       pipeline_mode: 'generic_slides_v1',
       image_profile: {
-        provider: 'replicate',
-        generation_model: 'qwen/qwen-image-2512',
-        edit_model: 'qwen/qwen-image-edit-2511',
+        provider: 'codex',
+        generation_model: 'gpt-image-2',
+        edit_model: 'gpt-image-2',
         dashscope_edit_n: 1,
         dashscope_edit_seed: '',
         dashscope_edit_negative_prompt: '',

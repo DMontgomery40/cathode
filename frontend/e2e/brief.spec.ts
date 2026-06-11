@@ -30,7 +30,7 @@ const MOCK_BOOTSTRAP = {
       openai: [],
       chatterbox: [],
     },
-    image_edit_models: ['qwen/qwen-image-edit-2511'],
+    image_edit_models: ['gpt-image-2', 'qwen/qwen-image-edit-2511'],
   },
   defaults: {
     brief: {
@@ -68,8 +68,8 @@ const MOCK_BOOTSTRAP = {
     },
     image_profile: {
       provider: 'replicate',
-      generation_model: 'qwen/qwen-image-2512',
-      edit_model: 'qwen/qwen-image-edit-2511',
+      generation_model: 'gpt-image-2',
+      edit_model: 'gpt-image-2',
     },
     video_profile: {
       provider: 'manual',

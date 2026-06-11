@@ -31,8 +31,8 @@ test.describe('Cross-route navigation', () => {
   test('Home -> Projects -> Project Scenes -> Render -> Queue', async ({ page }) => {
     await page.goto('/')
 
-    // Home: click "Continue editing" to go to Projects
-    await page.locator('button', { hasText: 'Continue editing' }).click()
+    // Home: click "Browse projects" to go to the library
+    await page.locator('button', { hasText: 'Browse projects' }).click()
     await page.waitForURL('**/projects')
 
     // Projects: open the fixture project to go to Scenes

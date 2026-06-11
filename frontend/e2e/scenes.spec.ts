@@ -92,8 +92,11 @@ test.describe('Scene Timeline', () => {
       await expect(page.getByLabel('Narration text')).toBeVisible()
       await expect(page.getByLabel('Image direction')).toBeVisible()
       await expect(page.getByLabel('Composition family')).toBeVisible()
-      await expect(page.getByLabel('Composition behavior')).toBeVisible()
-      await expect(page.getByLabel('Transition after')).toBeVisible()
+      // Behavior/transition/rationale are Remotion-only controls and stay
+      // hidden while the Remotion surface is disabled.
+      await expect(page.getByLabel('Composition behavior')).toHaveCount(0)
+      await expect(page.getByLabel('Transition after')).toHaveCount(0)
+      await expect(page.getByLabel('Composition rationale')).toHaveCount(0)
       await expect(page.getByRole('button', { name: 'Generate All Assets' })).toBeVisible()
       await expect(page.getByRole('button', { name: 'Render Video' })).toBeVisible()
       await expect(page.getByLabel('Image editor')).toBeVisible()
@@ -216,11 +219,10 @@ test.describe('Scene Timeline', () => {
 
         const sceneTypeOptions = await inspectorOptionLabels(page, 'Scene type')
         const familyOptions = await inspectorOptionLabels(page, 'Composition family')
-        const modeOptions = await inspectorOptionLabels(page, 'Composition behavior')
 
         expect(sceneTypeOptions).toEqual(['Image', 'Video'])
         expect(familyOptions).toEqual(['Static media', 'Media pan'])
-        expect(modeOptions).toEqual(['None'])
+        await expect(page.getByLabel('Composition behavior')).toHaveCount(0)
       } finally {
         cleanupProjectFixture(legacyMotionProject)
       }
@@ -362,9 +364,9 @@ test.describe('Scene Timeline', () => {
       const operatorContent = page.locator('#scene-operator-content')
       await expect(operatorContent.getByText('Generate image', { exact: true })).toBeVisible()
       await expect(operatorContent.getByText('Image', { exact: true })).toBeVisible()
-      await expect(operatorContent.getByText('Replicate / qwen/qwen-image-2512', { exact: true })).toBeVisible()
+      await expect(operatorContent.getByText('Codex / gpt-image-2', { exact: true })).toBeVisible()
       await expect(operatorContent.getByText('Edit', { exact: true })).toBeVisible()
-      await expect(operatorContent.getByText('qwen/qwen-image-edit-2511', { exact: true })).toBeVisible()
+      await expect(operatorContent.getByText('gpt-image-2', { exact: true })).toBeVisible()
       await expect(operatorContent.getByText('"generate"')).toHaveCount(0)
       await expect(operatorContent.getByText('"provider": "replicate"')).toHaveCount(0)
     })
@@ -685,15 +687,12 @@ test.describe('Scene Timeline', () => {
       const familySave = planSave()
       await selectInspectorOption(page, 'Composition family', 'static_media', 'Static media')
       await familySave
-      const transitionSave = planSave()
-      await selectInspectorOption(page, 'Transition after', 'fade', 'Fade')
-      await transitionSave
 
       await expect.poll(() => {
         const plan = readProjectPlan(DISPOSABLE_PROJECT) as MutablePlan
         const composition = plan.scenes?.[0]?.composition ?? {}
-        return `${composition.family ?? ''}|${composition.transition_after?.kind ?? ''}`
-      }).toBe('static_media|fade')
+        return String(composition.family ?? '')
+      }).toBe('static_media')
 
       const resetPlan = readProjectPlan(DISPOSABLE_PROJECT) as MutablePlan
       const firstScene = resetPlan.scenes[0]
@@ -721,8 +720,6 @@ test.describe('Scene Timeline', () => {
 
       await page.reload()
       await expectInspectorOption(page, 'Composition family', 'media_pan', 'Media pan')
-      await expectInspectorOption(page, 'Composition behavior', 'none', 'None')
-      await expectInspectorOption(page, 'Transition after', '', 'None')
     })
 
     test('image direction refine sends feedback to the correct endpoint', async ({ page }) => {

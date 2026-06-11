@@ -83,16 +83,18 @@ test.describe('Home / Workspace', () => {
   })
 
   // ── IntentDeck ─────────────────────────────────────────────────
-  test('IntentDeck renders all 5 cards', async ({ page }) => {
+  test('IntentDeck renders one card per distinct destination', async ({ page }) => {
     const group = page.locator('[role="group"][aria-label="Quick actions"]')
     await expect(group).toBeVisible()
 
-    // 5 intent cards
     await expect(page.locator('text=Start a new video')).toBeVisible()
+    await expect(page.locator('text=Create a vertical short')).toBeVisible()
     await expect(page.locator('text=Continue editing')).toBeVisible()
-    await expect(page.locator('text=Review footage & style')).toBeVisible()
-    await expect(page.locator('text=Render & ship')).toBeVisible()
+    await expect(page.locator('text=Browse projects')).toBeVisible()
     await expect(page.locator('text=Monitor queue')).toBeVisible()
+    // The filler cards that duplicated the /projects route are gone.
+    await expect(page.locator('text=Review footage & style')).toHaveCount(0)
+    await expect(page.locator('text=Render & ship')).toHaveCount(0)
   })
 
   test('IntentDeck shows real project badge without stale queue count', async ({ page }) => {
@@ -106,10 +108,16 @@ test.describe('Home / Workspace', () => {
     await expect(page).toHaveURL(/\/projects\/new\/brief/)
   })
 
-  test('IntentDeck card click - Continue editing navigates to projects', async ({ page }) => {
+  test('IntentDeck card click - Continue editing opens the latest project timeline', async ({ page }) => {
     await page.locator('button', { hasText: 'Continue editing' }).click()
+    await page.waitForURL(/\/projects\/[^/]+\/scenes/)
+    await expect(page).toHaveURL(/\/projects\/[^/]+\/scenes/)
+  })
+
+  test('IntentDeck card click - Browse projects navigates to the library', async ({ page }) => {
+    await page.locator('button', { hasText: 'Browse projects' }).click()
     await page.waitForURL('**/projects')
-    await expect(page).toHaveURL(/\/projects/)
+    await expect(page).toHaveURL(/\/projects$/)
   })
 
   test('IntentDeck card click - Monitor queue navigates to queue', async ({ page }) => {

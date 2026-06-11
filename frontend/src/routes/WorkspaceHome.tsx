@@ -7,6 +7,15 @@ import { WorkspaceCanvas, WorkspacePanel } from '../design-system/recipes'
 import { useProjects } from '../lib/api/hooks.ts'
 import { useGlobalQueueSummary } from '../lib/api/global-queue.ts'
 
+function latestProject(projects: { name: string; updated_utc?: string | null; created_utc?: string | null }[] | undefined) {
+  if (!projects?.length) return null
+  return [...projects].sort((a, b) => {
+    const left = a.updated_utc || a.created_utc || ''
+    const right = b.updated_utc || b.created_utc || ''
+    return right.localeCompare(left)
+  })[0]
+}
+
 export function WorkspaceHome() {
   const navigate = useNavigate()
   const { data: projects } = useProjects()
@@ -17,7 +26,10 @@ export function WorkspaceHome() {
   const queueBadge = !jobsLoading && activeCount > 0
     ? `${activeCount} active`
     : undefined
+  const recent = latestProject(projects)
 
+  // Every card is a distinct destination backed by real workspace state —
+  // no two cards may resolve to the same route.
   const cards = [
     {
       id: 'new-video',
@@ -45,46 +57,40 @@ export function WorkspaceHome() {
       badge: '9:16',
       onClick: () => navigate('/short-form'),
     },
-    {
+    ...(recent ? [{
       id: 'continue',
       title: 'Continue editing',
-      description: 'Pick up where you left off on an in-progress project.',
+      description: `Jump back into the scene timeline for "${recent.name}".`,
       icon: (
         <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
           <path d="M4 4V16H16" />
           <path d="M4 12L8 8L11 11L16 6" />
         </svg>
       ),
-      badge: projectBadge,
-      onClick: () => navigate('/projects'),
-    },
+      badge: recent.name,
+      onClick: () => navigate(`/projects/${recent.name}/scenes`),
+    }] : []),
     {
-      id: 'review',
-      title: 'Review footage & style',
-      description: 'Browse generated scenes, swap images, and refine visual direction.',
+      id: 'library',
+      title: 'Browse projects',
+      description: projectCount > 0
+        ? `Open any of the ${projectCount} saved project${projectCount === 1 ? '' : 's'} in the library.`
+        : 'The project library is empty — new videos will land here.',
       icon: (
         <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
           <rect x="2" y="4" width="16" height="12" rx="2" />
           <path d="M8 8L13 10L8 12V8Z" />
         </svg>
       ),
-      onClick: () => navigate('/projects'),
-    },
-    {
-      id: 'render',
-      title: 'Render & ship',
-      description: 'Assemble final cuts and export completed videos.',
-      icon: (
-        <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M4 16V4L10 10L16 4V16" />
-        </svg>
-      ),
+      badge: projectBadge,
       onClick: () => navigate('/projects'),
     },
     {
       id: 'queue',
       title: 'Monitor queue',
-      description: 'Check on active generation and render jobs.',
+      description: !jobsLoading && activeCount > 0
+        ? `${activeCount} background job${activeCount === 1 ? ' is' : 's are'} running right now.`
+        : 'No active jobs — review past storyboard, asset, and render runs.',
       icon: (
         <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
           <rect x="3" y="3" width="14" height="4" rx="1" />
@@ -110,7 +116,7 @@ export function WorkspaceHome() {
             <WorkspacePanel
               title="Choose the next move"
               eyebrow="Start"
-              copy="Create a new video, continue an existing project, review scenes, render, or check background jobs."
+              copy="Create a new video or short, jump back into your latest project, or check background jobs."
               variant="floating"
             >
               <IntentDeck cards={cards} columns={3} />
