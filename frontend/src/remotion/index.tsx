@@ -155,9 +155,7 @@ type MotionTemplateId =
   | 'orientation'
   | 'synthesis_summary'
   | 'closing_cta'
-  | 'clinical_explanation'
   | 'metric_improvement'
-  | 'brain_region_focus'
   | 'metric_comparison'
   | 'timeline_progression'
   | 'analogy_metaphor'
@@ -1077,119 +1075,6 @@ function ClosingCtaTemplate({ scene }: { scene: RemotionScene }) {
   )
 }
 
-// ─── Template: clinical_explanation ───
-
-function ClinicalExplanationTemplate({ scene }: { scene: RemotionScene }) {
-  const frame = useCurrentFrame()
-  const { fps } = useVideoConfig()
-  const reveal = spring({ frame, fps, config: { damping: 20, stiffness: 100, mass: 0.9 } })
-  const overrides = useStyleOverrides(scene, { brightness: 0.42, saturation: 0.85 })
-
-  const headline = sceneStr(scene, 'headline', scene.onScreenText[0] || scene.title || '')
-  const body = sceneStr(scene, 'body', scene.onScreenText.slice(1, 3).join(' ') || '')
-  const caption = sceneStr(scene, 'caption', '')
-
-  // 52% of (1664 - 2*padding) = ~773px
-  const headlineSize = useHeadlineFontSize(headline, 773, 72 * overrides.textScale)
-  const bodySize = useBodyFontSize(body, 773, 4)
-  const p = scene.composition?.props as Record<string, unknown> | undefined
-  const labels = (p?.labels ?? []) as Array<{ text?: string; region?: string }>
-
-  return (
-    <AbsoluteFill style={{ color: '#f7efe6' }}>
-      {scene.imageUrl && (
-        <CompositionBackgroundImage
-          src={scene.imageUrl}
-          reveal={reveal}
-          brightness={overrides.brightness ?? 0.42}
-          saturation={overrides.saturation ?? 0.85}
-          scrimGradient="linear-gradient(90deg, rgba(3,5,10,0.92) 0%, rgba(3,5,10,0.6) 50%, transparent 70%)"
-        />
-      )}
-      <AbsoluteFill style={{ padding: overrides.padding, display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 24 }}>
-        <div style={{ maxWidth: '52%', display: 'flex', flexDirection: 'column', gap: 20 }}>
-          <div
-            style={{
-              fontFamily: FONT_HEADLINE,
-              fontSize: headlineSize,
-              lineHeight: 0.94,
-              fontWeight: 'bold',
-              transform: `translateX(${interpolate(reveal, [0, 1], [-32, 0])}px)`,
-              opacity: reveal,
-            }}
-          >
-            {headline}
-          </div>
-          {body ? (
-            <div
-              style={{
-                fontFamily: FONT_BODY,
-                fontSize: bodySize,
-                lineHeight: BODY_LINE_HEIGHT,
-                color: 'rgba(255,244,234,0.82)',
-                opacity: interpolate(reveal, [0.15, 1], [0, 1]),
-              }}
-            >
-              {body}
-            </div>
-          ) : null}
-          {caption ? (
-            <div
-              style={{
-                fontFamily: FONT_DATA,
-                fontSize: LABEL_SIZE,
-                letterSpacing: '0.06em',
-                textTransform: 'uppercase',
-                color: overrides.accentColor || '#5eead4',
-                opacity: interpolate(reveal, [0.3, 1], [0, 1]),
-              }}
-            >
-              {caption}
-            </div>
-          ) : null}
-        </div>
-      </AbsoluteFill>
-      {/* Floating label text over the image side (no chrome -- background provides visual pills) */}
-      {labels.map((lbl, i) => {
-        const lblReveal = spring({
-          frame: Math.max(frame - 14 - i * 12, 0),
-          fps,
-          config: { damping: 18, stiffness: 100, mass: 0.9 },
-        })
-        const regionPos: Record<string, React.CSSProperties> = {
-          'top-left': { top: 120, right: 420 },
-          'top-center': { top: 120, right: 240 },
-          'top-right': { top: 120, right: 100 },
-          'center-left': { top: 320, right: 420 },
-          'center': { top: 320, right: 260 },
-          'center-right': { top: 320, right: 100 },
-          'bottom-left': { top: 520, right: 420 },
-          'bottom-center': { top: 520, right: 260 },
-          'bottom-right': { top: 520, right: 100 },
-        }
-        const pos = regionPos[lbl.region || 'center'] || regionPos['center']
-        return (
-          <div
-            key={i}
-            style={{
-              position: 'absolute',
-              ...pos,
-              padding: '8px 16px',
-              fontFamily: FONT_BODY,
-              fontSize: CAPTION_SIZE,
-              color: overrides.accentColor || '#5eead4',
-              transform: `scale(${interpolate(lblReveal, [0, 1], [0.8, 1])})`,
-              opacity: lblReveal,
-            }}
-          >
-            {lbl.text || ''}
-          </div>
-        )
-      })}
-    </AbsoluteFill>
-  )
-}
-
 // ─── Template: metric_improvement ───
 
 function MetricImprovementTemplate({ scene }: { scene: RemotionScene }) {
@@ -1330,167 +1215,6 @@ function MetricImprovementTemplate({ scene }: { scene: RemotionScene }) {
           </div>
         ) : null}
       </AbsoluteFill>
-    </AbsoluteFill>
-  )
-}
-
-// ─── Template: brain_region_focus ───
-
-function BrainRegionFocusTemplate({ scene }: { scene: RemotionScene }) {
-  const frame = useCurrentFrame()
-  const { fps } = useVideoConfig()
-  const reveal = spring({ frame, fps, config: { damping: 20, stiffness: 100, mass: 0.9 } })
-  const overrides = useStyleOverrides(scene, { brightness: 0.5, saturation: 0.9 })
-
-  const headline = sceneStr(scene, 'headline', scene.title || '')
-  const caption = sceneStr(scene, 'caption', '')
-  const headlineSize = useHeadlineFontSize(headline, 1400, 60 * overrides.textScale)
-  const p = scene.composition?.props as Record<string, unknown> | undefined
-  const regions = (p?.regions ?? []) as Array<{ name?: string; value?: string; status?: string }>
-
-  // fitText: compute from longest region name and value (hooks can't be in .map)
-  const longestRegionName = regions.reduce((a, b) => ((b.name || '').length > a.length ? b.name || '' : a), '')
-  const longestRegionValue = regions.reduce((a, b) => ((b.value || '').length > a.length ? b.value || '' : a), '')
-  const regionNameSize = useDataFontSize(longestRegionName, 200, 34 * overrides.textScale, FONT_BODY)
-  const regionValueSize = useDataFontSize(longestRegionValue, 180, 30 * overrides.textScale)
-
-  // Pixel coordinates mapped to the actual brain_region_focus_topdown.png image (1664x928).
-  // The image shows a frontal brain view centered at ~(832, 400).
-  // Brain spans roughly x:380-1280, y:100-720.
-  // Coordinates place label anchors on the anatomical region in the actual image.
-  const regionPositions: Record<string, { top: number; left: number }> = {
-    // Lobe-level regions (placed at lobe centers in the image)
-    frontal:          { top: 200, left: 832 },   // upper-center, frontal lobe mass
-    prefrontal:       { top: 140, left: 832 },   // very top of visible brain, forehead area
-    central:          { top: 310, left: 832 },   // mid-brain, central sulcus area
-    parietal:         { top: 420, left: 832 },   // lower-center, behind central
-    'central-parietal': { top: 365, left: 832 }, // between central and parietal
-    temporal:         { top: 380, left: 480 },   // left temporal lobe (side of brain)
-    occipital:        { top: 580, left: 832 },   // bottom-back, lowest visible lobe
-    // Individual 10-20 electrodes (placed at anatomical positions)
-    fp1: { top: 135, left: 680 },  // left frontal pole
-    fp2: { top: 135, left: 984 },  // right frontal pole
-    f3:  { top: 210, left: 620 },  // left frontal
-    f4:  { top: 210, left: 1044 }, // right frontal
-    fz:  { top: 195, left: 832 },  // midline frontal
-    c3:  { top: 310, left: 560 },  // left central
-    c4:  { top: 310, left: 1104 }, // right central
-    cz:  { top: 290, left: 832 },  // vertex / midline central
-    t3:  { top: 350, left: 430 },  // left temporal
-    t4:  { top: 350, left: 1234 }, // right temporal
-    p3:  { top: 430, left: 620 },  // left parietal
-    p4:  { top: 430, left: 1044 }, // right parietal
-    pz:  { top: 420, left: 832 },  // midline parietal
-    o1:  { top: 560, left: 700 },  // left occipital
-    o2:  { top: 560, left: 964 },  // right occipital
-    oz:  { top: 580, left: 832 },  // midline occipital
-  }
-
-  const statusColors: Record<string, string> = {
-    improved: overrides.accentColor || '#5eead4',
-    stable: '#60a5fa',
-    declined: '#fbbf24',
-    flagged: '#f87171',
-  }
-
-  return (
-    <AbsoluteFill style={{ color: '#f7efe6' }}>
-      {scene.imageUrl && (
-        <CompositionBackgroundImage
-          src={scene.imageUrl}
-          reveal={reveal}
-          brightness={overrides.brightness ?? 0.5}
-          saturation={overrides.saturation ?? 0.9}
-          scrimGradient="linear-gradient(180deg, rgba(3,5,10,0.7) 0%, rgba(3,5,10,0.3) 40%, rgba(3,5,10,0.3) 60%, rgba(3,5,10,0.7) 100%)"
-        />
-      )}
-      <AbsoluteFill style={{ padding: overrides.padding }}>
-        <div
-          style={{
-            fontFamily: FONT_HEADLINE,
-            fontSize: headlineSize,
-            lineHeight: 0.96,
-            fontWeight: 'bold',
-            opacity: reveal,
-            transform: `translateY(${interpolate(reveal, [0, 1], [20, 0])}px)`,
-          }}
-        >
-          {headline}
-        </div>
-      </AbsoluteFill>
-      {/* region labels */}
-      {regions.map((reg, i) => {
-        const regionReveal = spring({
-          frame: Math.max(frame - 12 - i * 10, 0),
-          fps,
-          config: { damping: 16, stiffness: 100, mass: 0.9 },
-        })
-        const nameKey = (reg.name || '').toLowerCase().replace(/[\s_-]+/g, '-').replace(/-/g, '')
-        const pos = Object.entries(regionPositions).find(([k]) =>
-          nameKey.includes(k) || k.includes(nameKey)
-        )?.[1] || { top: 340 + i * 70, left: 780 }
-        const color = statusColors[reg.status || 'stable'] || '#60a5fa'
-
-        return (
-          <div
-            key={i}
-            style={{
-              position: 'absolute',
-              top: pos.top,
-              left: pos.left,
-              display: 'flex',
-              alignItems: 'center',
-              gap: 10,
-              transform: `scale(${interpolate(regionReveal, [0, 1], [0.7, 1])})`,
-              opacity: regionReveal,
-            }}
-          >
-            <div
-              style={{
-                padding: '10px 20px',
-              }}
-            >
-              <div
-                style={{
-                  fontFamily: FONT_BODY,
-                  fontSize: regionNameSize,
-                  fontWeight: 600,
-                  color: '#fff',
-                }}
-              >
-                {reg.name || ''}
-              </div>
-              {reg.value ? (
-                <div
-                  style={{
-                    fontFamily: FONT_DATA,
-                    fontSize: regionValueSize,
-                    color,
-                    marginTop: 4,
-                  }}
-                >
-                  {reg.value}
-                </div>
-              ) : null}
-            </div>
-          </div>
-        )
-      })}
-      {caption ? (
-        <div
-          style={{
-            position: 'absolute',
-            bottom: overrides.padding,
-            left: overrides.padding,
-            fontFamily: FONT_CAPTION,
-            fontSize: CAPTION_SIZE + 2,
-            color: 'rgba(255,244,234,0.6)',
-            opacity: interpolate(reveal, [0.5, 1], [0, 1]),
-          }}
-        >
-          {caption}
-        </div>
-      ) : null}
     </AbsoluteFill>
   )
 }
@@ -4094,7 +3818,7 @@ function MotionTemplateRenderer({ scene }: { scene: RemotionScene }) {
       return <ThreeDataStage scene={scene} />
     case 'surreal_tableau_3d':
       return <SurrealTableau3D scene={scene} />
-    // ── Clinical template compositions ──
+    // ── Template deck compositions ──
     case 'cover_hook':
       return <CoverHookTemplate scene={scene} />
     case 'orientation':
@@ -4103,12 +3827,8 @@ function MotionTemplateRenderer({ scene }: { scene: RemotionScene }) {
       return <SynthesisSummaryTemplate scene={scene} />
     case 'closing_cta':
       return <ClosingCtaTemplate scene={scene} />
-    case 'clinical_explanation':
-      return <ClinicalExplanationTemplate scene={scene} />
     case 'metric_improvement':
       return <MetricImprovementTemplate scene={scene} />
-    case 'brain_region_focus':
-      return <BrainRegionFocusTemplate scene={scene} />
     case 'metric_comparison':
       return <MetricComparisonTemplate scene={scene} />
     case 'timeline_progression':

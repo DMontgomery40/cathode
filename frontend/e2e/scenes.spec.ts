@@ -1055,12 +1055,12 @@ test.describe('Scene Timeline', () => {
     })
   })
 
-  test.describe.serial('clinical template composition editors', () => {
-    const CLINICAL_PROJECT = `e2e_clinical_template_${Date.now()}`
+  test.describe.serial('template deck composition editors', () => {
+    const TEMPLATE_PROJECT = `e2e_template_deck_${Date.now()}`
 
     test.beforeAll(() => {
-      cloneProjectFixture(PROJECT, CLINICAL_PROJECT)
-      const planPath = path.resolve(process.cwd(), '..', 'projects', CLINICAL_PROJECT, 'plan.json')
+      cloneProjectFixture(PROJECT, TEMPLATE_PROJECT)
+      const planPath = path.resolve(process.cwd(), '..', 'projects', TEMPLATE_PROJECT, 'plan.json')
       const plan = JSON.parse(fs.readFileSync(planPath, 'utf8')) as MutablePlan
       plan.meta.render_profile = {
         ...(plan.meta.render_profile || {}),
@@ -1081,8 +1081,8 @@ test.describe('Scene Timeline', () => {
           family: 'cover_hook',
           mode: 'native',
           props: {
-            headline: 'Your Brain Map',
-            subtitle: 'A personalized neural landscape',
+            headline: 'Your Season Recap',
+            subtitle: 'A personalized performance review',
             kicker: 'Session 3 of 10',
           },
         },
@@ -1099,10 +1099,10 @@ test.describe('Scene Timeline', () => {
             family: 'metric_improvement',
             mode: 'native',
             props: {
-              headline: 'Alpha Power',
-              metric_name: 'Fz Alpha (8-12 Hz)',
-              before: { value: '4.2 uV', label: 'Session 1' },
-              after: { value: '6.1 uV', label: 'Session 3' },
+              headline: 'Win Rate',
+              metric_name: 'Win rate (rolling 30d)',
+              before: { value: '4.2%', label: 'Session 1' },
+              after: { value: '6.1%', label: 'Session 3' },
               delta: '+45%',
               direction: 'improvement',
               caption: 'Upward trend',
@@ -1111,31 +1111,9 @@ test.describe('Scene Timeline', () => {
         })
       }
 
-      // Scene 2: brain_region_focus with regions array
+      // Scene 2: timeline_progression with markers array
       if (plan.scenes.length > 2) {
         Object.assign(plan.scenes[2], {
-          scene_type: 'motion',
-          image_path: null,
-          video_path: null,
-          preview_path: null,
-          composition: {
-            family: 'brain_region_focus',
-            mode: 'native',
-            props: {
-              headline: 'Regional Activity',
-              regions: [
-                { name: 'Frontal', value: '+18%', status: 'improved' },
-                { name: 'Temporal', value: '+12%', status: 'stable' },
-              ],
-              caption: 'Two regions tracked',
-            },
-          },
-        })
-      }
-
-      // Scene 3: timeline_progression with markers array
-      if (plan.scenes.length > 3) {
-        Object.assign(plan.scenes[3], {
           scene_type: 'motion',
           image_path: null,
           video_path: null,
@@ -1144,8 +1122,8 @@ test.describe('Scene Timeline', () => {
             family: 'timeline_progression',
             mode: 'native',
             props: {
-              headline: 'Treatment Window',
-              span_label: '6-month protocol',
+              headline: 'Rollout Window',
+              span_label: '6-month rollout',
               markers: [
                 { label: 'Intake', date: 'Jan', annotation: 'Baseline', status: 'completed' },
                 { label: 'Mid-point', date: 'Apr', annotation: 'Check-in', status: 'current' },
@@ -1160,80 +1138,65 @@ test.describe('Scene Timeline', () => {
     })
 
     test.afterAll(() => {
-      cleanupProjectFixture(CLINICAL_PROJECT)
+      cleanupProjectFixture(TEMPLATE_PROJECT)
     })
 
     test('cover_hook editor shows headline, subtitle, and kicker fields', async ({ page }) => {
-      await page.goto(`/projects/${CLINICAL_PROJECT}/scenes`)
+      await page.goto(`/projects/${TEMPLATE_PROJECT}/scenes`)
       await expect(page.getByRole('region', { name: 'Scene inspector' })).toBeVisible()
       await expectInspectorOption(page, 'Scene type', 'motion', 'Remotion')
       await expectInspectorOption(page, 'Composition family', 'cover_hook', 'Cover hook')
-      await expect(page.getByLabel('Cover headline')).toHaveValue('Your Brain Map')
-      await expect(page.getByLabel('Cover subtitle')).toHaveValue('A personalized neural landscape')
+      await expect(page.getByLabel('Cover headline')).toHaveValue('Your Season Recap')
+      await expect(page.getByLabel('Cover subtitle')).toHaveValue('A personalized performance review')
       await expect(page.getByLabel('Cover kicker')).toHaveValue('Session 3 of 10')
     })
 
     test('metric_improvement editor shows before/after panels and delta', async ({ page }) => {
-      await page.goto(`/projects/${CLINICAL_PROJECT}/scenes`)
+      await page.goto(`/projects/${TEMPLATE_PROJECT}/scenes`)
       await expect(page.getByRole('region', { name: 'Scene inspector' })).toBeVisible()
       await page.getByRole('listbox', { name: 'Scene timeline' }).getByRole('option').nth(1).click()
       await expectInspectorOption(page, 'Composition family', 'metric_improvement', 'Metric improvement')
-      await expect(page.getByLabel('Metric headline')).toHaveValue('Alpha Power')
-      await expect(page.getByLabel('Metric name')).toHaveValue('Fz Alpha (8-12 Hz)')
-      await expect(page.getByLabel('Before value')).toHaveValue('4.2 uV')
+      await expect(page.getByLabel('Metric headline')).toHaveValue('Win Rate')
+      await expect(page.getByLabel('Metric name')).toHaveValue('Win rate (rolling 30d)')
+      await expect(page.getByLabel('Before value')).toHaveValue('4.2%')
       await expect(page.getByLabel('Before label')).toHaveValue('Session 1')
-      await expect(page.getByLabel('After value')).toHaveValue('6.1 uV')
+      await expect(page.getByLabel('After value')).toHaveValue('6.1%')
       await expect(page.getByLabel('After label')).toHaveValue('Session 3')
       await expect(page.getByLabel('Delta')).toHaveValue('+45%')
       await expect(page.getByLabel('Direction', { exact: true })).toHaveValue('improvement')
     })
 
-    test('brain_region_focus editor shows headline, regions array, and caption', async ({ page }) => {
-      await page.goto(`/projects/${CLINICAL_PROJECT}/scenes`)
+    test('timeline_progression editor shows headline, span_label, markers, and caption', async ({ page }) => {
+      await page.goto(`/projects/${TEMPLATE_PROJECT}/scenes`)
       await expect(page.getByRole('region', { name: 'Scene inspector' })).toBeVisible()
       await page.getByRole('listbox', { name: 'Scene timeline' }).getByRole('option').nth(2).click()
-      await expectInspectorOption(page, 'Composition family', 'brain_region_focus', 'Brain region focus')
-      await expect(page.getByLabel('Brain region headline')).toHaveValue('Regional Activity')
-      await expect(page.getByLabel('Brain region caption')).toHaveValue('Two regions tracked')
-      await expect(page.getByLabel('Region 1 name')).toHaveValue('Frontal')
-      await expect(page.getByLabel('Region 1 value')).toHaveValue('+18%')
-      await expect(page.getByLabel('Region 1 status')).toHaveValue('improved')
-      await expect(page.getByLabel('Region 2 name')).toHaveValue('Temporal')
-      await expect(page.getByLabel('Region 2 value')).toHaveValue('+12%')
-      await expect(page.getByLabel('Region 2 status')).toHaveValue('stable')
-    })
-
-    test('timeline_progression editor shows headline, span_label, markers, and caption', async ({ page }) => {
-      await page.goto(`/projects/${CLINICAL_PROJECT}/scenes`)
-      await expect(page.getByRole('region', { name: 'Scene inspector' })).toBeVisible()
-      await page.getByRole('listbox', { name: 'Scene timeline' }).getByRole('option').nth(3).click()
       await expectInspectorOption(page, 'Composition family', 'timeline_progression', 'Timeline progression')
-      await expect(page.getByLabel('Timeline headline')).toHaveValue('Treatment Window')
-      await expect(page.getByLabel('Span label')).toHaveValue('6-month protocol')
+      await expect(page.getByLabel('Timeline headline')).toHaveValue('Rollout Window')
+      await expect(page.getByLabel('Span label')).toHaveValue('6-month rollout')
       await expect(page.getByLabel('Timeline caption')).toHaveValue('On track')
       await expect(page.getByText('Markers (2)')).toBeVisible()
     })
 
     test('cover_hook prop edits persist through the real save endpoint', async ({ page }) => {
-      await page.goto(`/projects/${CLINICAL_PROJECT}/scenes`)
+      await page.goto(`/projects/${TEMPLATE_PROJECT}/scenes`)
       await expect(page.getByLabel('Cover headline')).toBeVisible()
 
       const saveResponse = page.waitForResponse((response) =>
         response.request().method() === 'PUT'
-        && response.url().includes(`/api/projects/${CLINICAL_PROJECT}/plan`),
+        && response.url().includes(`/api/projects/${TEMPLATE_PROJECT}/plan`),
       )
 
-      await page.getByLabel('Cover headline').fill('Updated Brain Map')
+      await page.getByLabel('Cover headline').fill('Updated Season Recap')
       await saveResponse
 
       await expect.poll(() => {
-        const plan = readProjectPlan(CLINICAL_PROJECT) as MutablePlan
+        const plan = readProjectPlan(TEMPLATE_PROJECT) as MutablePlan
         const props = plan.scenes?.[0]?.composition?.props ?? {}
         return props.headline ?? ''
-      }).toBe('Updated Brain Map')
+      }).toBe('Updated Season Recap')
 
       await page.reload()
-      await expect(page.getByLabel('Cover headline')).toHaveValue('Updated Brain Map')
+      await expect(page.getByLabel('Cover headline')).toHaveValue('Updated Season Recap')
     })
   })
 })

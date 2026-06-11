@@ -259,7 +259,7 @@ test.describe('Render Control', () => {
             {
               uid: 'static-media-scene',
               sceneType: 'image',
-              title: 'Clinical Follow-up Still',
+              title: 'Quarterly Follow-up Still',
               narration: 'Plan a follow-up and keep reinforcing the gains.',
               onScreenText: [
                 'Exact Authored Label',

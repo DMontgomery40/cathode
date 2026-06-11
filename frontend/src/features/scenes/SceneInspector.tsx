@@ -128,9 +128,7 @@ const COMPOSITION_FAMILY_OPTIONS: CompositionFamilyOption[] = [
   { value: 'orientation', label: 'Orientation', motionAllowed: true },
   { value: 'synthesis_summary', label: 'Synthesis summary', motionAllowed: true },
   { value: 'closing_cta', label: 'Closing CTA', motionAllowed: true },
-  { value: 'clinical_explanation', label: 'Clinical explanation', motionAllowed: true },
   { value: 'metric_improvement', label: 'Metric improvement', motionAllowed: true },
-  { value: 'brain_region_focus', label: 'Brain region focus', motionAllowed: true },
   { value: 'metric_comparison', label: 'Metric comparison', motionAllowed: true },
   { value: 'timeline_progression', label: 'Timeline progression', motionAllowed: true },
   { value: 'analogy_metaphor', label: 'Analogy / metaphor', motionAllowed: true },
@@ -612,8 +610,8 @@ function defaultCompositionModeForFamily(family: string): 'none' | 'overlay' | '
   }
   if ([
     'kinetic_statements', 'bullet_stack', 'quote_focus', 'three_data_stage', 'surreal_tableau_3d',
-    'cover_hook', 'orientation', 'synthesis_summary', 'closing_cta', 'clinical_explanation',
-    'metric_improvement', 'brain_region_focus', 'metric_comparison', 'timeline_progression', 'analogy_metaphor',
+    'cover_hook', 'orientation', 'synthesis_summary', 'closing_cta',
+    'metric_improvement', 'metric_comparison', 'timeline_progression', 'analogy_metaphor',
   ].includes(normalized)) {
     return 'native'
   }
@@ -628,21 +626,19 @@ function isThreeDataStageFamily(family: string): boolean {
   return String(family || '').trim() === 'three_data_stage'
 }
 
-const CLINICAL_TEMPLATE_FAMILIES = new Set([
+const TEMPLATE_DECK_FAMILIES = new Set([
   'cover_hook',
   'orientation',
   'synthesis_summary',
   'closing_cta',
-  'clinical_explanation',
   'metric_improvement',
-  'brain_region_focus',
   'metric_comparison',
   'timeline_progression',
   'analogy_metaphor',
 ])
 
-function isClinicalTemplateFamily(family: string): boolean {
-  return CLINICAL_TEMPLATE_FAMILIES.has(String(family || '').trim())
+function isTemplateDeckFamily(family: string): boolean {
+  return TEMPLATE_DECK_FAMILIES.has(String(family || '').trim())
 }
 
 function familyRequiresMotionScene(family: string, mode?: string): boolean {
@@ -1260,7 +1256,7 @@ export function SceneInspector({
   const isMotionScene = sceneType === 'motion'
   const nativeMotionScene = remotionEnabled && isMotionScene
   const isThreeDataStage = remotionEnabled && isThreeDataStageFamily(compositionState.family)
-  const isClinicalTemplate = remotionEnabled && isClinicalTemplateFamily(compositionState.family)
+  const isTemplateDeck = remotionEnabled && isTemplateDeckFamily(compositionState.family)
   const showOverlayTextEditor = remotionEnabled && (isMotionScene || compositionState.mode === 'native' || compositionState.mode === 'overlay')
   const threeDataStageData = isThreeDataStage
     ? normalizeThreeDataStageData(scene, compositionState.data)
@@ -2111,37 +2107,37 @@ export function SceneInspector({
     )
   }
 
-  // ── Clinical template family editors ──────────────────────────────────
+  // ── Template deck family editors ──────────────────────────────────────
 
-  const clinicalProps = compositionState.props as Record<string, unknown>
+  const templateProps = compositionState.props as Record<string, unknown>
 
-  const updateClinicalProp = (key: string, value: unknown) => {
+  const updateTemplateProp = (key: string, value: unknown) => {
     updateComposition({ props: { [key]: value } })
   }
 
-  const updateClinicalArrayItem = (key: string, index: number, value: string) => {
-    const arr = Array.isArray(clinicalProps[key]) ? [...(clinicalProps[key] as string[])] : []
+  const updateTemplateArrayItem = (key: string, index: number, value: string) => {
+    const arr = Array.isArray(templateProps[key]) ? [...(templateProps[key] as string[])] : []
     arr[index] = value
-    updateClinicalProp(key, arr)
+    updateTemplateProp(key, arr)
   }
 
-  const removeClinicalArrayItem = (key: string, index: number) => {
-    const arr = Array.isArray(clinicalProps[key]) ? [...(clinicalProps[key] as string[])] : []
+  const removeTemplateArrayItem = (key: string, index: number) => {
+    const arr = Array.isArray(templateProps[key]) ? [...(templateProps[key] as string[])] : []
     arr.splice(index, 1)
-    updateClinicalProp(key, arr)
+    updateTemplateProp(key, arr)
   }
 
-  const addClinicalArrayItem = (key: string) => {
-    const arr = Array.isArray(clinicalProps[key]) ? [...(clinicalProps[key] as string[])] : []
+  const addTemplateArrayItem = (key: string) => {
+    const arr = Array.isArray(templateProps[key]) ? [...(templateProps[key] as string[])] : []
     arr.push('')
-    updateClinicalProp(key, arr)
+    updateTemplateProp(key, arr)
   }
 
-  const clinicalInputClass = 'rounded-[var(--radius-md)] border border-[var(--border-subtle)] bg-[var(--surface-stage)] px-[var(--space-2)] py-[var(--space-2)] text-[var(--text-primary)] outline-none focus-visible:shadow-[var(--focus-ring)]'
-  const clinicalLabelClass = 'flex flex-col gap-[var(--space-1)] text-[var(--text-secondary)]'
+  const templateInputClass = 'rounded-[var(--radius-md)] border border-[var(--border-subtle)] bg-[var(--surface-stage)] px-[var(--space-2)] py-[var(--space-2)] text-[var(--text-primary)] outline-none focus-visible:shadow-[var(--focus-ring)]'
+  const templateLabelClass = 'flex flex-col gap-[var(--space-1)] text-[var(--text-secondary)]'
 
   const renderStringArrayEditor = (key: string, label: string, itemLabel: string) => {
-    const items: string[] = Array.isArray(clinicalProps[key]) ? (clinicalProps[key] as string[]) : []
+    const items: string[] = Array.isArray(templateProps[key]) ? (templateProps[key] as string[]) : []
     return (
       <div className="flex flex-col gap-[var(--space-2)]">
         <span className="text-[var(--text-secondary)]" style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--weight-medium)' }}>
@@ -2152,13 +2148,13 @@ export function SceneInspector({
             <input
               type="text"
               value={item}
-              onChange={(e) => updateClinicalArrayItem(key, i, e.target.value)}
-              className={`min-w-0 flex-1 ${clinicalInputClass}`}
+              onChange={(e) => updateTemplateArrayItem(key, i, e.target.value)}
+              className={`min-w-0 flex-1 ${templateInputClass}`}
               style={{ fontSize: 'var(--text-sm)' }}
               aria-label={`${itemLabel} ${i + 1}`}
             />
             <button
-              onClick={() => removeClinicalArrayItem(key, i)}
+              onClick={() => removeTemplateArrayItem(key, i)}
               className="rounded-[var(--radius-sm)] p-[var(--space-1)] text-[var(--text-tertiary)] outline-none focus-visible:shadow-[var(--focus-ring)] hover:text-[var(--signal-danger)]"
               aria-label={`Remove ${itemLabel} ${i + 1}`}
             >
@@ -2169,7 +2165,7 @@ export function SceneInspector({
           </div>
         ))}
         <button
-          onClick={() => addClinicalArrayItem(key)}
+          onClick={() => addTemplateArrayItem(key)}
           className="self-start rounded-[var(--radius-sm)] px-[var(--space-2)] py-[var(--space-1)] text-[var(--text-tertiary)] outline-none focus-visible:shadow-[var(--focus-ring)] hover:text-[var(--text-secondary)]"
           style={{ fontSize: 'var(--text-xs)' }}
         >
@@ -2179,40 +2175,40 @@ export function SceneInspector({
     )
   }
 
-  const renderClinicalTemplateEditor = () => {
+  const renderTemplateDeckEditor = () => {
     const family = compositionState.family
 
     // ── cover_hook: headline, subtitle, kicker ──
     if (family === 'cover_hook') {
       return (
         <>
-          <label className={clinicalLabelClass} style={{ fontSize: 'var(--text-xs)' }}>
+          <label className={templateLabelClass} style={{ fontSize: 'var(--text-xs)' }}>
             <span>Headline</span>
             <input
               type="text"
-              value={String(clinicalProps.headline || '')}
-              onChange={(e) => updateClinicalProp('headline', e.target.value)}
-              className={clinicalInputClass}
+              value={String(templateProps.headline || '')}
+              onChange={(e) => updateTemplateProp('headline', e.target.value)}
+              className={templateInputClass}
               aria-label="Cover headline"
             />
           </label>
-          <label className={clinicalLabelClass} style={{ fontSize: 'var(--text-xs)' }}>
+          <label className={templateLabelClass} style={{ fontSize: 'var(--text-xs)' }}>
             <span>Subtitle</span>
             <textarea
-              value={String(clinicalProps.subtitle || '')}
-              onChange={(e) => updateClinicalProp('subtitle', e.target.value)}
+              value={String(templateProps.subtitle || '')}
+              onChange={(e) => updateTemplateProp('subtitle', e.target.value)}
               rows={2}
-              className={`w-full resize-y ${clinicalInputClass}`}
+              className={`w-full resize-y ${templateInputClass}`}
               aria-label="Cover subtitle"
             />
           </label>
-          <label className={clinicalLabelClass} style={{ fontSize: 'var(--text-xs)' }}>
+          <label className={templateLabelClass} style={{ fontSize: 'var(--text-xs)' }}>
             <span>Kicker</span>
             <input
               type="text"
-              value={String(clinicalProps.kicker || '')}
-              onChange={(e) => updateClinicalProp('kicker', e.target.value)}
-              className={clinicalInputClass}
+              value={String(templateProps.kicker || '')}
+              onChange={(e) => updateTemplateProp('kicker', e.target.value)}
+              className={templateInputClass}
               aria-label="Cover kicker"
             />
           </label>
@@ -2224,13 +2220,13 @@ export function SceneInspector({
     if (family === 'orientation') {
       return (
         <>
-          <label className={clinicalLabelClass} style={{ fontSize: 'var(--text-xs)' }}>
+          <label className={templateLabelClass} style={{ fontSize: 'var(--text-xs)' }}>
             <span>Headline</span>
             <input
               type="text"
-              value={String(clinicalProps.headline || '')}
-              onChange={(e) => updateClinicalProp('headline', e.target.value)}
-              className={clinicalInputClass}
+              value={String(templateProps.headline || '')}
+              onChange={(e) => updateTemplateProp('headline', e.target.value)}
+              className={templateInputClass}
               aria-label="Orientation headline"
             />
           </label>
@@ -2241,28 +2237,28 @@ export function SceneInspector({
 
     // ── synthesis_summary: headline, columns[{title, accent, items}] ──
     if (family === 'synthesis_summary') {
-      const columns = Array.isArray(clinicalProps.columns)
-        ? (clinicalProps.columns as Array<{ title?: string; accent?: string; items?: Array<{ label?: string; icon?: string } | string> }>)
+      const columns = Array.isArray(templateProps.columns)
+        ? (templateProps.columns as Array<{ title?: string; accent?: string; items?: Array<{ label?: string; icon?: string } | string> }>)
         : []
       const updateColumn = (ci: number, patch: Record<string, unknown>) => {
         const next = columns.map((col, i) => (i === ci ? { ...col, ...patch } : col))
-        updateClinicalProp('columns', next)
+        updateTemplateProp('columns', next)
       }
       const addColumn = () => {
-        updateClinicalProp('columns', [...columns, { title: '', accent: 'teal', items: [] }])
+        updateTemplateProp('columns', [...columns, { title: '', accent: 'teal', items: [] }])
       }
       const removeColumn = (ci: number) => {
-        updateClinicalProp('columns', columns.filter((_, i) => i !== ci))
+        updateTemplateProp('columns', columns.filter((_, i) => i !== ci))
       }
       return (
         <>
-          <label className={clinicalLabelClass} style={{ fontSize: 'var(--text-xs)' }}>
+          <label className={templateLabelClass} style={{ fontSize: 'var(--text-xs)' }}>
             <span>Headline</span>
             <input
               type="text"
-              value={String(clinicalProps.headline || '')}
-              onChange={(e) => updateClinicalProp('headline', e.target.value)}
-              className={clinicalInputClass}
+              value={String(templateProps.headline || '')}
+              onChange={(e) => updateTemplateProp('headline', e.target.value)}
+              className={templateInputClass}
               aria-label="Synthesis headline"
             />
           </label>
@@ -2292,22 +2288,22 @@ export function SceneInspector({
                       </button>
                     </div>
                     <div className="grid gap-[var(--space-2)] xl:grid-cols-2">
-                      <label className={clinicalLabelClass} style={{ fontSize: 'var(--text-xs)' }}>
+                      <label className={templateLabelClass} style={{ fontSize: 'var(--text-xs)' }}>
                         <span>Title</span>
                         <input
                           type="text"
                           value={col.title || ''}
                           onChange={(e) => updateColumn(ci, { title: e.target.value })}
-                          className={clinicalInputClass}
+                          className={templateInputClass}
                           aria-label={`Column ${ci + 1} title`}
                         />
                       </label>
-                      <label className={clinicalLabelClass} style={{ fontSize: 'var(--text-xs)' }}>
+                      <label className={templateLabelClass} style={{ fontSize: 'var(--text-xs)' }}>
                         <span>Accent</span>
                         <select
                           value={col.accent || 'teal'}
                           onChange={(e) => updateColumn(ci, { accent: e.target.value })}
-                          className={clinicalInputClass}
+                          className={templateInputClass}
                           aria-label={`Column ${ci + 1} accent`}
                         >
                           <option value="teal">Teal</option>
@@ -2329,7 +2325,7 @@ export function SceneInspector({
                               nextItems[ii] = e.target.value
                               updateColumn(ci, { items: nextItems.map((it) => ({ label: it })) })
                             }}
-                            className={`min-w-0 flex-1 ${clinicalInputClass}`}
+                            className={`min-w-0 flex-1 ${templateInputClass}`}
                             style={{ fontSize: 'var(--text-sm)' }}
                             aria-label={`Column ${ci + 1} item ${ii + 1}`}
                           />
@@ -2377,35 +2373,35 @@ export function SceneInspector({
     if (family === 'closing_cta') {
       return (
         <>
-          <label className={clinicalLabelClass} style={{ fontSize: 'var(--text-xs)' }}>
+          <label className={templateLabelClass} style={{ fontSize: 'var(--text-xs)' }}>
             <span>Headline</span>
             <input
               type="text"
-              value={String(clinicalProps.headline || '')}
-              onChange={(e) => updateClinicalProp('headline', e.target.value)}
-              className={clinicalInputClass}
+              value={String(templateProps.headline || '')}
+              onChange={(e) => updateTemplateProp('headline', e.target.value)}
+              className={templateInputClass}
               aria-label="CTA headline"
             />
           </label>
           {renderStringArrayEditor('bullets', 'Bullets', 'Bullet')}
           <div className="grid gap-[var(--space-3)] xl:grid-cols-2">
-            <label className={clinicalLabelClass} style={{ fontSize: 'var(--text-xs)' }}>
+            <label className={templateLabelClass} style={{ fontSize: 'var(--text-xs)' }}>
               <span>Kicker</span>
               <input
                 type="text"
-                value={String(clinicalProps.kicker || '')}
-                onChange={(e) => updateClinicalProp('kicker', e.target.value)}
-                className={clinicalInputClass}
+                value={String(templateProps.kicker || '')}
+                onChange={(e) => updateTemplateProp('kicker', e.target.value)}
+                className={templateInputClass}
                 aria-label="CTA kicker"
               />
             </label>
-            <label className={clinicalLabelClass} style={{ fontSize: 'var(--text-xs)' }}>
+            <label className={templateLabelClass} style={{ fontSize: 'var(--text-xs)' }}>
               <span>Caption</span>
               <input
                 type="text"
-                value={String(clinicalProps.caption || '')}
-                onChange={(e) => updateClinicalProp('caption', e.target.value)}
-                className={clinicalInputClass}
+                value={String(templateProps.caption || '')}
+                onChange={(e) => updateTemplateProp('caption', e.target.value)}
+                className={templateInputClass}
                 aria-label="CTA caption"
               />
             </label>
@@ -2414,135 +2410,39 @@ export function SceneInspector({
       )
     }
 
-    // ── clinical_explanation: headline, body, caption, labels[{text, region}] ──
-    if (family === 'clinical_explanation') {
-      const labels = Array.isArray(clinicalProps.labels)
-        ? (clinicalProps.labels as Array<{ text?: string; region?: string }>)
-        : []
-      const updateLabel = (li: number, patch: Record<string, string>) => {
-        const next = labels.map((lbl, i) => (i === li ? { ...lbl, ...patch } : lbl))
-        updateClinicalProp('labels', next)
-      }
-      return (
-        <>
-          <label className={clinicalLabelClass} style={{ fontSize: 'var(--text-xs)' }}>
-            <span>Headline</span>
-            <input
-              type="text"
-              value={String(clinicalProps.headline || '')}
-              onChange={(e) => updateClinicalProp('headline', e.target.value)}
-              className={clinicalInputClass}
-              aria-label="Explanation headline"
-            />
-          </label>
-          <label className={clinicalLabelClass} style={{ fontSize: 'var(--text-xs)' }}>
-            <span>Body</span>
-            <textarea
-              value={String(clinicalProps.body || '')}
-              onChange={(e) => updateClinicalProp('body', e.target.value)}
-              rows={3}
-              className={`w-full resize-y ${clinicalInputClass}`}
-              aria-label="Explanation body"
-            />
-          </label>
-          <label className={clinicalLabelClass} style={{ fontSize: 'var(--text-xs)' }}>
-            <span>Caption</span>
-            <input
-              type="text"
-              value={String(clinicalProps.caption || '')}
-              onChange={(e) => updateClinicalProp('caption', e.target.value)}
-              className={clinicalInputClass}
-              aria-label="Explanation caption"
-            />
-          </label>
-          <div className="flex flex-col gap-[var(--space-2)]">
-            <span className="text-[var(--text-secondary)]" style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--weight-medium)' }}>
-              Floating labels ({labels.length})
-            </span>
-            {labels.map((lbl, li) => (
-              <div key={li} className="flex min-w-0 items-center gap-[var(--space-2)]">
-                <input
-                  type="text"
-                  value={lbl.text || ''}
-                  onChange={(e) => updateLabel(li, { text: e.target.value })}
-                  placeholder="Label text"
-                  className={`min-w-0 flex-1 ${clinicalInputClass}`}
-                  style={{ fontSize: 'var(--text-sm)' }}
-                  aria-label={`Label ${li + 1} text`}
-                />
-                <select
-                  value={lbl.region || 'center'}
-                  onChange={(e) => updateLabel(li, { region: e.target.value })}
-                  className={clinicalInputClass}
-                  style={{ fontSize: 'var(--text-xs)', width: 'auto' }}
-                  aria-label={`Label ${li + 1} region`}
-                >
-                  <option value="top-left">Top left</option>
-                  <option value="top-center">Top center</option>
-                  <option value="top-right">Top right</option>
-                  <option value="center-left">Center left</option>
-                  <option value="center">Center</option>
-                  <option value="center-right">Center right</option>
-                  <option value="bottom-left">Bottom left</option>
-                  <option value="bottom-center">Bottom center</option>
-                  <option value="bottom-right">Bottom right</option>
-                </select>
-                <button
-                  onClick={() => updateClinicalProp('labels', labels.filter((_, i) => i !== li))}
-                  className="rounded-[var(--radius-sm)] p-[var(--space-1)] text-[var(--text-tertiary)] outline-none focus-visible:shadow-[var(--focus-ring)] hover:text-[var(--signal-danger)]"
-                  aria-label={`Remove label ${li + 1}`}
-                >
-                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5">
-                    <path d="M3 3L11 11M3 11L11 3" />
-                  </svg>
-                </button>
-              </div>
-            ))}
-            <button
-              onClick={() => updateClinicalProp('labels', [...labels, { text: '', region: 'center' }])}
-              className="self-start rounded-[var(--radius-sm)] px-[var(--space-2)] py-[var(--space-1)] text-[var(--text-tertiary)] outline-none focus-visible:shadow-[var(--focus-ring)] hover:text-[var(--text-secondary)]"
-              style={{ fontSize: 'var(--text-xs)' }}
-            >
-              + Add label
-            </button>
-          </div>
-        </>
-      )
-    }
-
-    // ── metric_improvement: headline, metric_name, before/after {value, label}, delta, caption, direction ──
+    // ── metric_improvement: headline, before/after values, delta, caption ──
     if (family === 'metric_improvement') {
-      const before = (clinicalProps.before ?? {}) as { value?: string; label?: string }
-      const after = (clinicalProps.after ?? {}) as { value?: string; label?: string }
+      const before = (templateProps.before ?? {}) as { value?: string; label?: string }
+      const after = (templateProps.after ?? {}) as { value?: string; label?: string }
       return (
         <>
-          <label className={clinicalLabelClass} style={{ fontSize: 'var(--text-xs)' }}>
+          <label className={templateLabelClass} style={{ fontSize: 'var(--text-xs)' }}>
             <span>Headline</span>
             <input
               type="text"
-              value={String(clinicalProps.headline || '')}
-              onChange={(e) => updateClinicalProp('headline', e.target.value)}
-              className={clinicalInputClass}
+              value={String(templateProps.headline || '')}
+              onChange={(e) => updateTemplateProp('headline', e.target.value)}
+              className={templateInputClass}
               aria-label="Metric headline"
             />
           </label>
           <div className="grid gap-[var(--space-3)] xl:grid-cols-2">
-            <label className={clinicalLabelClass} style={{ fontSize: 'var(--text-xs)' }}>
+            <label className={templateLabelClass} style={{ fontSize: 'var(--text-xs)' }}>
               <span>Metric name</span>
               <input
                 type="text"
-                value={String(clinicalProps.metric_name || '')}
-                onChange={(e) => updateClinicalProp('metric_name', e.target.value)}
-                className={clinicalInputClass}
+                value={String(templateProps.metric_name || '')}
+                onChange={(e) => updateTemplateProp('metric_name', e.target.value)}
+                className={templateInputClass}
                 aria-label="Metric name"
               />
             </label>
-            <label className={clinicalLabelClass} style={{ fontSize: 'var(--text-xs)' }}>
+            <label className={templateLabelClass} style={{ fontSize: 'var(--text-xs)' }}>
               <span>Direction</span>
               <select
-                value={String(clinicalProps.direction || 'improvement')}
-                onChange={(e) => updateClinicalProp('direction', e.target.value)}
-                className={clinicalInputClass}
+                value={String(templateProps.direction || 'improvement')}
+                onChange={(e) => updateTemplateProp('direction', e.target.value)}
+                className={templateInputClass}
                 aria-label="Direction"
               >
                 <option value="improvement">Improvement</option>
@@ -2556,23 +2456,23 @@ export function SceneInspector({
               Before
             </span>
             <div className="mt-[var(--space-1)] grid gap-[var(--space-2)] xl:grid-cols-2">
-              <label className={clinicalLabelClass} style={{ fontSize: 'var(--text-xs)' }}>
+              <label className={templateLabelClass} style={{ fontSize: 'var(--text-xs)' }}>
                 <span>Value</span>
                 <input
                   type="text"
                   value={before.value || ''}
-                  onChange={(e) => updateClinicalProp('before', { ...before, value: e.target.value })}
-                  className={clinicalInputClass}
+                  onChange={(e) => updateTemplateProp('before', { ...before, value: e.target.value })}
+                  className={templateInputClass}
                   aria-label="Before value"
                 />
               </label>
-              <label className={clinicalLabelClass} style={{ fontSize: 'var(--text-xs)' }}>
+              <label className={templateLabelClass} style={{ fontSize: 'var(--text-xs)' }}>
                 <span>Label</span>
                 <input
                   type="text"
                   value={before.label || ''}
-                  onChange={(e) => updateClinicalProp('before', { ...before, label: e.target.value })}
-                  className={clinicalInputClass}
+                  onChange={(e) => updateTemplateProp('before', { ...before, label: e.target.value })}
+                  className={templateInputClass}
                   aria-label="Before label"
                 />
               </label>
@@ -2583,47 +2483,47 @@ export function SceneInspector({
               After
             </span>
             <div className="mt-[var(--space-1)] grid gap-[var(--space-2)] xl:grid-cols-2">
-              <label className={clinicalLabelClass} style={{ fontSize: 'var(--text-xs)' }}>
+              <label className={templateLabelClass} style={{ fontSize: 'var(--text-xs)' }}>
                 <span>Value</span>
                 <input
                   type="text"
                   value={after.value || ''}
-                  onChange={(e) => updateClinicalProp('after', { ...after, value: e.target.value })}
-                  className={clinicalInputClass}
+                  onChange={(e) => updateTemplateProp('after', { ...after, value: e.target.value })}
+                  className={templateInputClass}
                   aria-label="After value"
                 />
               </label>
-              <label className={clinicalLabelClass} style={{ fontSize: 'var(--text-xs)' }}>
+              <label className={templateLabelClass} style={{ fontSize: 'var(--text-xs)' }}>
                 <span>Label</span>
                 <input
                   type="text"
                   value={after.label || ''}
-                  onChange={(e) => updateClinicalProp('after', { ...after, label: e.target.value })}
-                  className={clinicalInputClass}
+                  onChange={(e) => updateTemplateProp('after', { ...after, label: e.target.value })}
+                  className={templateInputClass}
                   aria-label="After label"
                 />
               </label>
             </div>
           </GlassPanel>
           <div className="grid gap-[var(--space-3)] xl:grid-cols-2">
-            <label className={clinicalLabelClass} style={{ fontSize: 'var(--text-xs)' }}>
+            <label className={templateLabelClass} style={{ fontSize: 'var(--text-xs)' }}>
               <span>Delta</span>
               <input
                 type="text"
-                value={String(clinicalProps.delta || '')}
-                onChange={(e) => updateClinicalProp('delta', e.target.value)}
-                className={clinicalInputClass}
+                value={String(templateProps.delta || '')}
+                onChange={(e) => updateTemplateProp('delta', e.target.value)}
+                className={templateInputClass}
                 aria-label="Delta"
                 placeholder="e.g. +18%"
               />
             </label>
-            <label className={clinicalLabelClass} style={{ fontSize: 'var(--text-xs)' }}>
+            <label className={templateLabelClass} style={{ fontSize: 'var(--text-xs)' }}>
               <span>Caption</span>
               <input
                 type="text"
-                value={String(clinicalProps.caption || '')}
-                onChange={(e) => updateClinicalProp('caption', e.target.value)}
-                className={clinicalInputClass}
+                value={String(templateProps.caption || '')}
+                onChange={(e) => updateTemplateProp('caption', e.target.value)}
+                className={templateInputClass}
                 aria-label="Metric caption"
               />
             </label>
@@ -2632,100 +2532,10 @@ export function SceneInspector({
       )
     }
 
-    // ── brain_region_focus: headline, regions[{name, value, status}], caption, view ──
-    if (family === 'brain_region_focus') {
-      const regions = Array.isArray(clinicalProps.regions)
-        ? (clinicalProps.regions as Array<{ name?: string; value?: string; status?: string }>)
-        : []
-      const updateRegion = (ri: number, patch: Record<string, string>) => {
-        const next = regions.map((reg, i) => (i === ri ? { ...reg, ...patch } : reg))
-        updateClinicalProp('regions', next)
-      }
-      return (
-        <>
-          <label className={clinicalLabelClass} style={{ fontSize: 'var(--text-xs)' }}>
-            <span>Headline</span>
-            <input
-              type="text"
-              value={String(clinicalProps.headline || '')}
-              onChange={(e) => updateClinicalProp('headline', e.target.value)}
-              className={clinicalInputClass}
-              aria-label="Brain region headline"
-            />
-          </label>
-          <label className={clinicalLabelClass} style={{ fontSize: 'var(--text-xs)' }}>
-            <span>Caption</span>
-            <input
-              type="text"
-              value={String(clinicalProps.caption || '')}
-              onChange={(e) => updateClinicalProp('caption', e.target.value)}
-              className={clinicalInputClass}
-              aria-label="Brain region caption"
-            />
-          </label>
-          <div className="flex flex-col gap-[var(--space-2)]">
-            <span className="text-[var(--text-secondary)]" style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--weight-medium)' }}>
-              Regions ({regions.length})
-            </span>
-            {regions.map((reg, ri) => (
-              <div key={ri} className="flex min-w-0 flex-wrap items-center gap-[var(--space-2)]">
-                <input
-                  type="text"
-                  value={reg.name || ''}
-                  onChange={(e) => updateRegion(ri, { name: e.target.value })}
-                  placeholder="Name (e.g. frontal)"
-                  className={`min-w-0 flex-1 basis-[8rem] ${clinicalInputClass}`}
-                  style={{ fontSize: 'var(--text-sm)' }}
-                  aria-label={`Region ${ri + 1} name`}
-                />
-                <input
-                  type="text"
-                  value={reg.value || ''}
-                  onChange={(e) => updateRegion(ri, { value: e.target.value })}
-                  placeholder="Value"
-                  className={`min-w-0 basis-[5rem] ${clinicalInputClass}`}
-                  style={{ fontSize: 'var(--text-sm)' }}
-                  aria-label={`Region ${ri + 1} value`}
-                />
-                <select
-                  value={reg.status || 'stable'}
-                  onChange={(e) => updateRegion(ri, { status: e.target.value })}
-                  className={clinicalInputClass}
-                  style={{ fontSize: 'var(--text-xs)', width: 'auto' }}
-                  aria-label={`Region ${ri + 1} status`}
-                >
-                  <option value="improved">Improved</option>
-                  <option value="stable">Stable</option>
-                  <option value="declined">Declined</option>
-                  <option value="flagged">Flagged</option>
-                </select>
-                <button
-                  onClick={() => updateClinicalProp('regions', regions.filter((_, i) => i !== ri))}
-                  className="rounded-[var(--radius-sm)] p-[var(--space-1)] text-[var(--text-tertiary)] outline-none focus-visible:shadow-[var(--focus-ring)] hover:text-[var(--signal-danger)]"
-                  aria-label={`Remove region ${ri + 1}`}
-                >
-                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5">
-                    <path d="M3 3L11 11M3 11L11 3" />
-                  </svg>
-                </button>
-              </div>
-            ))}
-            <button
-              onClick={() => updateClinicalProp('regions', [...regions, { name: '', value: '', status: 'stable' }])}
-              className="self-start rounded-[var(--radius-sm)] px-[var(--space-2)] py-[var(--space-1)] text-[var(--text-tertiary)] outline-none focus-visible:shadow-[var(--focus-ring)] hover:text-[var(--text-secondary)]"
-              style={{ fontSize: 'var(--text-xs)' }}
-            >
-              + Add region
-            </button>
-          </div>
-        </>
-      )
-    }
-
-    // ── metric_comparison: headline, left/right {title, accent, items[]}, caption ──
+    // ── metric_comparison: headline, left/right panels with items ──
     if (family === 'metric_comparison') {
-      const left = (clinicalProps.left ?? {}) as { title?: string; accent?: string; items?: string[] }
-      const right = (clinicalProps.right ?? {}) as { title?: string; accent?: string; items?: string[] }
+      const left = (templateProps.left ?? {}) as { title?: string; accent?: string; items?: string[] }
+      const right = (templateProps.right ?? {}) as { title?: string; accent?: string; items?: string[] }
       const renderComparisonSide = (sideKey: 'left' | 'right', side: typeof left, sideLabel: string) => {
         const sideItems = side.items || []
         return (
@@ -2735,22 +2545,22 @@ export function SceneInspector({
                 {sideLabel}
               </span>
               <div className="grid gap-[var(--space-2)] xl:grid-cols-2">
-                <label className={clinicalLabelClass} style={{ fontSize: 'var(--text-xs)' }}>
+                <label className={templateLabelClass} style={{ fontSize: 'var(--text-xs)' }}>
                   <span>Title</span>
                   <input
                     type="text"
                     value={side.title || ''}
-                    onChange={(e) => updateClinicalProp(sideKey, { ...side, title: e.target.value })}
-                    className={clinicalInputClass}
+                    onChange={(e) => updateTemplateProp(sideKey, { ...side, title: e.target.value })}
+                    className={templateInputClass}
                     aria-label={`${sideLabel} title`}
                   />
                 </label>
-                <label className={clinicalLabelClass} style={{ fontSize: 'var(--text-xs)' }}>
+                <label className={templateLabelClass} style={{ fontSize: 'var(--text-xs)' }}>
                   <span>Accent</span>
                   <select
                     value={side.accent || (sideKey === 'left' ? 'amber' : 'teal')}
-                    onChange={(e) => updateClinicalProp(sideKey, { ...side, accent: e.target.value })}
-                    className={clinicalInputClass}
+                    onChange={(e) => updateTemplateProp(sideKey, { ...side, accent: e.target.value })}
+                    className={templateInputClass}
                     aria-label={`${sideLabel} accent`}
                   >
                     <option value="teal">Teal</option>
@@ -2768,16 +2578,16 @@ export function SceneInspector({
                     onChange={(e) => {
                       const nextItems = [...sideItems]
                       nextItems[ii] = e.target.value
-                      updateClinicalProp(sideKey, { ...side, items: nextItems })
+                      updateTemplateProp(sideKey, { ...side, items: nextItems })
                     }}
-                    className={`min-w-0 flex-1 ${clinicalInputClass}`}
+                    className={`min-w-0 flex-1 ${templateInputClass}`}
                     style={{ fontSize: 'var(--text-sm)' }}
                     aria-label={`${sideLabel} item ${ii + 1}`}
                   />
                   <button
                     onClick={() => {
                       const nextItems = sideItems.filter((_, j) => j !== ii)
-                      updateClinicalProp(sideKey, { ...side, items: nextItems })
+                      updateTemplateProp(sideKey, { ...side, items: nextItems })
                     }}
                     className="rounded-[var(--radius-sm)] p-[var(--space-1)] text-[var(--text-tertiary)] outline-none focus-visible:shadow-[var(--focus-ring)] hover:text-[var(--signal-danger)]"
                     aria-label={`Remove ${sideLabel} item ${ii + 1}`}
@@ -2789,7 +2599,7 @@ export function SceneInspector({
                 </div>
               ))}
               <button
-                onClick={() => updateClinicalProp(sideKey, { ...side, items: [...sideItems, ''] })}
+                onClick={() => updateTemplateProp(sideKey, { ...side, items: [...sideItems, ''] })}
                 className="self-start rounded-[var(--radius-sm)] px-[var(--space-2)] py-[var(--space-1)] text-[var(--text-tertiary)] outline-none focus-visible:shadow-[var(--focus-ring)] hover:text-[var(--text-secondary)]"
                 style={{ fontSize: 'var(--text-xs)' }}
               >
@@ -2801,25 +2611,25 @@ export function SceneInspector({
       }
       return (
         <>
-          <label className={clinicalLabelClass} style={{ fontSize: 'var(--text-xs)' }}>
+          <label className={templateLabelClass} style={{ fontSize: 'var(--text-xs)' }}>
             <span>Headline</span>
             <input
               type="text"
-              value={String(clinicalProps.headline || '')}
-              onChange={(e) => updateClinicalProp('headline', e.target.value)}
-              className={clinicalInputClass}
+              value={String(templateProps.headline || '')}
+              onChange={(e) => updateTemplateProp('headline', e.target.value)}
+              className={templateInputClass}
               aria-label="Comparison headline"
             />
           </label>
           {renderComparisonSide('left', left, 'Left panel')}
           {renderComparisonSide('right', right, 'Right panel')}
-          <label className={clinicalLabelClass} style={{ fontSize: 'var(--text-xs)' }}>
+          <label className={templateLabelClass} style={{ fontSize: 'var(--text-xs)' }}>
             <span>Caption</span>
             <input
               type="text"
-              value={String(clinicalProps.caption || '')}
-              onChange={(e) => updateClinicalProp('caption', e.target.value)}
-              className={clinicalInputClass}
+              value={String(templateProps.caption || '')}
+              onChange={(e) => updateTemplateProp('caption', e.target.value)}
+              className={templateInputClass}
               aria-label="Comparison caption"
             />
           </label>
@@ -2829,44 +2639,44 @@ export function SceneInspector({
 
     // ── timeline_progression: headline, span_label, markers[{label, date, annotation, status}], caption ──
     if (family === 'timeline_progression') {
-      const markers = Array.isArray(clinicalProps.markers)
-        ? (clinicalProps.markers as Array<{ label?: string; date?: string; annotation?: string; status?: string }>)
+      const markers = Array.isArray(templateProps.markers)
+        ? (templateProps.markers as Array<{ label?: string; date?: string; annotation?: string; status?: string }>)
         : []
       const updateMarker = (mi: number, patch: Record<string, string>) => {
         const next = markers.map((m, i) => (i === mi ? { ...m, ...patch } : m))
-        updateClinicalProp('markers', next)
+        updateTemplateProp('markers', next)
       }
       return (
         <>
-          <label className={clinicalLabelClass} style={{ fontSize: 'var(--text-xs)' }}>
+          <label className={templateLabelClass} style={{ fontSize: 'var(--text-xs)' }}>
             <span>Headline</span>
             <input
               type="text"
-              value={String(clinicalProps.headline || '')}
-              onChange={(e) => updateClinicalProp('headline', e.target.value)}
-              className={clinicalInputClass}
+              value={String(templateProps.headline || '')}
+              onChange={(e) => updateTemplateProp('headline', e.target.value)}
+              className={templateInputClass}
               aria-label="Timeline headline"
             />
           </label>
           <div className="grid gap-[var(--space-3)] xl:grid-cols-2">
-            <label className={clinicalLabelClass} style={{ fontSize: 'var(--text-xs)' }}>
+            <label className={templateLabelClass} style={{ fontSize: 'var(--text-xs)' }}>
               <span>Span label</span>
               <input
                 type="text"
-                value={String(clinicalProps.span_label || '')}
-                onChange={(e) => updateClinicalProp('span_label', e.target.value)}
-                className={clinicalInputClass}
+                value={String(templateProps.span_label || '')}
+                onChange={(e) => updateTemplateProp('span_label', e.target.value)}
+                className={templateInputClass}
                 aria-label="Span label"
                 placeholder="e.g. 6-month treatment window"
               />
             </label>
-            <label className={clinicalLabelClass} style={{ fontSize: 'var(--text-xs)' }}>
+            <label className={templateLabelClass} style={{ fontSize: 'var(--text-xs)' }}>
               <span>Caption</span>
               <input
                 type="text"
-                value={String(clinicalProps.caption || '')}
-                onChange={(e) => updateClinicalProp('caption', e.target.value)}
-                className={clinicalInputClass}
+                value={String(templateProps.caption || '')}
+                onChange={(e) => updateTemplateProp('caption', e.target.value)}
+                className={templateInputClass}
                 aria-label="Timeline caption"
               />
             </label>
@@ -2880,7 +2690,7 @@ export function SceneInspector({
                 <div className="flex items-center justify-between">
                   <span className="text-[var(--text-tertiary)]" style={{ fontSize: '10px' }}>Marker {mi + 1}</span>
                   <button
-                    onClick={() => updateClinicalProp('markers', markers.filter((_, i) => i !== mi))}
+                    onClick={() => updateTemplateProp('markers', markers.filter((_, i) => i !== mi))}
                     className="rounded-[var(--radius-sm)] p-[var(--space-1)] text-[var(--text-tertiary)] outline-none focus-visible:shadow-[var(--focus-ring)] hover:text-[var(--signal-danger)]"
                     aria-label={`Remove marker ${mi + 1}`}
                   >
@@ -2895,7 +2705,7 @@ export function SceneInspector({
                     value={m.label || ''}
                     onChange={(e) => updateMarker(mi, { label: e.target.value })}
                     placeholder="Label"
-                    className={clinicalInputClass}
+                    className={templateInputClass}
                     style={{ fontSize: 'var(--text-sm)' }}
                     aria-label={`Marker ${mi + 1} label`}
                   />
@@ -2904,7 +2714,7 @@ export function SceneInspector({
                     value={m.date || ''}
                     onChange={(e) => updateMarker(mi, { date: e.target.value })}
                     placeholder="Date"
-                    className={clinicalInputClass}
+                    className={templateInputClass}
                     style={{ fontSize: 'var(--text-sm)' }}
                     aria-label={`Marker ${mi + 1} date`}
                   />
@@ -2913,14 +2723,14 @@ export function SceneInspector({
                     value={m.annotation || ''}
                     onChange={(e) => updateMarker(mi, { annotation: e.target.value })}
                     placeholder="Annotation"
-                    className={clinicalInputClass}
+                    className={templateInputClass}
                     style={{ fontSize: 'var(--text-sm)' }}
                     aria-label={`Marker ${mi + 1} annotation`}
                   />
                   <select
                     value={m.status || 'completed'}
                     onChange={(e) => updateMarker(mi, { status: e.target.value })}
-                    className={clinicalInputClass}
+                    className={templateInputClass}
                     style={{ fontSize: 'var(--text-xs)' }}
                     aria-label={`Marker ${mi + 1} status`}
                   >
@@ -2933,7 +2743,7 @@ export function SceneInspector({
               </GlassPanel>
             ))}
             <button
-              onClick={() => updateClinicalProp('markers', [...markers, { label: '', date: '', annotation: '', status: 'completed' }])}
+              onClick={() => updateTemplateProp('markers', [...markers, { label: '', date: '', annotation: '', status: 'completed' }])}
               className="self-start rounded-[var(--radius-sm)] px-[var(--space-2)] py-[var(--space-1)] text-[var(--text-tertiary)] outline-none focus-visible:shadow-[var(--focus-ring)] hover:text-[var(--text-secondary)]"
               style={{ fontSize: 'var(--text-xs)' }}
             >
@@ -2946,10 +2756,10 @@ export function SceneInspector({
 
     // ── analogy_metaphor: headline, left/right {title, accent, items[], direction, summary}, caption ──
     if (family === 'analogy_metaphor') {
-      const left = (clinicalProps.left ?? {}) as {
+      const left = (templateProps.left ?? {}) as {
         title?: string; items?: string[]; accent?: string; direction?: string; summary?: string
       }
-      const right = (clinicalProps.right ?? {}) as {
+      const right = (templateProps.right ?? {}) as {
         title?: string; items?: string[]; accent?: string; direction?: string; summary?: string
       }
       const renderAnalogyPanel = (sideKey: 'left' | 'right', side: typeof left, sideLabel: string) => {
@@ -2961,22 +2771,22 @@ export function SceneInspector({
                 {sideLabel}
               </span>
               <div className="grid gap-[var(--space-2)] xl:grid-cols-3">
-                <label className={clinicalLabelClass} style={{ fontSize: 'var(--text-xs)' }}>
+                <label className={templateLabelClass} style={{ fontSize: 'var(--text-xs)' }}>
                   <span>Title</span>
                   <input
                     type="text"
                     value={side.title || ''}
-                    onChange={(e) => updateClinicalProp(sideKey, { ...side, title: e.target.value })}
-                    className={clinicalInputClass}
+                    onChange={(e) => updateTemplateProp(sideKey, { ...side, title: e.target.value })}
+                    className={templateInputClass}
                     aria-label={`${sideLabel} title`}
                   />
                 </label>
-                <label className={clinicalLabelClass} style={{ fontSize: 'var(--text-xs)' }}>
+                <label className={templateLabelClass} style={{ fontSize: 'var(--text-xs)' }}>
                   <span>Accent</span>
                   <select
                     value={side.accent || 'teal'}
-                    onChange={(e) => updateClinicalProp(sideKey, { ...side, accent: e.target.value })}
-                    className={clinicalInputClass}
+                    onChange={(e) => updateTemplateProp(sideKey, { ...side, accent: e.target.value })}
+                    className={templateInputClass}
                     aria-label={`${sideLabel} accent`}
                   >
                     <option value="teal">Teal</option>
@@ -2985,12 +2795,12 @@ export function SceneInspector({
                     <option value="green">Green</option>
                   </select>
                 </label>
-                <label className={clinicalLabelClass} style={{ fontSize: 'var(--text-xs)' }}>
+                <label className={templateLabelClass} style={{ fontSize: 'var(--text-xs)' }}>
                   <span>Direction</span>
                   <select
                     value={side.direction || ''}
-                    onChange={(e) => updateClinicalProp(sideKey, { ...side, direction: e.target.value })}
-                    className={clinicalInputClass}
+                    onChange={(e) => updateTemplateProp(sideKey, { ...side, direction: e.target.value })}
+                    className={templateInputClass}
                     aria-label={`${sideLabel} direction`}
                   >
                     <option value="">None</option>
@@ -3007,16 +2817,16 @@ export function SceneInspector({
                     onChange={(e) => {
                       const nextItems = [...sideItems]
                       nextItems[ii] = e.target.value
-                      updateClinicalProp(sideKey, { ...side, items: nextItems })
+                      updateTemplateProp(sideKey, { ...side, items: nextItems })
                     }}
-                    className={`min-w-0 flex-1 ${clinicalInputClass}`}
+                    className={`min-w-0 flex-1 ${templateInputClass}`}
                     style={{ fontSize: 'var(--text-sm)' }}
                     aria-label={`${sideLabel} item ${ii + 1}`}
                   />
                   <button
                     onClick={() => {
                       const nextItems = sideItems.filter((_, j) => j !== ii)
-                      updateClinicalProp(sideKey, { ...side, items: nextItems })
+                      updateTemplateProp(sideKey, { ...side, items: nextItems })
                     }}
                     className="rounded-[var(--radius-sm)] p-[var(--space-1)] text-[var(--text-tertiary)] outline-none focus-visible:shadow-[var(--focus-ring)] hover:text-[var(--signal-danger)]"
                     aria-label={`Remove ${sideLabel} item ${ii + 1}`}
@@ -3028,19 +2838,19 @@ export function SceneInspector({
                 </div>
               ))}
               <button
-                onClick={() => updateClinicalProp(sideKey, { ...side, items: [...sideItems, ''] })}
+                onClick={() => updateTemplateProp(sideKey, { ...side, items: [...sideItems, ''] })}
                 className="self-start rounded-[var(--radius-sm)] px-[var(--space-2)] py-[var(--space-1)] text-[var(--text-tertiary)] outline-none focus-visible:shadow-[var(--focus-ring)] hover:text-[var(--text-secondary)]"
                 style={{ fontSize: 'var(--text-xs)' }}
               >
                 + Add item
               </button>
-              <label className={clinicalLabelClass} style={{ fontSize: 'var(--text-xs)' }}>
+              <label className={templateLabelClass} style={{ fontSize: 'var(--text-xs)' }}>
                 <span>Summary badge</span>
                 <input
                   type="text"
                   value={side.summary || ''}
-                  onChange={(e) => updateClinicalProp(sideKey, { ...side, summary: e.target.value })}
-                  className={clinicalInputClass}
+                  onChange={(e) => updateTemplateProp(sideKey, { ...side, summary: e.target.value })}
+                  className={templateInputClass}
                   aria-label={`${sideLabel} summary`}
                 />
               </label>
@@ -3050,25 +2860,25 @@ export function SceneInspector({
       }
       return (
         <>
-          <label className={clinicalLabelClass} style={{ fontSize: 'var(--text-xs)' }}>
+          <label className={templateLabelClass} style={{ fontSize: 'var(--text-xs)' }}>
             <span>Headline</span>
             <input
               type="text"
-              value={String(clinicalProps.headline || '')}
-              onChange={(e) => updateClinicalProp('headline', e.target.value)}
-              className={clinicalInputClass}
+              value={String(templateProps.headline || '')}
+              onChange={(e) => updateTemplateProp('headline', e.target.value)}
+              className={templateInputClass}
               aria-label="Analogy headline"
             />
           </label>
           {renderAnalogyPanel('left', left, 'Left panel')}
           {renderAnalogyPanel('right', right, 'Right panel')}
-          <label className={clinicalLabelClass} style={{ fontSize: 'var(--text-xs)' }}>
+          <label className={templateLabelClass} style={{ fontSize: 'var(--text-xs)' }}>
             <span>Caption</span>
             <input
               type="text"
-              value={String(clinicalProps.caption || '')}
-              onChange={(e) => updateClinicalProp('caption', e.target.value)}
-              className={clinicalInputClass}
+              value={String(templateProps.caption || '')}
+              onChange={(e) => updateTemplateProp('caption', e.target.value)}
+              className={templateInputClass}
               aria-label="Analogy caption"
             />
           </label>
@@ -3302,8 +3112,8 @@ export function SceneInspector({
 
               {isThreeDataStage ? (
                 renderThreeDataStageEditor()
-              ) : isClinicalTemplate ? (
-                renderClinicalTemplateEditor()
+              ) : isTemplateDeck ? (
+                renderTemplateDeckEditor()
               ) : isSurrealTableauFamily(compositionState.family) ? (
                 <>
                   <div className="grid gap-[var(--space-3)] xl:grid-cols-2">
@@ -3574,7 +3384,7 @@ export function SceneInspector({
                   aria-label="Composition rationale"
                 />
               </label>
-              {isThreeDataStage ? renderThreeDataStageEditor() : isClinicalTemplate ? renderClinicalTemplateEditor() : null}
+              {isThreeDataStage ? renderThreeDataStageEditor() : isTemplateDeck ? renderTemplateDeckEditor() : null}
 
               <div className="grid gap-[var(--space-3)] xl:grid-cols-2">
                 <label className="flex flex-col gap-[var(--space-1)] text-[var(--text-secondary)]" style={{ fontSize: 'var(--text-xs)' }}>
@@ -3866,7 +3676,7 @@ export function SceneInspector({
                   aria-label="Composition rationale"
                 />
               </label>
-              {isThreeDataStage ? renderThreeDataStageEditor() : isClinicalTemplate ? renderClinicalTemplateEditor() : null}
+              {isThreeDataStage ? renderThreeDataStageEditor() : isTemplateDeck ? renderTemplateDeckEditor() : null}
               {imageGenerationProvider === 'manual' && (
                 <p className="m-0 text-[var(--text-tertiary)]" style={{ fontSize: 'var(--text-xs)', marginTop: 'var(--space-2)' }}>
                   Manual image generation is upload-first. Upload a still here or switch the project image provider in Settings before generating.
