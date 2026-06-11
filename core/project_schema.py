@@ -58,14 +58,12 @@ _NATIVE_REMOTION_FAMILIES = {
     "software_demo_focus",
     "surreal_tableau_3d",
     "three_data_stage",
-    # Clinical template compositions
+    # Template deck compositions
     "cover_hook",
     "orientation",
     "synthesis_summary",
     "closing_cta",
-    "clinical_explanation",
     "metric_improvement",
-    "brain_region_focus",
     "metric_comparison",
     "timeline_progression",
     "analogy_metaphor",

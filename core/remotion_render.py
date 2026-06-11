@@ -30,10 +30,10 @@ _DEFAULT_API_BASE_URL = "http://127.0.0.1:9321"
 _DEFAULT_MOTION_TEMPLATE = "kinetic_title"
 _BUILTIN_TEXT_OVERLAY_FAMILIES = {"software_demo_focus"}
 
-_CLINICAL_TEMPLATE_FAMILIES = {
+_TEMPLATE_DECK_FAMILIES = {
     "cover_hook", "orientation", "synthesis_summary", "closing_cta",
-    "clinical_explanation", "metric_improvement", "brain_region_focus",
-    "metric_comparison", "timeline_progression", "analogy_metaphor",
+    "metric_improvement", "metric_comparison", "timeline_progression",
+    "analogy_metaphor",
 }
 
 # Analogy backgrounds use a prefix naming convention
@@ -52,37 +52,29 @@ def _api_base_url() -> str:
 
 
 def _resolve_image_url_for_scene(composition: dict[str, Any], scene: dict[str, Any]) -> str | None:
-    """Fall back to template_deck background for native clinical template scenes."""
+    """Fall back to template_deck background for native template deck scenes."""
     mode = str(composition.get("mode") or "").strip().lower()
     family = str(composition.get("family") or "").strip()
-    if mode == "native" and family in _CLINICAL_TEMPLATE_FAMILIES:
+    if mode == "native" and family in _TEMPLATE_DECK_FAMILIES:
         props = composition.get("props") if isinstance(composition.get("props"), dict) else {}
         return _template_background_url(family, props)
     return None
 
 
 def _template_background_url(family: str, props: dict[str, Any]) -> str | None:
-    """Resolve a template_deck background URL for a clinical template family."""
+    """Resolve a template_deck background URL for a template deck family."""
     bg_id = str(props.get("background_id") or "").strip()
     if not bg_id:
         if family == "analogy_metaphor":
             bg_id = _ANALOGY_BACKGROUND_OPTIONS[0]
-        elif family == "brain_region_focus":
-            # Template coordinates are mapped to the topdown (front-on coronal) view
-            bg_id = "brain_region_focus_topdown"
         else:
             bg_id = family
 
-    # Try family-name match first, then with subdirectories for brain diagrams
-    candidates = [
-        REPO_ROOT / "template_deck" / "backgrounds" / f"{bg_id}.png",
-        REPO_ROOT / "template_deck" / "backgrounds" / "brain_diagrams" / f"{bg_id}.png",
-    ]
-    for candidate in candidates:
-        if candidate.exists():
-            rel = str(candidate.relative_to(REPO_ROOT / "template_deck")).replace("\\", "/")
-            encoded = "/".join(quote(part) for part in rel.split("/") if part)
-            return f"{_api_base_url()}/api/template-deck/{encoded}"
+    candidate = REPO_ROOT / "template_deck" / "backgrounds" / f"{bg_id}.png"
+    if candidate.exists():
+        rel = str(candidate.relative_to(REPO_ROOT / "template_deck")).replace("\\", "/")
+        encoded = "/".join(quote(part) for part in rel.split("/") if part)
+        return f"{_api_base_url()}/api/template-deck/{encoded}"
     return None
 
 
@@ -299,22 +291,22 @@ def build_remotion_manifest(
         motion = scene_motion_payload(scene)
         composition = scene_composition_payload(scene)
         # Reroute family when data shape contradicts visualization type
-        # (e.g. brain_region_focus with temporal arrows -> metric_improvement)
+        # (e.g. metric_improvement with temporal arrows -> three_data_stage)
         family = str(composition.get("family") or "").strip()
-        if family in _CLINICAL_TEMPLATE_FAMILIES:
+        if family in _TEMPLATE_DECK_FAMILIES:
             from .composition_planner import (
-                _enrich_clinical_props,
+                _enrich_template_props,
                 _reroute_family_by_data_shape,
                 _scene_data_points,
             )
             family = _reroute_family_by_data_shape(family, scene)
             composition["family"] = family
-            # Enrich clinical template props from on_screen_text/data_points
+            # Enrich template deck props from on_screen_text/data_points
             # (handles plans created before enrichment code existed)
             props = composition.get("props") if isinstance(composition.get("props"), dict) else {}
             lines = [str(item).strip() for item in (scene.get("on_screen_text") or []) if str(item).strip()]
             data_points = _scene_data_points(scene)
-            _enrich_clinical_props(family, props, lines, data_points)
+            _enrich_template_props(family, props, lines, data_points)
             composition["props"] = props
         if family == "three_data_stage":
             # Re-extract numeric series from data_points when the director

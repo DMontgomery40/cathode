@@ -37,12 +37,10 @@ _SUPPORTED_NATIVE_FALLBACK_FAMILIES = {
     "quote_focus",
     "three_data_stage",
     "surreal_tableau_3d",
-    # Clinical template families (deterministic Remotion overlays)
+    # Template deck families (deterministic Remotion overlays)
     "cover_hook",
     "orientation",
-    "clinical_explanation",
     "metric_improvement",
-    "brain_region_focus",
     "metric_comparison",
     "timeline_progression",
     "analogy_metaphor",

@@ -188,30 +188,28 @@ def test_ffmpeg_motion_scene_accepts_rendered_preview_clip(tmp_path):
     assert scene_has_renderable_visual(scene, render_backend="ffmpeg") is True
 
 
-def test_clinical_template_families_route_as_native_remotion_compositions(tmp_path):
-    """All 10 clinical template families must produce native-mode manifest scenes.
+def test_template_deck_families_route_as_native_remotion_compositions(tmp_path):
+    """All template deck families must produce native-mode manifest scenes.
 
     This guards the pipeline contract between the Python composition planner and
     the Remotion MotionTemplateRenderer switch statement in index.tsx.
     """
-    clinical_families = [
+    deck_families = [
         "cover_hook",
         "orientation",
         "synthesis_summary",
         "closing_cta",
-        "clinical_explanation",
         "metric_improvement",
-        "brain_region_focus",
         "metric_comparison",
         "timeline_progression",
         "analogy_metaphor",
     ]
 
-    project_dir = tmp_path / "clinical_demo"
+    project_dir = tmp_path / "deck_demo"
     (project_dir / "audio").mkdir(parents=True)
 
     scenes = []
-    for idx, family in enumerate(clinical_families, start=1):
+    for idx, family in enumerate(deck_families, start=1):
         uid = f"scene_{idx:03d}"
         audio = project_dir / "audio" / f"{uid}.wav"
         audio.write_bytes(b"wav")
@@ -236,7 +234,7 @@ def test_clinical_template_families_route_as_native_remotion_compositions(tmp_pa
 
     plan = {
         "meta": {
-            "project_name": "clinical_demo",
+            "project_name": "deck_demo",
             "brief": {"text_render_mode": "deterministic_overlay"},
             "render_profile": {"fps": 24, "render_backend": "remotion"},
         },
@@ -246,12 +244,12 @@ def test_clinical_template_families_route_as_native_remotion_compositions(tmp_pa
     manifest = build_remotion_manifest(
         project_dir=project_dir,
         plan=plan,
-        output_path=project_dir / "clinical_demo.mp4",
+        output_path=project_dir / "deck_demo.mp4",
         render_profile=plan["meta"]["render_profile"],
     )
 
-    assert len(manifest["scenes"]) == len(clinical_families)
-    for manifest_scene, expected_family in zip(manifest["scenes"], clinical_families):
+    assert len(manifest["scenes"]) == len(deck_families)
+    for manifest_scene, expected_family in zip(manifest["scenes"], deck_families):
         assert manifest_scene["composition"]["family"] == expected_family, (
             f"Expected family '{expected_family}', got '{manifest_scene['composition']['family']}'"
         )
@@ -363,8 +361,8 @@ def test_progress_payload_maps_remotion_events_to_render_job_updates():
     assert progress_payload["progress"] == 0.42
 
 
-def test_template_background_resolved_for_native_clinical_scenes(tmp_path):
-    """Native clinical template scenes with no image_path should get a template_deck background URL."""
+def test_template_background_resolved_for_native_template_deck_scenes(tmp_path):
+    """Native template deck scenes with no image_path should get a template_deck background URL."""
     import shutil
     from core.runtime import REPO_ROOT
 
@@ -391,7 +389,7 @@ def test_template_background_resolved_for_native_clinical_scenes(tmp_path):
                 "scene_type": "motion",
                 "title": "Cover",
                 "audio_path": str(project_dir / "audio" / "s1.wav"),
-                "on_screen_text": ["Your Report", "Overview", "Clinic"],
+                "on_screen_text": ["Your Report", "Overview", "betTube Studio"],
                 "composition": {
                     "family": "cover_hook",
                     "mode": "native",
@@ -464,11 +462,11 @@ def test_authored_image_no_captions_overlay(tmp_path):
     )
 
 
-def test_manifest_enriches_clinical_props_at_build_time(tmp_path):
+def test_manifest_enriches_template_props_at_build_time(tmp_path):
     """Plans created before enrichment code should get enriched props at manifest build time.
 
-    Covers: timeline_progression (markers from onScreenText), metric_improvement (stages
-    from data_points), brain_region_focus (regions from data_points).
+    Covers: timeline_progression (markers from onScreenText) and metric_improvement
+    (stages from data_points, rerouted to three_data_stage for session series).
     """
     project_dir = tmp_path / "enrich_test"
     (project_dir / "audio").mkdir(parents=True)
@@ -477,8 +475,6 @@ def test_manifest_enriches_clinical_props_at_build_time(tmp_path):
     (project_dir / "audio" / "s1.wav").write_bytes(b"wav")
     # metric_improvement: headline-only props, data_points have session values
     (project_dir / "audio" / "s2.wav").write_bytes(b"wav")
-    # brain_region_focus: headline-only props, data_points have region info
-    (project_dir / "audio" / "s3.wav").write_bytes(b"wav")
 
     plan = {
         "meta": {
@@ -509,42 +505,23 @@ def test_manifest_enriches_clinical_props_at_build_time(tmp_path):
                 "uid": "s2",
                 "id": 2,
                 "scene_type": "motion",
-                "title": "Alpha Power",
+                "title": "Throughput",
                 "audio_path": str(project_dir / "audio" / "s2.wav"),
-                "on_screen_text": ["Alpha Power Improvement"],
+                "on_screen_text": ["Throughput Improvement"],
                 "data_points": [
-                    "Session 1: 8.2 uV",
-                    "Session 2: 9.1 uV",
-                    "Session 3: 10.4 uV",
+                    "Session 1: 8.2 ms",
+                    "Session 2: 9.1 ms",
+                    "Session 3: 10.4 ms",
                 ],
                 "composition": {
                     "family": "metric_improvement",
                     "mode": "native",
-                    "props": {"headline": "Alpha Power Improvement"},
+                    "props": {"headline": "Throughput Improvement"},
                     "data": {
                         "data_points": [
-                            "Session 1: 8.2 uV",
-                            "Session 2: 9.1 uV",
-                            "Session 3: 10.4 uV",
-                        ],
-                    },
-                },
-            },
-            {
-                "uid": "s3",
-                "id": 3,
-                "scene_type": "motion",
-                "title": "Brain Regions",
-                "audio_path": str(project_dir / "audio" / "s3.wav"),
-                "on_screen_text": ["Brain Region Overview"],
-                "composition": {
-                    "family": "brain_region_focus",
-                    "mode": "native",
-                    "props": {"headline": "Brain Region Overview"},
-                    "data": {
-                        "data_points": [
-                            "Frontal: 12.3 uV improved",
-                            "Central: 8.1 uV stable",
+                            "Session 1: 8.2 ms",
+                            "Session 2: 9.1 ms",
+                            "Session 3: 10.4 ms",
                         ],
                     },
                 },
@@ -574,9 +551,3 @@ def test_manifest_enriches_clinical_props_at_build_time(tmp_path):
     assert len(series) >= 1, f"Expected >= 1 series from data_points, got {len(series)}"
     points = series[0].get("points", [])
     assert any(p.get("y") is not None for p in points), "Expected real y values in series"
-
-    # brain_region_focus should have regions enriched from data_points
-    brain = manifest["scenes"][2]
-    regions = brain["composition"]["props"].get("regions", [])
-    assert len(regions) >= 2, f"Expected >= 2 regions from data_points, got {len(regions)}"
-    assert "Frontal" in regions[0].get("name", "")
