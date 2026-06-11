@@ -2,7 +2,6 @@ import { useNavigate } from 'react-router-dom'
 import { WorkspaceHeader } from '../components/composed/WorkspaceHeader'
 import { IntentDeck } from '../components/composed/IntentDeck'
 import { BackgroundMesh } from '../components/primitives/BackgroundMesh'
-import { Badge } from '../components/primitives/Badge'
 import { WorkspaceCanvas, WorkspacePanel } from '../design-system/recipes'
 import { useProjects } from '../lib/api/hooks.ts'
 import { useGlobalQueueSummary } from '../lib/api/global-queue.ts'
@@ -22,6 +21,7 @@ export function WorkspaceHome() {
   const { activeCount, jobsLoading } = useGlobalQueueSummary()
   const projectCount = projects?.length ?? 0
   const renderedCount = (projects ?? []).filter((project) => project.has_video).length
+  const shortFormCount = (projects ?? []).filter((project) => project.short_form_format === 'vertical_short').length
   const projectBadge = projectCount > 0 ? `${projectCount} project${projectCount === 1 ? '' : 's'}` : undefined
   const queueBadge = !jobsLoading && activeCount > 0
     ? `${activeCount} active`
@@ -126,20 +126,7 @@ export function WorkspaceHome() {
               <WorkspacePanel
                 title="Workspace status"
                 eyebrow="Overview"
-                copy="Current project and queue totals across this workspace."
-              >
-                <div className="flex flex-wrap gap-[var(--space-2)]">
-                  <Badge variant={projectCount > 0 ? 'active' : 'default'}>{projectCount} projects</Badge>
-                  <Badge variant={activeCount > 0 ? 'active' : 'default'}>{activeCount} active jobs</Badge>
-                  <Badge variant={renderedCount > 0 ? 'success' : 'default'}>{renderedCount} rendered</Badge>
-                  <Badge variant="default">9:16 shorts</Badge>
-                </div>
-              </WorkspacePanel>
-
-              <WorkspacePanel
-                title="Quick totals"
-                eyebrow="Library"
-                copy="Open Projects to pick a timeline, or Queue when background jobs are active."
+                copy="Live totals from the project library and the background job queue."
               >
                 <div className="workspace-kpi-grid">
                   <div>
@@ -147,12 +134,16 @@ export function WorkspaceHome() {
                     <div className="workspace-panel-title text-[var(--text-2xl)]">{projectCount}</div>
                   </div>
                   <div>
+                    <p className="workspace-eyebrow">Rendered</p>
+                    <div className="workspace-panel-title text-[var(--text-2xl)]">{renderedCount}</div>
+                  </div>
+                  <div>
                     <p className="workspace-eyebrow">Active jobs</p>
                     <div className="workspace-panel-title text-[var(--text-2xl)]">{activeCount}</div>
                   </div>
                   <div>
-                    <p className="workspace-eyebrow">Rendered</p>
-                    <div className="workspace-panel-title text-[var(--text-2xl)]">{renderedCount}</div>
+                    <p className="workspace-eyebrow">Vertical shorts</p>
+                    <div className="workspace-panel-title text-[var(--text-2xl)]">{shortFormCount}</div>
                   </div>
                 </div>
               </WorkspacePanel>

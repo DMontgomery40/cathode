@@ -1424,9 +1424,12 @@ def backfill_plan(
         image_profile["generation_model"] = str(meta["image_model"])
     provider = str(image_profile.get("provider") or default_image_profile()["provider"]).strip().lower()
     image_profile["provider"] = provider if provider in IMAGE_PROVIDERS else str(default_image_profile()["provider"])
-    image_profile["generation_model"] = str(
-        image_profile.get("generation_model") or default_image_profile()["generation_model"]
-    ).strip()
+    generation_model = str(image_profile.get("generation_model") or "").strip()
+    if image_profile["provider"] == "codex" and "/" in generation_model:
+        # A provider switch that left a Replicate/HF slug behind would pair the
+        # GPT Image route with a foreign model; heal it on load.
+        generation_model = ""
+    image_profile["generation_model"] = generation_model or str(default_image_profile()["generation_model"])
     image_profile["edit_model"] = str(
         image_profile.get("edit_model") or default_image_profile()["edit_model"]
     ).strip()

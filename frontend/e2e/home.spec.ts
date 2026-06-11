@@ -152,4 +152,19 @@ test.describe('Home / Workspace', () => {
     // Skip link may be first focusable; check it exists in DOM
     await expect(skipLink).toBeAttached()
   })
+
+  test('Workspace status KPIs match the live API, nothing hardcoded', async ({ page, request }) => {
+    const response = await request.get('/api/projects')
+    const projects = await response.json() as Array<{ has_video: boolean; short_form_format?: string | null }>
+    const expected = {
+      Projects: String(projects.length),
+      Rendered: String(projects.filter((p) => p.has_video).length),
+      'Vertical shorts': String(projects.filter((p) => p.short_form_format === 'vertical_short').length),
+    }
+
+    for (const [label, value] of Object.entries(expected)) {
+      const kpi = page.locator('.workspace-kpi-grid > div').filter({ hasText: label })
+      await expect(kpi.locator('div')).toHaveText(value)
+    }
+  })
 })

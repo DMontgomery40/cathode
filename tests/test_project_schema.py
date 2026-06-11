@@ -670,7 +670,7 @@ def test_backfill_plan_adds_image_profile_defaults_and_compatibility():
         {
             "meta": {
                 "project_name": "image_demo",
-                "image_model": "custom/model",
+                "image_model": "gpt-image-2-mini",
             },
             "scenes": [],
         }
@@ -679,9 +679,12 @@ def test_backfill_plan_adds_image_profile_defaults_and_compatibility():
     image_profile = plan["meta"]["image_profile"]
 
     assert image_profile["provider"] == "codex"
-    assert image_profile["generation_model"] == "custom/model"
+    # Legacy flat image_model migrates into the profile when it is coherent
+    # with the codex route; foreign provider slugs are healed instead (see
+    # test_backfill_plan_heals_codex_profile_with_foreign_generation_model).
+    assert image_profile["generation_model"] == "gpt-image-2-mini"
     assert image_profile["edit_model"] == "gpt-image-2"
-    assert plan["meta"]["image_model"] == "custom/model"
+    assert plan["meta"]["image_model"] == "gpt-image-2-mini"
 
 
 def test_backfill_plan_accepts_local_image_provider():
@@ -1118,3 +1121,22 @@ def test_legacy_family_fallback_applies_to_legacy_motion_template_id():
     )
     assert payload["family"] == "three_data_stage"
     assert payload["manifestation"] == "native_remotion"
+
+
+def test_backfill_plan_heals_codex_profile_with_foreign_generation_model():
+    """A provider switch that left a Replicate slug behind must not persist a
+    GPT Image profile pointing at a foreign model."""
+    plan = backfill_plan(
+        {
+            "meta": {
+                "project_name": "drifted_profile",
+                "brief": {"source_material": "Text"},
+                "image_profile": {"provider": "codex", "generation_model": "qwen/qwen-image-2512"},
+            },
+            "scenes": [],
+        }
+    )
+
+    profile = plan["meta"]["image_profile"]
+    assert profile["provider"] == "codex"
+    assert profile["generation_model"] == "gpt-image-2"

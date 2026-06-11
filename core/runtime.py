@@ -476,9 +476,15 @@ def resolve_image_profile(profile: dict | None = None) -> dict:
             raw_generation_model if requested_provider == "replicate" and raw_generation_model else replicate_default
         )
     else:
-        resolved["generation_model"] = str(
-            resolved.get("generation_model") or default_image_profile()["generation_model"]
-        ).strip()
+        generation_model = str(resolved.get("generation_model") or "").strip()
+        if provider == "codex":
+            # The GPT Image route only serves OpenAI image models. A profile
+            # that drifted from another provider (or a provider switch that
+            # left a Replicate/HF slug behind) must not pair a foreign model
+            # with the codex route.
+            if requested_provider != "codex" or "/" in generation_model:
+                generation_model = ""
+        resolved["generation_model"] = generation_model or default_image_profile()["generation_model"]
     edit_model = str(resolved.get("edit_model") or default_image_profile()["edit_model"]).strip()
     if edit_model.startswith("gpt-image") and not keys.get("openai"):
         edit_model = ""

@@ -27,6 +27,17 @@ function asBool(value: unknown, fallback = false): boolean {
   return typeof value === 'boolean' ? value : fallback
 }
 
+function defaultGenerationModelFor(provider: string): string {
+  switch (provider) {
+    case 'codex':
+      return 'gpt-image-2'
+    case 'replicate':
+      return 'qwen/qwen-image-2512'
+    default:
+      return ''
+  }
+}
+
 function providerLabel(provider: string): string {
   switch (provider) {
     case 'codex':
@@ -171,7 +182,16 @@ export function ImageProfilePanel({
               <Select
                 label="Image Provider"
                 value={provider}
-                onChange={(event) => onProfileChange({ provider: event.target.value })}
+                onChange={(event) => {
+                  const nextProvider = event.target.value
+                  // Switching providers must also switch the model — leaving
+                  // the previous provider's model produces an incoherent
+                  // profile (e.g. the GPT Image route with a Replicate slug).
+                  onProfileChange({
+                    provider: nextProvider,
+                    generation_model: defaultGenerationModelFor(nextProvider),
+                  })
+                }}
                 options={imageProviders.map((item) => ({ value: item, label: providerLabel(item) }))}
                 disabled={disabled}
               />

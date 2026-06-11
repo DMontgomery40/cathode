@@ -251,3 +251,28 @@ def test_resolve_workflow_llm_roles_allows_claude_print_story_writer(monkeypatch
 
     assert creative_provider == "claude_print"
     assert treatment_provider == "anthropic"
+
+
+def test_resolve_image_profile_never_pairs_foreign_model_with_codex(monkeypatch):
+    """A provider switch (or availability fallback) must not leave another
+    provider's model on the GPT Image route."""
+    from core.runtime import resolve_image_profile
+
+    monkeypatch.setattr(
+        "core.runtime.check_api_keys",
+        lambda: {"openai": True, "replicate": False, "dashscope": False, "elevenlabs": False, "anthropic": True},
+    )
+
+    # Replicate profile, replicate key gone -> falls back to codex with the codex default model.
+    fallback = resolve_image_profile({"provider": "replicate", "generation_model": "qwen/qwen-image-2512"})
+    assert fallback["provider"] == "codex"
+    assert fallback["generation_model"] == "gpt-image-2"
+
+    # Explicit codex request that still carries a Replicate slug -> coerced to the codex default.
+    drifted = resolve_image_profile({"provider": "codex", "generation_model": "qwen/qwen-image-2512"})
+    assert drifted["provider"] == "codex"
+    assert drifted["generation_model"] == "gpt-image-2"
+
+    # Explicit codex request with a legitimate model override stays untouched.
+    explicit = resolve_image_profile({"provider": "codex", "generation_model": "gpt-image-2-mini"})
+    assert explicit["generation_model"] == "gpt-image-2-mini"
