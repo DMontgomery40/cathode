@@ -266,6 +266,38 @@ def test_short_form_brief_repairs_partial_vertical_render_profile():
     assert render_profile["render_backend"] == "ffmpeg"
 
 
+def test_backfill_plan_preserves_audio_take_metadata():
+    plan = backfill_plan(
+        {
+            "meta": {"project_name": "take_demo"},
+            "scenes": [
+                {
+                    "title": "Voiced scene",
+                    "narration": "Hello.",
+                    "visual_prompt": "A slide.",
+                    "audio_take": {
+                        "provider": "kokoro",
+                        "voice": "af_bella",
+                        "speed": 1.1,
+                        "model": "kokoro-local",
+                        "generated_utc": "2026-06-11T17:02:00Z",
+                    },
+                },
+                {
+                    "title": "Unvoiced scene",
+                    "narration": "World.",
+                    "visual_prompt": "Another slide.",
+                },
+            ],
+        }
+    )
+
+    voiced, unvoiced = plan["scenes"]
+    assert voiced["audio_take"]["voice"] == "af_bella"
+    assert voiced["audio_take"]["provider"] == "kokoro"
+    assert unvoiced["audio_take"] is None
+
+
 def test_backfill_plan_preserves_video_scene_metadata():
     plan = backfill_plan(
         {

@@ -127,6 +127,13 @@ export interface Scene {
   audio_path?: string | null
   audio_exists?: boolean
   audio_version?: number | null
+  audio_take?: {
+    provider?: string
+    voice?: string
+    speed?: number
+    model?: string
+    generated_utc?: string
+  } | null
   preview_path?: string | null
   preview_exists?: boolean
   preview_version?: number | null

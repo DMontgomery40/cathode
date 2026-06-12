@@ -7,6 +7,7 @@ import json
 import os
 import re
 import wave
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Literal
 
@@ -964,7 +965,7 @@ def generate_scene_audio_result(
 
     output_path = project_dir / "audio" / f"scene_{scene_id:03d}.wav"
 
-    return generate_audio_result(
+    result = generate_audio_result(
         narration,
         output_path,
         voice=resolved_voice,
@@ -979,3 +980,15 @@ def generate_scene_audio_result(
         elevenlabs_style=resolved_elevenlabs_style,
         elevenlabs_use_speaker_boost=resolved_elevenlabs_use_speaker_boost,
     )
+    # Record what this take was ACTUALLY generated with — generate_audio_result
+    # reports the provider/voice after any silent fallback (e.g. kokoro ->
+    # OpenAI), so the UI can describe the attached audio instead of implying it
+    # matches whatever the current project default happens to be.
+    scene["audio_take"] = {
+        "provider": str(result.get("provider") or resolved_provider),
+        "voice": str(result.get("voice") or resolved_voice),
+        "speed": resolved_speed,
+        "model": str(result.get("model") or ""),
+        "generated_utc": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+    }
+    return result

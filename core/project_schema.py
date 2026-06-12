@@ -1298,6 +1298,10 @@ def normalize_scene(
         base_dir=base_dir,
         project_name=project_name,
     )
+    # Metadata about the attached narration take (provider/voice it was
+    # generated with); preserved verbatim so the UI can report it honestly.
+    audio_take = src.get("audio_take")
+    out["audio_take"] = dict(audio_take) if isinstance(audio_take, dict) else None
     if "preview_path" in src:
         out["preview_path"] = _normalize_project_asset_path(
             src.get("preview_path"),

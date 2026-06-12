@@ -49,6 +49,47 @@ def test_generate_scene_audio_uses_project_defaults(monkeypatch, tmp_path):
     assert captured["kwargs"]["voice"] == "af_bella"
 
 
+def test_generate_scene_audio_records_take_metadata(monkeypatch, tmp_path):
+    """The scene is stamped with the provider/voice the take was ACTUALLY
+    generated with, so the UI can describe attached audio truthfully."""
+    captured = {}
+    monkeypatch.setattr(voice_gen, "generate_audio_result", _fake_audio_result(captured))
+
+    scene = {"id": 0, "narration": "Hello world."}
+    voice_gen.generate_scene_audio_result(
+        scene,
+        tmp_path,
+        tts_provider="kokoro",
+        voice="af_bella",
+        speed=1.1,
+    )
+
+    take = scene["audio_take"]
+    assert take["provider"] == "kokoro"
+    assert take["voice"] == "af_bella"
+    assert take["speed"] == 1.1
+    assert take["model"] == "test-model"
+    assert take["generated_utc"].endswith("Z")
+
+
+def test_generate_scene_audio_take_metadata_reports_fallback_voice(monkeypatch, tmp_path):
+    """When the provider falls back (e.g. kokoro -> openai), the take records
+    what generate_audio_result actually used, not what was requested."""
+
+    def fallback_result(text, output_path, **kwargs):
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_bytes(b"wav")
+        return {"path": output_path, "provider": "openai", "model": "tts-1", "voice": "alloy"}
+
+    monkeypatch.setattr(voice_gen, "generate_audio_result", fallback_result)
+
+    scene = {"id": 0, "narration": "Hello world."}
+    voice_gen.generate_scene_audio_result(scene, tmp_path, tts_provider="kokoro", voice="af_bella")
+
+    assert scene["audio_take"]["provider"] == "openai"
+    assert scene["audio_take"]["voice"] == "alloy"
+
+
 def test_generate_scene_audio_honors_scene_voice_override(monkeypatch, tmp_path):
     captured = {}
 

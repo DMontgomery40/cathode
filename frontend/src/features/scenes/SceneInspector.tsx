@@ -4072,6 +4072,31 @@ export function SceneInspector({
                 </label>
               </div>
             )}
+            {hasNarrationAudio && (
+              scene.audio_take?.voice ? (
+                <div className="text-[var(--text-tertiary)]" style={{ fontSize: 'var(--text-xs)' }}>
+                  Attached take: {String(scene.audio_take.provider || 'unknown')} / {String(scene.audio_take.voice)}
+                  {(() => {
+                    const effectiveProvider = sceneTtsOverrideEnabled ? sceneTtsProvider : projectTtsProvider
+                    const effectiveVoice = sceneTtsOverrideEnabled ? sceneTtsVoice : projectTtsVoice
+                    const stale = Boolean(
+                      effectiveVoice
+                      && (String(scene.audio_take?.voice) !== effectiveVoice
+                        || String(scene.audio_take?.provider || '') !== effectiveProvider),
+                    )
+                    return stale ? (
+                      <span className="text-[var(--signal-warning)]">
+                        {' '}— current setting is {effectiveProvider} / {effectiveVoice}; Regenerate Audio to apply it.
+                      </span>
+                    ) : null
+                  })()}
+                </div>
+              ) : (
+                <div className="text-[var(--text-tertiary)]" style={{ fontSize: 'var(--text-xs)' }}>
+                  Attached take predates voice tracking — its voice is unknown until regenerated.
+                </div>
+              )
+            )}
             <div className="text-[var(--text-tertiary)]" style={{ fontSize: 'var(--text-xs)' }}>
               Project default: {projectTtsProvider}{projectTtsVoice ? ` / ${projectTtsVoice}` : ''}
             </div>
